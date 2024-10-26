@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+    <contextName>asr-proxy</contextName>
+    <!-- variable name="HOSTNAME" value="${HOSTNAME}" /-->
+    <property name="pattern" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg %n"/>
+    <property name="pattern-color" value="%yellow(%d{yyyy-MM-dd HH:mm:ss.SSS}) [%thread] %highlight(%-5level) %green(%logger{50}) - %highlight(%msg) %n"/>
+    <property name="LOG_HOME" value="logs"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+            <pattern>${pattern}</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="CONSOLE-WITH-COLOR" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+            <pattern>${pattern-color}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+    <appender name="CONSOLE-TEST" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+            <pattern>%yellow(%d{yyyy-MM-dd HH:mm:ss.SSS}) %highlight(%-5level) %green(%logger{50}) - %highlight(%msg) %n</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_HOME}/asr-proxy.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_HOME}/fs-agent.%d.%i.log</fileNamePattern>
+            <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                <maxFileSize>512MB</maxFileSize>
+            </timeBasedFileNamingAndTriggeringPolicy>
+            <maxHistory>30</maxHistory>
+        </rollingPolicy>
+
+        <encoder>
+            <pattern>${pattern}</pattern>
+        </encoder>
+    </appender>
+
+    <!--为了防止进程退出时，内存中的数据丢失，请加上此选项-->
+    <shutdownHook class="ch.qos.logback.core.hook.DelayingShutdownHook"/>
+
+    <appender name="sls" class="com.aliyun.openservices.log.logback.LoghubAppender">
+        <!-- deny all events with a level below INFO, that is TRACE and DEBUG -->
+        <!-- https://logback.qos.ch/manual/filters.html#thresholdFilter -->
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>INFO</level>
+        </filter>
+        <!--必选项-->
+        <!-- 账号及网络配置 -->
+        <endpoint>${SLS_ENDPOINT}</endpoint>
+        <!-- accessKeyId>your accesskey id</accessKeyId -->
+        <!-- accessKeySecret>your accesskey</accessKeySecret -->
+
+        <!-- sls 项目配置 -->
+        <project>${SLS_PROJECT}</project>
+        <logStore>${SLS_LOGSTORE}</logStore>
+        <!--必选项 (end)-->
+
+        <!-- 可选项 -->
+        <topic>${SLS_TOPIC}</topic>
+        <source>${HOSTNAME}</source>
+
+        <!-- 可选项 详见 '参数说明'-->
+        <totalSizeInBytes>104857600</totalSizeInBytes>
+        <maxBlockMs>0</maxBlockMs>
+        <ioThreadCount>8</ioThreadCount>
+        <batchSizeThresholdInBytes>524288</batchSizeThresholdInBytes>
+        <batchCountThreshold>4096</batchCountThreshold>
+        <lingerMs>2000</lingerMs>
+        <retries>10</retries>
+        <baseRetryBackoffMs>100</baseRetryBackoffMs>
+        <maxRetryBackoffMs>50000</maxRetryBackoffMs>
+
+        <!-- 可选项 通过配置 encoder 的 pattern 自定义 log 的格式 -->
+        <encoder>
+            <pattern>%d %-5level [%thread] %logger{0}: %msg</pattern>
+        </encoder>
+
+        <!-- 可选项 设置 time 字段呈现的格式 -->
+        <timeFormat>yyyy-MM-dd'T'HH:mmZ</timeFormat>
+        <!-- 可选项 设置 time 字段呈现的时区 -->
+        <timeZone>UTC</timeZone>
+        <!-- 可选项 设置是否要添加 Location 字段（日志打印位置），默认为 true -->
+        <includeLocation>true</includeLocation>
+        <!-- 可选项 当 encoder 不为空时，是否要包含 message 字段，默认为 true -->
+        <includeMessage>true</includeMessage>
+        <!-- 可选项 可注入自定义的 credentialsProvider，允许用户自行实现 AK 获取逻辑 -->
+        <!-- 参见 "自定义凭证提供者 CredentialsProvider" 一节介绍 -->
+        <credentialsProviderBuilder class="com.yulore.aliyun.MyBuilder">
+            <group>${CPB_GROUP}</group> <!-- 自定义参数 -->
+            <dataId>${CPB_DATAID}</dataId> <!-- 自定义参数 -->
+        </credentialsProviderBuilder>
+
+        <!-- 可选项，exception 堆栈最大记录长度，超出此长度会被截断，默认值为 500 -->
+        <maxThrowable>500</maxThrowable>
+    </appender>
+
+    <logger name="link.thingscloud.freeswitch.esl.spring.boot.starter.handler.DefaultEslEventHandler" level="ERROR"/>
+    <logger name="link.thingscloud.freeswitch" level="INFO"/>
+    <logger name="org.apache.http" level="WARN"/>
+    <logger name="com.aliyun.openservices" level="WARN"/>
+
+    <logger name="com.yulore.test" level="info" additivity="false">
+        <appender-ref ref="CONSOLE-TEST"/>
+    </logger>
+
+    <!-- https://docs.spring.io/spring-boot/docs/2.1.8.RELEASE/reference/html/boot-features-logging.html -->
+    <springProfile name="prod">
+        <root level="INFO">
+            <appender-ref ref="FILE"/>
+            <appender-ref ref="sls"/>
+        </root>
+    </springProfile>
+    <springProfile name="dev">
+        <root level="DEBUG">
+            <appender-ref ref="FILE"/>
+            <appender-ref ref="sls"/>
+        </root>
+    </springProfile>
+
+</configuration>

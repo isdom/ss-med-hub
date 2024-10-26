@@ -1,0 +1,38 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '2.7.18'
+    id 'io.spring.dependency-management' version '1.0.11.RELEASE'
+}
+
+group = 'com.yulore.znc'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter'
+    implementation 'com.alibaba.boot:nacos-config-spring-boot-starter:0.2.12'
+    compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.20'
+    annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.20'
+    implementation 'com.alibaba.nls:nls-sdk-common:2.1.6'
+    implementation 'com.alibaba.nls:nls-sdk-transcriber:2.2.15'
+    // https://mvnrepository.com/artifact/org.java-websocket/Java-WebSocket
+    implementation 'org.java-websocket:Java-WebSocket:1.5.7'
+
+    implementation 'com.google.protobuf:protobuf-java:2.5.0'
+    implementation 'com.aliyun.openservices:aliyun-log-logback-appender:0.1.27'
+
+    testImplementation platform('org.junit:junit-bom:5.10.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+}
+
+bootJar {
+//    This is overridden by the mainClassName in springBoot{} and added here for reference purposes.
+    mainClass = 'com.yulore.NacosConfigApplication'
+}
+
+test {
+    useJUnitPlatform()
+}

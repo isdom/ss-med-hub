@@ -1,0 +1,10 @@
+# application-prod.yml
+
+nacos:
+  config:
+    endpoint: ${NACOS_ENDPOINT}
+    namespace: ${NACOS_NAMESPACE}
+
+spring:
+  application:
+    name: asr-proxy

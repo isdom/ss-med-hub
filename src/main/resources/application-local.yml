@@ -1,0 +1,5 @@
+# application-local.yml
+
+spring:
+  application:
+    name: ${APP_NAME:asr-proxy}
