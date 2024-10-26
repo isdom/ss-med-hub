@@ -105,7 +105,7 @@ public class ProxyMain {
 
                     @Override
                     public void onMessage(final WebSocket webSocket, final ByteBuffer bytes) {
-                        log.info("received binary message from {}: isDirect: {}", webSocket.getRemoteSocketAddress(), bytes.isDirect());
+                        // log.info("received binary message from {}: isDirect: {}", webSocket.getRemoteSocketAddress(), bytes.isDirect());
                         handleASRData(bytes, webSocket);
                     }
 
