@@ -228,7 +228,7 @@ public class ProxyMain {
     }
 
     private void notifyTranscriptionStarted(final WebSocket webSocket, final SpeechTranscriberResponse response) {
-        sendEvent(webSocket, "TranscriptionStarted", new PayloadTranscriptionCompleted());
+        sendEvent(webSocket, "TranscriptionStarted", (Void)null);
     }
 
     private void notifySentenceBegin(final WebSocket webSocket, final SpeechTranscriberResponse response) {
@@ -253,7 +253,7 @@ public class ProxyMain {
     }
 
     private void notifyTranscriptionCompleted(final WebSocket webSocket, final SpeechTranscriberResponse response) {
-        sendEvent(webSocket, "TranscriptionCompleted", new PayloadTranscriptionCompleted());
+        sendEvent(webSocket, "TranscriptionCompleted", (Void)null);
     }
 
     private SpeechTranscriber createSpeechTranscriber(final NlsClient client, final SpeechTranscriberListener listener) {
