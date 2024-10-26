@@ -311,7 +311,9 @@ public class ProxyMain {
             }
 
             transcriber.close();
+            webSocket.setAttachment(null);
         }
+        webSocket.close();
     }
 
     @PreDestroy
