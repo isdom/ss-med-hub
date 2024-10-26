@@ -89,6 +89,7 @@ public class ProxyMain {
                     @Override
                     public void onClose(WebSocket webSocket, int code, String reason, boolean remote) {
                         log.info("closed {} with exit code {} additional info: {}", webSocket.getRemoteSocketAddress(), code, reason);
+                        stopAndCloseTranscriber(webSocket);
                     }
 
                     @Override
@@ -298,8 +299,14 @@ public class ProxyMain {
     }
 
     private void handleStopAsrCommand(final ASRCommandVO cmd, final WebSocket webSocket) {
+        stopAndCloseTranscriber(webSocket);
+        webSocket.close();
+    }
+
+    private static void stopAndCloseTranscriber(WebSocket webSocket) {
         final SpeechTranscriber transcriber = webSocket.getAttachment();
         if (transcriber != null) {
+            webSocket.setAttachment(null);
             try {
                 //通知服务端语音数据发送完毕，等待服务端处理完成。
                 long now = System.currentTimeMillis();
@@ -311,9 +318,7 @@ public class ProxyMain {
             }
 
             transcriber.close();
-            webSocket.setAttachment(null);
         }
-        webSocket.close();
     }
 
     @PreDestroy
