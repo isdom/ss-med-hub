@@ -14,8 +14,12 @@ repositories {
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter'
     implementation 'com.alibaba.boot:nacos-config-spring-boot-starter:0.2.12'
+    // https://mvnrepository.com/artifact/javax.xml.bind/jaxb-api
+    implementation 'javax.xml.bind:jaxb-api:2.3.1'
+
     compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.20'
     annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.20'
+
     implementation 'com.alibaba.nls:nls-sdk-common:2.1.6'
     implementation 'com.alibaba.nls:nls-sdk-transcriber:2.2.15'
     // https://mvnrepository.com/artifact/org.java-websocket/Java-WebSocket
