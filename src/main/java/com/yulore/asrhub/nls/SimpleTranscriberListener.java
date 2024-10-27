@@ -1,4 +1,4 @@
-package com.yulore.asrproxy.nls;
+package com.yulore.asrhub.nls;
 
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriberListener;
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriberResponse;

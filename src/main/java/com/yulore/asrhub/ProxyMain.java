@@ -1,4 +1,4 @@
-package com.yulore.asrproxy;
+package com.yulore.asrhub;
 
 import com.alibaba.nls.client.AccessToken;
 import com.alibaba.nls.client.protocol.InputFormatEnum;
@@ -9,7 +9,7 @@ import com.alibaba.nls.client.protocol.asr.SpeechTranscriberListener;
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriberResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.yulore.asrproxy.vo.*;
+import com.yulore.asrhub.vo.*;
 import io.netty.util.NettyRuntime;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;

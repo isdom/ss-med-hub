@@ -1,4 +1,4 @@
-package com.yulore.asrproxy.vo;
+package com.yulore.asrhub.vo;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
