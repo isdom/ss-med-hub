@@ -2,9 +2,10 @@
 <configuration>
     <contextName>asr-hub</contextName>
     <!-- variable name="HOSTNAME" value="${HOSTNAME}" /-->
+    <variable file="logback_vars.properties" />
     <property name="pattern" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg %n"/>
     <property name="pattern-color" value="%yellow(%d{yyyy-MM-dd HH:mm:ss.SSS}) [%thread] %highlight(%-5level) %green(%logger{50}) - %highlight(%msg) %n"/>
-    <property name="LOG_HOME" value="logs"/>
+    <property name="LOG_HOME" value="${log.home:-logs}"/>
 
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
@@ -25,11 +26,11 @@
     </appender>
 
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>${LOG_HOME}/asr-hub.log</file>
+        <file>${LOG_HOME}/${CONTEXT_NAME}.log</file>
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>${LOG_HOME}/fs-agent.%d.%i.log</fileNamePattern>
+            <fileNamePattern>${LOG_HOME}/${CONTEXT_NAME}.%d.%i.log</fileNamePattern>
             <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
-                <maxFileSize>512MB</maxFileSize>
+                <maxFileSize>${log.file.size.max:-100}MB</maxFileSize>
             </timeBasedFileNamingAndTriggeringPolicy>
             <maxHistory>30</maxHistory>
         </rollingPolicy>
