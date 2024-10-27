@@ -30,7 +30,7 @@ import java.util.concurrent.Executors;
 // then press Enter. You can now see whitespace characters in your code.
 @Slf4j
 @Component
-public class ProxyMain {
+public class HubMain {
     //@Value("#{${asr.provider}}")
     //private Map<String,String> _asrProviders;
 
