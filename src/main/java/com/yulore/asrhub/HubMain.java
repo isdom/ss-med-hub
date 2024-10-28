@@ -232,8 +232,10 @@ public class HubMain {
     private SpeechTranscriber buildSpeechTranscriber(final NlsClient client, final ASRAccount account, final SpeechTranscriberListener listener) {
         SpeechTranscriber transcriber = null;
         try {
+            log.info("nls_url: {}", _nls_url);
+
             //创建实例、建立连接。
-            transcriber = new SpeechTranscriber(client, account.currentToken(), listener);
+            transcriber = new SpeechTranscriber(client, account.currentToken(), listener, _nls_url);
             transcriber.setAppKey(account.getAppKey());
 
             //输入音频编码方式。
