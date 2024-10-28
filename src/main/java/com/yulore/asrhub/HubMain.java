@@ -210,8 +210,9 @@ public class HubMain {
             speechTranscriber = buildSpeechTranscriber(_nlsClient, account, buildTranscriberListener(webSocket, account, startConnectingInMs));
             session.setSpeechTranscriber(speechTranscriber);
         } catch (Exception ex) {
-          // TODO: close websocket?
-          throw ex;
+            // TODO: close websocket?
+            log.error("StartTranscription: failed: {}", ex.toString());
+            throw ex;
         } finally {
             session.unlock();
         }
