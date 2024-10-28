@@ -90,7 +90,7 @@
         <includeMessage>true</includeMessage>
         <!-- 可选项 可注入自定义的 credentialsProvider，允许用户自行实现 AK 获取逻辑 -->
         <!-- 参见 "自定义凭证提供者 CredentialsProvider" 一节介绍 -->
-        <credentialsProviderBuilder class="com.yulore.aliyun.MyBuilder">
+        <credentialsProviderBuilder class="com.yulore.aliyun.SLSCPBuilder">
             <group>${CPB_GROUP}</group> <!-- 自定义参数 -->
             <dataId>${CPB_DATAID}</dataId> <!-- 自定义参数 -->
         </credentialsProviderBuilder>

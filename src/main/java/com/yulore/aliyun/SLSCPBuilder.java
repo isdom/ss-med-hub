@@ -11,7 +11,7 @@ import java.io.StringReader;
 import java.util.Properties;
 
 @Slf4j
-public class MyBuilder implements CredentialsProviderBuilder {
+public class SLSCPBuilder implements CredentialsProviderBuilder {
     @Override
     public CredentialsProvider getCredentialsProvider() throws Exception {
         String accessKeyId = null;
@@ -41,7 +41,7 @@ public class MyBuilder implements CredentialsProviderBuilder {
             log.error("getCredentialsProvider: {}", e.toString());
         }
 
-        return new MyCredentialsProvider(accessKeyId, accessKeySecret);
+        return new SLSCredentialsProvider(accessKeyId, accessKeySecret);
     }
 
     private String _dataId;

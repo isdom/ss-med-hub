@@ -3,8 +3,8 @@ package com.yulore.aliyun;
 import com.aliyun.openservices.log.common.auth.Credentials;
 import com.aliyun.openservices.log.common.auth.CredentialsProvider;
 
-public class MyCredentialsProvider implements CredentialsProvider {
-    public MyCredentialsProvider(String accessKeyId, String accessKeySecret) {
+public class SLSCredentialsProvider implements CredentialsProvider {
+    public SLSCredentialsProvider(String accessKeyId, String accessKeySecret) {
         this._accessKeyId = accessKeyId;
         this._accessKeySecret = accessKeySecret;
     }
