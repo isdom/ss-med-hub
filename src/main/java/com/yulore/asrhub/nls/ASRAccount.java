@@ -119,7 +119,7 @@ public class ASRAccount {
                     log.warn("_accessToken.apply failed: {}", e.toString());
                 }
             } else {
-                log.info("nls account: {} no need update token, expire time: {}\nconnecting:{}, connected: {}",
+                log.info("nls account: {} no need update token, expire time: {} connecting:{}, connected: {}",
                         account,
                         new SimpleDateFormat().format(new Date(_accessToken.getExpireTime() * 1000)),
                         _connectingOrConnectedCount.get(), _connectedCount.get());

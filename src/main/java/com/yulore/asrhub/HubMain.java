@@ -135,7 +135,7 @@ public class HubMain {
         log.info("nls account init, count:{}", _accounts.size());
 
         _nlsAuthExecutor = Executors.newSingleThreadScheduledExecutor();
-        _nlsAuthExecutor.scheduleAtFixedRate(this::checkAndUpdateNlsToken, 0, 60, TimeUnit.SECONDS);
+        _nlsAuthExecutor.scheduleAtFixedRate(this::checkAndUpdateNlsToken, 0, 10, TimeUnit.SECONDS);
     }
 
     private ASRAccount selectASRAccount() {
