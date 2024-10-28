@@ -235,7 +235,7 @@ public class HubMain {
             log.info("nls_url: {}", _nls_url);
 
             //创建实例、建立连接。
-            transcriber = new SpeechTranscriber(client, account.currentToken(), listener, _nls_url);
+            transcriber = new SpeechTranscriber(client, account.currentToken(), listener/*, _nls_url*/);
             transcriber.setAppKey(account.getAppKey());
 
             //输入音频编码方式。
