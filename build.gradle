@@ -20,8 +20,8 @@ dependencies {
     compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.20'
     annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.20'
 
-    implementation 'com.alibaba.nls:nls-sdk-common:2.1.6'
-    implementation 'com.alibaba.nls:nls-sdk-transcriber:2.2.15'
+    implementation 'com.alibaba.nls:nls-sdk-common:2.2.16'
+    implementation 'com.alibaba.nls:nls-sdk-transcriber:2.2.16'
     // https://mvnrepository.com/artifact/org.java-websocket/Java-WebSocket
     implementation 'org.java-websocket:Java-WebSocket:1.5.7'
 
