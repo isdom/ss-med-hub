@@ -156,7 +156,12 @@ public class HubMain {
     }
 
     private void handleASRData(final ByteBuffer bytes, final WebSocket webSocket) {
-        final SpeechTranscriber transcriber = webSocket.getAttachment();
+        final Session session = webSocket.getAttachment();
+        if (session == null) {
+            log.error("handleASRData: {} without Session, abort", webSocket.getRemoteSocketAddress());
+            return;
+        }
+        final SpeechTranscriber transcriber = session.getSpeechTranscriber();
         if (transcriber != null) {
             transcriber.send(bytes.array());
         }
