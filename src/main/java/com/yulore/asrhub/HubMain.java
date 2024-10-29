@@ -69,7 +69,7 @@ public class HubMain {
         initASRAccounts();
 
         //创建NlsClient实例应用全局创建一个即可。生命周期可和整个应用保持一致，默认服务地址为阿里云线上服务地址。
-        _nlsClient = new NlsClient(_nls_url);
+        _nlsClient = new NlsClient(_nls_url, "invalid_token");
 
         _sessionExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2);
 
@@ -235,7 +235,7 @@ public class HubMain {
             log.info("nls_url: {}", _nls_url);
 
             //创建实例、建立连接。
-            transcriber = new SpeechTranscriber(client, account.currentToken(), listener/*, _nls_url*/);
+            transcriber = new SpeechTranscriber(client, account.currentToken(), listener);
             transcriber.setAppKey(account.getAppKey());
 
             //输入音频编码方式。
