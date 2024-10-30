@@ -7,7 +7,7 @@ class SessionTest {
 
     @Test
     void startTranscription() {
-        Session session = new Session();
+        Session session = new Session(_test_enable_delay);
 
         // return true for the first time
         assertTrue(session.startTranscription());

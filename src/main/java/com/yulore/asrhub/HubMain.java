@@ -54,6 +54,12 @@ public class HubMain {
     @Value("#{${nls.accounts}}")
     private Map<String,String> _nlsAccounts;
 
+    @Value("${test.enable_delay}")
+    private boolean _test_enable_delay;
+
+    @Value("${test.delay_ms}")
+    private long _test_delay_ms;
+
     final List<ASRAccount> _accounts = new ArrayList<>();
 
     private ScheduledExecutorService _nlsAuthExecutor;
@@ -78,13 +84,14 @@ public class HubMain {
                     public void onOpen(final WebSocket webSocket, final ClientHandshake clientHandshake) {
                         log.info("new connection to {}", webSocket.getRemoteSocketAddress());
                         // init session attach with webSocket
-                        webSocket.setAttachment(new Session());
+                        webSocket.setAttachment(new Session(_test_enable_delay, _test_delay_ms));
                     }
 
                     @Override
                     public void onClose(WebSocket webSocket, int code, String reason, boolean remote) {
                         log.info("closed {} with exit code {} additional info: {}", webSocket.getRemoteSocketAddress(), code, reason);
                         stopAndCloseTranscriber(webSocket);
+                        webSocket.<Session>getAttachment().close();
                     }
 
                     @Override
@@ -161,10 +168,7 @@ public class HubMain {
             log.error("handleASRData: {} without Session, abort", webSocket.getRemoteSocketAddress());
             return;
         }
-        final SpeechTranscriber transcriber = session.getSpeechTranscriber();
-        if (transcriber != null) {
-            transcriber.send(bytes.array());
-        }
+        session.transmit(bytes);
     }
 
     private void handleASRCommand(final ASRCommandVO cmd, final WebSocket webSocket) {

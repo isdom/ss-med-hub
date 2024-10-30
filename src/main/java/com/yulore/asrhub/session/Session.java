@@ -7,6 +7,11 @@ import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
 
+import java.nio.ByteBuffer;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -22,6 +27,15 @@ public class Session {
 
     final AtomicBoolean _isStartTranscription = new AtomicBoolean(false);
     final AtomicBoolean _isTranscriptionStarted = new AtomicBoolean(false);
+    ScheduledExecutorService _delayExecutor = null;
+    long _testDelayMs = 0;
+
+    public Session(final boolean testEnableDelay, final long testDelayMs) {
+        if (testEnableDelay) {
+            _delayExecutor = Executors.newSingleThreadScheduledExecutor();
+            _testDelayMs = testDelayMs;
+        }
+    }
 
     public void lock() {
         _lock.lock();
@@ -77,6 +91,22 @@ public class Session {
             }
         } finally {
             unlock();
+        }
+    }
+
+    public void transmit(final ByteBuffer bytes) {
+        if (speechTranscriber != null) {
+            if (_delayExecutor == null) {
+                speechTranscriber.send(bytes.array());
+            } else {
+                _delayExecutor.schedule(()->speechTranscriber.send(bytes.array()), _testDelayMs, TimeUnit.MILLISECONDS);
+            }
+        }
+    }
+
+    public void close() {
+        if (_delayExecutor != null) {
+            _delayExecutor.shutdownNow();
         }
     }
 }
