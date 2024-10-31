@@ -8,7 +8,7 @@ import com.alibaba.nls.client.protocol.asr.SpeechTranscriberListener;
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriberResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.yulore.asrhub.nls.ASRAccount;
+import com.yulore.asrhub.nls.AsrAgent;
 import com.yulore.asrhub.session.Session;
 import com.yulore.asrhub.vo.*;
 import io.netty.util.NettyRuntime;
@@ -60,7 +60,7 @@ public class HubMain {
     @Value("${test.delay_ms}")
     private long _test_delay_ms;
 
-    final List<ASRAccount> _accounts = new ArrayList<>();
+    final List<AsrAgent> _accounts = new ArrayList<>();
 
     private ScheduledExecutorService _nlsAuthExecutor;
     
@@ -132,7 +132,7 @@ public class HubMain {
             log.info("nls account: {} / {}", entry.getKey(), entry.getValue());
             final String[] values = entry.getValue().split(" ");
             log.info("nls values detail: {}", Arrays.toString(values));
-            final ASRAccount account = ASRAccount.parse(entry.getKey(), entry.getValue());
+            final AsrAgent account = AsrAgent.parse(entry.getKey(), entry.getValue());
             if (null == account) {
                 log.warn("nls account init failed by: {}/{}", entry.getKey(), entry.getValue());
             } else {
@@ -145,9 +145,9 @@ public class HubMain {
         _nlsAuthExecutor.scheduleAtFixedRate(this::checkAndUpdateNlsToken, 0, 10, TimeUnit.SECONDS);
     }
 
-    private ASRAccount selectASRAccount() {
-        for (ASRAccount account : _accounts) {
-            final ASRAccount selected = account.checkAndSelectIfhasIdle();
+    private AsrAgent selectASRAccount() {
+        for (AsrAgent account : _accounts) {
+            final AsrAgent selected = account.checkAndSelectIfhasIdle();
             if (null != selected) {
                 log.info("select asr({}): {}/{}", account.getAccount(), account.get_connectingOrConnectedCount().get(), account.getLimit());
                 return selected;
@@ -157,7 +157,7 @@ public class HubMain {
     }
 
     private void checkAndUpdateNlsToken() {
-        for (ASRAccount account : _accounts) {
+        for (AsrAgent account : _accounts) {
             account.checkAndUpdateAccessToken();
         }
     }
@@ -213,7 +213,7 @@ public class HubMain {
             }
 
             final long startConnectingInMs = System.currentTimeMillis();
-            final ASRAccount account = selectASRAccount();
+            final AsrAgent account = selectASRAccount();
             session.setAsrAccount(account);
 
             speechTranscriber = buildSpeechTranscriber(_nlsClient, account, buildTranscriberListener(webSocket, account, startConnectingInMs));
@@ -233,7 +233,7 @@ public class HubMain {
         }
     }
 
-    private SpeechTranscriber buildSpeechTranscriber(final NlsClient client, final ASRAccount account, final SpeechTranscriberListener listener) {
+    private SpeechTranscriber buildSpeechTranscriber(final NlsClient client, final AsrAgent account, final SpeechTranscriberListener listener) {
         SpeechTranscriber transcriber = null;
         try {
             log.info("nls_url: {}", _nls_url);
@@ -279,7 +279,7 @@ public class HubMain {
     }
 
     @NotNull
-    private SpeechTranscriberListener buildTranscriberListener(final WebSocket webSocket, final ASRAccount account, final long startConnectingInMs) {
+    private SpeechTranscriberListener buildTranscriberListener(final WebSocket webSocket, final AsrAgent account, final long startConnectingInMs) {
         return new SpeechTranscriberListener() {
             @Override
             public void onTranscriberStart(final SpeechTranscriberResponse response) {
@@ -342,7 +342,7 @@ public class HubMain {
         };
     }
 
-    private void notifyTranscriptionStarted(final WebSocket webSocket, final ASRAccount account, final SpeechTranscriberResponse response) {
+    private void notifyTranscriptionStarted(final WebSocket webSocket, final AsrAgent account, final SpeechTranscriberResponse response) {
         final Session session = webSocket.getAttachment();
         session.transcriptionStarted();
         account.incConnected();
@@ -370,7 +370,7 @@ public class HubMain {
                         response.getTransSentenceText()));
     }
 
-    private void notifyTranscriptionCompleted(final WebSocket webSocket, final ASRAccount account, final SpeechTranscriberResponse response) {
+    private void notifyTranscriptionCompleted(final WebSocket webSocket, final AsrAgent account, final SpeechTranscriberResponse response) {
         // TODO: account.dec??
         sendEvent(webSocket, "TranscriptionCompleted", (Void)null);
     }

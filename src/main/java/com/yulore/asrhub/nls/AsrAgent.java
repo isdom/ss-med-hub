@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicReference;
 @Data
 @ToString
 @Slf4j
-public class ASRAccount {
+public class AsrAgent {
     String account;
     String appKey;
     String accessKeyId;
@@ -28,9 +28,9 @@ public class ASRAccount {
 
     final AtomicReference<String> _currentToken = new AtomicReference<String>(null);
 
-    public static ASRAccount parse(final String accountName, final String values) {
+    public static AsrAgent parse(final String accountName, final String values) {
         final String[] kvs = values.split(" ");
-        final ASRAccount account = new ASRAccount();
+        final AsrAgent account = new AsrAgent();
         account.setAccount(accountName);
 
         for (String kv : kvs) {
@@ -58,7 +58,7 @@ public class ASRAccount {
         return _currentToken.get();
     }
 
-    public ASRAccount checkAndSelectIfhasIdle() {
+    public AsrAgent checkAndSelectIfhasIdle() {
         while (true) {
             int currentCount = _connectingOrConnectedCount.get();
             if (currentCount >= limit) {
