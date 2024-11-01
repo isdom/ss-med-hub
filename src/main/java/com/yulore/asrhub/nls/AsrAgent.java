@@ -99,7 +99,7 @@ public class AsrAgent {
             try {
                 _accessToken.apply();
                 _currentToken.set(_accessToken.getToken());
-                log.info("nls account: {} init token: {}, expire time: {}",
+                log.info("asr account: {} init token: {}, expire time: {}",
                         account, _accessToken.getToken(),
                         new SimpleDateFormat().format(new Date(_accessToken.getExpireTime() * 1000)) );
 
@@ -119,7 +119,7 @@ public class AsrAgent {
                     log.warn("_accessToken.apply failed: {}", e.toString());
                 }
             } else {
-                log.info("nls account: {} no need update token, expire time: {} connecting:{}, connected: {}",
+                log.info("asr account: {} no need update token, expire time: {} connecting:{}, connected: {}",
                         account,
                         new SimpleDateFormat().format(new Date(_accessToken.getExpireTime() * 1000)),
                         _connectingOrConnectedCount.get(), _connectedCount.get());
