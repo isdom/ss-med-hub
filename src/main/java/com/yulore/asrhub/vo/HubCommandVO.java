@@ -7,7 +7,7 @@ import java.util.Map;
 
 @Data
 @ToString
-public class ASRCommandVO {
+public class HubCommandVO {
     Map<String, String> header;
     Map<String, String> payload;
 }

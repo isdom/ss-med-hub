@@ -60,7 +60,7 @@ public class HubMain {
     @Value("${test.delay_ms}")
     private long _test_delay_ms;
 
-    final List<AsrAgent> _accounts = new ArrayList<>();
+    final List<AsrAgent> _agents = new ArrayList<>();
 
     private ScheduledExecutorService _nlsAuthExecutor;
     
@@ -72,7 +72,7 @@ public class HubMain {
 
     @PostConstruct
     public void start() {
-        initASRAccounts();
+        initASRAgents();
 
         //创建NlsClient实例应用全局创建一个即可。生命周期可和整个应用保持一致，默认服务地址为阿里云线上服务地址。
         _nlsClient = new NlsClient(_nls_url, "invalid_token");
@@ -98,7 +98,7 @@ public class HubMain {
                     public void onMessage(final WebSocket webSocket, final String message) {
                         log.info("received text message from {}: {}", webSocket.getRemoteSocketAddress(), message);
                         try {
-                            handleASRCommand(new ObjectMapper().readValue(message, ASRCommandVO.class), webSocket);
+                            handleHubCommand(new ObjectMapper().readValue(message, HubCommandVO.class), webSocket);
                         } catch (JsonProcessingException ex) {
                             log.error("handleASRCommand {}: {}, an error occurred when parseAsJson: {}",
                                     webSocket.getRemoteSocketAddress(), message, ex.toString());
@@ -126,8 +126,8 @@ public class HubMain {
         _wsServer.start();
     }
 
-    private void initASRAccounts() {
-        _accounts.clear();
+    private void initASRAgents() {
+        _agents.clear();
         for (Map.Entry<String, String> entry : _nlsAccounts.entrySet()) {
             log.info("nls account: {} / {}", entry.getKey(), entry.getValue());
             final String[] values = entry.getValue().split(" ");
@@ -136,20 +136,20 @@ public class HubMain {
             if (null == account) {
                 log.warn("nls account init failed by: {}/{}", entry.getKey(), entry.getValue());
             } else {
-                _accounts.add(account);
+                _agents.add(account);
             }
         }
-        log.info("nls account init, count:{}", _accounts.size());
+        log.info("nls account init, count:{}", _agents.size());
 
         _nlsAuthExecutor = Executors.newSingleThreadScheduledExecutor();
         _nlsAuthExecutor.scheduleAtFixedRate(this::checkAndUpdateNlsToken, 0, 10, TimeUnit.SECONDS);
     }
 
-    private AsrAgent selectASRAccount() {
-        for (AsrAgent account : _accounts) {
+    private AsrAgent selectAsrAgent() {
+        for (AsrAgent account : _agents) {
             final AsrAgent selected = account.checkAndSelectIfhasIdle();
             if (null != selected) {
-                log.info("select asr({}): {}/{}", account.getAccount(), account.get_connectingOrConnectedCount().get(), account.getLimit());
+                log.info("select asr({}): {}/{}", account.getName(), account.get_connectingOrConnectedCount().get(), account.getLimit());
                 return selected;
             }
         }
@@ -157,7 +157,7 @@ public class HubMain {
     }
 
     private void checkAndUpdateNlsToken() {
-        for (AsrAgent account : _accounts) {
+        for (AsrAgent account : _agents) {
             account.checkAndUpdateAccessToken();
         }
     }
@@ -171,7 +171,7 @@ public class HubMain {
         session.transmit(bytes);
     }
 
-    private void handleASRCommand(final ASRCommandVO cmd, final WebSocket webSocket) {
+    private void handleHubCommand(final HubCommandVO cmd, final WebSocket webSocket) {
         if ("StartTranscription".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handleStartTranscriptionCommand(cmd, webSocket));
         } else if ("StopTranscription".equals(cmd.getHeader().get("name"))) {
@@ -182,8 +182,8 @@ public class HubMain {
     }
 
     private static <PAYLOAD> void sendEvent(final WebSocket webSocket, final String eventName, final PAYLOAD payload) {
-        final ASREventVO<PAYLOAD> event = new ASREventVO<>();
-        final ASREventVO.Header header = new ASREventVO.Header();
+        final HubEventVO<PAYLOAD> event = new HubEventVO<>();
+        final HubEventVO.Header header = new HubEventVO.Header();
         header.setName(eventName);
         event.setHeader(header);
         event.setPayload(payload);
@@ -195,7 +195,7 @@ public class HubMain {
         }
     }
 
-    private void handleStartTranscriptionCommand(final ASRCommandVO cmd, final WebSocket webSocket) {
+    private void handleStartTranscriptionCommand(final HubCommandVO cmd, final WebSocket webSocket) {
         final Session session = webSocket.getAttachment();
         if (session == null) {
             log.error("StartTranscription: {} without Session, abort", webSocket.getRemoteSocketAddress());
@@ -213,7 +213,7 @@ public class HubMain {
             }
 
             final long startConnectingInMs = System.currentTimeMillis();
-            final AsrAgent account = selectASRAccount();
+            final AsrAgent account = selectAsrAgent();
             session.setAsrAccount(account);
 
             speechTranscriber = buildSpeechTranscriber(_nlsClient, account, buildTranscriberListener(webSocket, account, startConnectingInMs));
@@ -375,7 +375,7 @@ public class HubMain {
         sendEvent(webSocket, "TranscriptionCompleted", (Void)null);
     }
 
-    private void handleStopTranscriptionCommand(final ASRCommandVO cmd, final WebSocket webSocket) {
+    private void handleStopTranscriptionCommand(final HubCommandVO cmd, final WebSocket webSocket) {
         stopAndCloseTranscriber(webSocket);
         webSocket.close();
     }

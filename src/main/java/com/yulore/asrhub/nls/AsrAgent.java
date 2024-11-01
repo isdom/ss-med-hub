@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicReference;
 @ToString
 @Slf4j
 public class AsrAgent {
-    String account;
+    String name;
     String appKey;
     String accessKeyId;
     String accessKeySecret;
@@ -31,7 +31,7 @@ public class AsrAgent {
     public static AsrAgent parse(final String accountName, final String values) {
         final String[] kvs = values.split(" ");
         final AsrAgent account = new AsrAgent();
-        account.setAccount(accountName);
+        account.setName(accountName);
 
         for (String kv : kvs) {
             final String[] ss = kv.split("=");
@@ -100,7 +100,7 @@ public class AsrAgent {
                 _accessToken.apply();
                 _currentToken.set(_accessToken.getToken());
                 log.info("asr account: {} init token: {}, expire time: {}",
-                        account, _accessToken.getToken(),
+                        name, _accessToken.getToken(),
                         new SimpleDateFormat().format(new Date(_accessToken.getExpireTime() * 1000)) );
 
             } catch (IOException e) {
@@ -113,14 +113,14 @@ public class AsrAgent {
                     _accessToken.apply();
                     _currentToken.set(_accessToken.getToken());
                     log.info("nls account: {} update token: {}, expire time: {}",
-                            account, _accessToken.getToken(),
+                            name, _accessToken.getToken(),
                             new SimpleDateFormat().format(new Date(_accessToken.getExpireTime() * 1000)) );
                 } catch (IOException e) {
                     log.warn("_accessToken.apply failed: {}", e.toString());
                 }
             } else {
                 log.info("asr account: {} no need update token, expire time: {} connecting:{}, connected: {}",
-                        account,
+                        name,
                         new SimpleDateFormat().format(new Date(_accessToken.getExpireTime() * 1000)),
                         _connectingOrConnectedCount.get(), _connectedCount.get());
             }
