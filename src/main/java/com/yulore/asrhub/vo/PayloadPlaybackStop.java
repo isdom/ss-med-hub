@@ -7,6 +7,6 @@ import lombok.ToString;
 @AllArgsConstructor
 @Data
 @ToString
-public class PayloadPlayback {
-    String l16_name;
+public class PayloadPlaybackStop {
+    String file;
 }

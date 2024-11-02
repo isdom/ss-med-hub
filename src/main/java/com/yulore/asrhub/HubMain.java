@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yulore.asrhub.nls.AsrAgent;
 import com.yulore.asrhub.session.Session;
 import com.yulore.asrhub.vo.*;
+import com.yulore.l16.L16File;
 import io.netty.util.NettyRuntime;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
@@ -22,16 +23,14 @@ import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
+import java.io.*;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 // Press Shift twice to open the Search Everywhere dialog and type `show whitespaces`,
 // then press Enter. You can now see whitespace characters in your code.
@@ -70,6 +69,13 @@ public class HubMain {
 
     private ExecutorService _sessionExecutor;
 
+    private ConcurrentMap<String, L16File> _id2L16File = new ConcurrentHashMap<>();
+
+    private ScheduledExecutorService _playbackExecutor;
+
+    @Value("${l16.path}")
+    private String _l16_path;
+
     @PostConstruct
     public void start() {
         initASRAgents();
@@ -78,6 +84,7 @@ public class HubMain {
         _nlsClient = new NlsClient(_nls_url, "invalid_token");
 
         _sessionExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2);
+        _playbackExecutor = Executors.newScheduledThreadPool(NettyRuntime.availableProcessors() * 2);
 
         _wsServer = new WebSocketServer(new InetSocketAddress(_ws_host, _ws_port)) {
                     @Override
@@ -176,9 +183,64 @@ public class HubMain {
             _sessionExecutor.submit(()-> handleStartTranscriptionCommand(cmd, webSocket));
         } else if ("StopTranscription".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handleStopTranscriptionCommand(cmd, webSocket));
+        } else if ("Playback".equals(cmd.getHeader().get("name"))) {
+            _sessionExecutor.submit(()-> handlePlaybackCommand(cmd, webSocket));
         } else {
-            log.warn("handleASRCommand: Unknown Command: {}", cmd);
+            log.warn("handleHubCommand: Unknown Command: {}", cmd);
         }
+    }
+
+    private void handlePlaybackCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        final String file = cmd.getPayload().get("file");
+        if (file != null ) {
+            // {vars_playback_id=73cb4b57-0c54-42aa-98a9-9b81352c0cc4}/mnt/aicall/aispeech/dd_app_sb_3_0/c264515130674055869c16fcc2458109.wav
+            final int begin = file.lastIndexOf('/');
+            final int end = file.indexOf('.');
+            final String fileid = file.substring(begin + 1, end);
+            log.info("handlePlaybackCommand: try load file: {}", fileid);
+            L16File l16file = _id2L16File.get(fileid);
+            if (l16file == null ) {
+                final String fullPath = _l16_path + fileid + ".l16";
+                final File l16 = new File(fullPath);
+                if (!l16.exists()) {
+                    log.warn("handlePlaybackCommand: {} not exist, ignore playback {}", fullPath, fileid);
+                    return;
+                }
+                try (final DataInputStream is = new DataInputStream(new FileInputStream(l16))) {
+                    l16file = L16File.loadL16(is);
+                    if (l16file == null) {
+                        log.warn("handlePlaybackCommand: load {} failed!", fullPath);
+                        return;
+                    }
+                    final L16File prevL16file = _id2L16File.putIfAbsent(fileid, l16file);
+                    if (prevL16file != null) {
+                        l16file = prevL16file;
+                    }
+                } catch (IOException ex) {
+                    log.warn("handlePlaybackCommand: load {} failed: {}", fullPath, ex.toString());
+                    return;
+                }
+            }
+            sendEvent(webSocket, "PlaybackStart",
+                    new PayloadPlaybackStart(file,
+                            l16file.header.rate,
+                            l16file.header.interval,
+                            l16file.header.channels));
+            schedulePlayback(l16file, file, webSocket);
+        }
+    }
+
+    private void schedulePlayback(final L16File l16file, final String file, final WebSocket webSocket) {
+        final List<ScheduledFuture<?>> futures = new ArrayList<>(l16file.slices.length + 1);
+        for (L16File.L16Slice slice : l16file.slices) {
+            final ScheduledFuture<?> future = _playbackExecutor.schedule(()->webSocket.send(slice.raw_data),
+                    slice.from_start / 1000, TimeUnit.MILLISECONDS);
+            futures.add(future);
+        }
+        final long notifyStopDelay = l16file.slices[l16file.slices.length - 1].from_start / 1000 + l16file.header.interval;
+        futures.add(_playbackExecutor.schedule(()->sendEvent(webSocket, "PlaybackStop", new PayloadPlaybackStop(file)),
+                notifyStopDelay, TimeUnit.MILLISECONDS));
+        log.info("schedulePlayback: schedule {} by {} send action", file, futures.size());
     }
 
     private static <PAYLOAD> void sendEvent(final WebSocket webSocket, final String eventName, final PAYLOAD payload) {
@@ -398,6 +460,7 @@ public class HubMain {
 
         _nlsAuthExecutor.shutdownNow();
         _sessionExecutor.shutdownNow();
+        _playbackExecutor.shutdownNow();
 
         log.info("ASR-Hub: shutdown");
     }
