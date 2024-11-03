@@ -1,4 +1,4 @@
-package com.yulore.asrhub;
+package com.yulore.medhub;
 
 import com.alibaba.nls.client.protocol.InputFormatEnum;
 import com.alibaba.nls.client.protocol.NlsClient;
@@ -8,10 +8,10 @@ import com.alibaba.nls.client.protocol.asr.SpeechTranscriberListener;
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriberResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.yulore.asrhub.nls.ASRAgent;
-import com.yulore.asrhub.nls.TTSAgent;
-import com.yulore.asrhub.session.Session;
-import com.yulore.asrhub.vo.*;
+import com.yulore.medhub.nls.ASRAgent;
+import com.yulore.medhub.nls.TTSAgent;
+import com.yulore.medhub.session.Session;
+import com.yulore.medhub.vo.*;
 import com.yulore.l16.L16File;
 import io.netty.util.NettyRuntime;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +32,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
+
+// 20241103: asr-hub rename to med-hub (Media Hub)
 
 // Press Shift twice to open the Search Everywhere dialog and type `show whitespaces`,
 // then press Enter. You can now see whitespace characters in your code.

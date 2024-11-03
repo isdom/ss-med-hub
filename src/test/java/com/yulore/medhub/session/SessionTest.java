@@ -1,4 +1,4 @@
-package com.yulore.asrhub.session;
+package com.yulore.medhub.session;
 
 import org.junit.jupiter.api.Test;
 
@@ -7,7 +7,7 @@ class SessionTest {
 
     @Test
     void startTranscription() {
-        Session session = new Session(_test_enable_delay);
+        Session session = new Session(false, 0);
 
         // return true for the first time
         assertTrue(session.startTranscription());

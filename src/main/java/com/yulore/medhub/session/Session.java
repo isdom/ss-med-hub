@@ -1,7 +1,7 @@
-package com.yulore.asrhub.session;
+package com.yulore.medhub.session;
 
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriber;
-import com.yulore.asrhub.nls.ASRAgent;
+import com.yulore.medhub.nls.ASRAgent;
 import lombok.Data;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
@@ -66,10 +66,10 @@ public class Session {
                 log.info("stopAndCloseTranscriber: {} has already stopAndCloseTranscriber, ignore", webSocket.getRemoteSocketAddress());
                 return;
             }
-            final ASRAgent asr = asrAgent;
+            final ASRAgent agent = asrAgent;
             asrAgent = null;
 
-            asr.decConnection();
+            agent.decConnection();
 
             if (speechTranscriber != null) {
                 try {
@@ -86,7 +86,7 @@ public class Session {
             }
             if (isTranscriptionStarted()) {
                 // 对于已经标记了 TranscriptionStarted 的会话, 将其使用的 ASR Account 已连接通道减少一
-                asr.decConnected();
+                agent.decConnected();
             }
         } finally {
             unlock();

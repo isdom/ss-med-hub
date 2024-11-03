@@ -1,6 +1,5 @@
-package com.yulore.asrhub.nls;
+package com.yulore.medhub.nls;
 
-import com.alibaba.nls.client.protocol.NlsClient;
 import com.alibaba.nls.client.protocol.OutputFormatEnum;
 import com.alibaba.nls.client.protocol.SampleRateEnum;
 import com.alibaba.nls.client.protocol.tts.SpeechSynthesizer;

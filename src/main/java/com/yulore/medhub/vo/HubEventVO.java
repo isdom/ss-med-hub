@@ -1,4 +1,4 @@
-package com.yulore.asrhub.vo;
+package com.yulore.medhub.vo;
 
 import lombok.Data;
 import lombok.ToString;

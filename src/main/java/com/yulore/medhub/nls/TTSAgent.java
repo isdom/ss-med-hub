@@ -1,9 +1,9 @@
-package com.yulore.asrhub.nls;
+package com.yulore.medhub.nls;
 
 import com.alibaba.nls.client.AccessToken;
 import com.alibaba.nls.client.protocol.NlsClient;
-import com.alibaba.nls.client.protocol.asr.SpeechTranscriber;
-import com.alibaba.nls.client.protocol.asr.SpeechTranscriberListener;
+import com.alibaba.nls.client.protocol.tts.SpeechSynthesizer;
+import com.alibaba.nls.client.protocol.tts.SpeechSynthesizerListener;
 import lombok.Data;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicReference;
 @Data
 @ToString
 @Slf4j
-public class ASRAgent {
+public class TTSAgent {
     NlsClient client;
 
     String name;
@@ -33,9 +33,9 @@ public class ASRAgent {
 
     final AtomicReference<String> _currentToken = new AtomicReference<String>(null);
 
-    public static ASRAgent parse(final String accountName, final String values) {
+    public static TTSAgent parse(final String accountName, final String values) {
         final String[] kvs = values.split(" ");
-        final ASRAgent agent = new ASRAgent();
+        final TTSAgent agent = new TTSAgent();
         agent.setName(accountName);
 
         for (String kv : kvs) {
@@ -56,18 +56,18 @@ public class ASRAgent {
         }
     }
 
-    public SpeechTranscriber buildSpeechTranscriber(final SpeechTranscriberListener listener) throws Exception {
+    public SpeechSynthesizer buildSpeechSynthesizer(final SpeechSynthesizerListener listener) throws Exception {
         //创建实例、建立连接。
-        final SpeechTranscriber transcriber = new SpeechTranscriber(client, currentToken(), listener);
-        transcriber.setAppKey(appKey);
-        return transcriber;
+        final SpeechSynthesizer synthesizer = new SpeechSynthesizer(client, currentToken(), listener);
+        synthesizer.setAppKey(appKey);
+        return synthesizer;
     }
 
     public String currentToken() {
         return _currentToken.get();
     }
 
-    public ASRAgent checkAndSelectIfhasIdle() {
+    public TTSAgent checkAndSelectIfhasIdle() {
         while (true) {
             int currentCount = _connectingOrConnectedCount.get();
             if (currentCount >= limit) {
@@ -103,7 +103,7 @@ public class ASRAgent {
             try {
                 _accessToken.apply();
                 _currentToken.set(_accessToken.getToken());
-                log.info("asr agent: {} init token: {}, expire time: {}",
+                log.info("tts agent: {} init token: {}, expire time: {}",
                         name, _accessToken.getToken(),
                         new SimpleDateFormat().format(new Date(_accessToken.getExpireTime() * 1000)) );
 
@@ -116,14 +116,14 @@ public class ASRAgent {
                 try {
                     _accessToken.apply();
                     _currentToken.set(_accessToken.getToken());
-                    log.info("asr agent: {} update token: {}, expire time: {}",
+                    log.info("tts agent: {} update token: {}, expire time: {}",
                             name, _accessToken.getToken(),
                             new SimpleDateFormat().format(new Date(_accessToken.getExpireTime() * 1000)) );
                 } catch (IOException e) {
                     log.warn("_accessToken.apply failed: {}", e.toString());
                 }
             } else {
-                log.info("asr agent: {} no need update token, expire time: {} connecting:{}, connected: {}",
+                log.info("tts agent: {} no need update token, expire time: {} connecting:{}, connected: {}",
                         name,
                         new SimpleDateFormat().format(new Date(_accessToken.getExpireTime() * 1000)),
                         _connectingOrConnectedCount.get(), _connectedCount.get());
