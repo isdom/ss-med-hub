@@ -10,9 +10,11 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yulore.medhub.nls.ASRAgent;
 import com.yulore.medhub.nls.TTSAgent;
-import com.yulore.medhub.session.Session;
+import com.yulore.medhub.nls.TTSTask;
+import com.yulore.medhub.session.MediaSession;
 import com.yulore.medhub.vo.*;
 import com.yulore.l16.L16File;
+import com.yulore.util.ByteArrayListInputStream;
 import io.netty.util.NettyRuntime;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
@@ -98,14 +100,14 @@ public class HubMain {
                     public void onOpen(final WebSocket webSocket, final ClientHandshake clientHandshake) {
                         log.info("new connection to {}", webSocket.getRemoteSocketAddress());
                         // init session attach with webSocket
-                        webSocket.setAttachment(new Session(_test_enable_delay, _test_delay_ms));
+                        webSocket.setAttachment(new MediaSession(_test_enable_delay, _test_delay_ms));
                     }
 
                     @Override
                     public void onClose(WebSocket webSocket, int code, String reason, boolean remote) {
                         log.info("closed {} with exit code {} additional info: {}", webSocket.getRemoteSocketAddress(), code, reason);
                         stopAndCloseTranscriber(webSocket);
-                        webSocket.<Session>getAttachment().close();
+                        webSocket.<MediaSession>getAttachment().close();
                     }
 
                     @Override
@@ -173,15 +175,26 @@ public class HubMain {
         _nlsAuthExecutor.scheduleAtFixedRate(this::checkAndUpdateNlsToken, 0, 10, TimeUnit.SECONDS);
     }
 
-    private ASRAgent selectAsrAgent() {
-        for (ASRAgent account : _asrAgents) {
-            final ASRAgent selected = account.checkAndSelectIfhasIdle();
+    private ASRAgent selectASRAgent() {
+        for (ASRAgent agent : _asrAgents) {
+            final ASRAgent selected = agent.checkAndSelectIfhasIdle();
             if (null != selected) {
-                log.info("select asr({}): {}/{}", account.getName(), account.get_connectingOrConnectedCount().get(), account.getLimit());
+                log.info("select asr({}): {}/{}", agent.getName(), agent.get_connectingOrConnectedCount().get(), agent.getLimit());
                 return selected;
             }
         }
-        throw new RuntimeException("all asr account has full");
+        throw new RuntimeException("all asr agent has full");
+    }
+
+    private TTSAgent selectTTSAgent() {
+        for (TTSAgent agent : _ttsAgents) {
+            final TTSAgent selected = agent.checkAndSelectIfhasIdle();
+            if (null != selected) {
+                log.info("select tts({}): {}/{}", agent.getName(), agent.get_connectingOrConnectedCount().get(), agent.getLimit());
+                return selected;
+            }
+        }
+        throw new RuntimeException("all tts agent has full");
     }
 
     private void checkAndUpdateNlsToken() {
@@ -194,7 +207,7 @@ public class HubMain {
     }
 
     private void handleASRData(final ByteBuffer bytes, final WebSocket webSocket) {
-        final Session session = webSocket.getAttachment();
+        final MediaSession session = webSocket.getAttachment();
         if (session == null) {
             log.error("handleASRData: {} without Session, abort", webSocket.getRemoteSocketAddress());
             return;
@@ -218,9 +231,62 @@ public class HubMain {
 
     private void handlePlayTTSCommand(final HubCommandVO cmd, final WebSocket webSocket) {
         final String text = cmd.getPayload().get("text");
-        if (text != null ) {
-
+        if (text == null ) {
+            log.warn("PlayTTS: {} 's text is null, abort", webSocket.getRemoteSocketAddress());
+            return;
         }
+        final MediaSession session = webSocket.getAttachment();
+        if (session == null) {
+            log.error("PlayTTS: {} without Session, abort", webSocket.getRemoteSocketAddress());
+            return;
+        }
+
+        if (!session.startPlaying()) {
+            log.error("PlayTTS: {} playing another, abort this play command", webSocket.getRemoteSocketAddress());
+            return;
+        }
+
+        final List<byte[]> bufs = new ArrayList<>();
+        final long startInMs = System.currentTimeMillis();
+        final TTSAgent agent = selectTTSAgent();
+        final TTSTask task = new TTSTask(agent, text,
+                (bytes) -> bufs.add(bytes.array()),
+                (response)->playPcmTo(new ByteArrayListInputStream(bufs), webSocket, startInMs, session::stopPlaying),
+                (response)->{
+                    log.warn("tts failed: {}", response);
+                    session.stopPlaying();
+                });
+        task.start();
+    }
+
+    private void playPcmTo(final InputStream is, final WebSocket webSocket, final long startInMs, final Runnable onEnd) {
+        log.info("playPcmTo: gen pcm stream cost={} ms", System.currentTimeMillis() - startInMs);
+        sendEvent(webSocket, "PlaybackStart",
+                new PayloadPlaybackStart("tts", 8000, 20, 1));
+        final List<ScheduledFuture<?>> futures = new ArrayList<>();
+        long delay = 20;
+        try {
+            final byte[] bytes = new byte[320];
+            while (is.read(bytes) == 320) {
+                final ScheduledFuture<?> future = _playbackExecutor.schedule(()->webSocket.send(bytes), delay, TimeUnit.MILLISECONDS);
+                futures.add(future);
+                delay += 20;
+            }
+        } catch (IOException ex) {
+            log.warn("playPcmTo: {}", ex.toString());
+        } finally {
+            try {
+                is.close();
+            } catch (IOException ignored) {
+            }
+        }
+
+        futures.add(_playbackExecutor.schedule(()->{
+                    sendEvent(webSocket, "PlaybackStop", new PayloadPlaybackStop("tts"));
+                    onEnd.run();
+                },
+                delay, TimeUnit.MILLISECONDS));
+        log.info("playPcmTo: schedule tts by {} send action", futures.size());
     }
 
     private void handlePlaybackCommand(final HubCommandVO cmd, final WebSocket webSocket) {
@@ -291,7 +357,7 @@ public class HubMain {
     }
 
     private void handleStartTranscriptionCommand(final HubCommandVO cmd, final WebSocket webSocket) {
-        final Session session = webSocket.getAttachment();
+        final MediaSession session = webSocket.getAttachment();
         if (session == null) {
             log.error("StartTranscription: {} without Session, abort", webSocket.getRemoteSocketAddress());
             return;
@@ -308,7 +374,7 @@ public class HubMain {
             }
 
             final long startConnectingInMs = System.currentTimeMillis();
-            final ASRAgent agent = selectAsrAgent();
+            final ASRAgent agent = selectASRAgent();
             session.setAsrAgent(agent);
 
             speechTranscriber = buildSpeechTranscriber(agent, buildTranscriberListener(webSocket, agent, startConnectingInMs));
@@ -429,7 +495,7 @@ public class HubMain {
     }
 
     private void notifyTranscriptionStarted(final WebSocket webSocket, final ASRAgent account, final SpeechTranscriberResponse response) {
-        final Session session = webSocket.getAttachment();
+        final MediaSession session = webSocket.getAttachment();
         session.transcriptionStarted();
         account.incConnected();
         sendEvent(webSocket, "TranscriptionStarted", (Void)null);
@@ -467,7 +533,7 @@ public class HubMain {
     }
 
     private static void stopAndCloseTranscriber(final WebSocket webSocket) {
-        final Session session = webSocket.getAttachment();
+        final MediaSession session = webSocket.getAttachment();
         if (session == null) {
             log.error("stopAndCloseTranscriber: {} without Session, abort", webSocket.getRemoteSocketAddress());
             return;

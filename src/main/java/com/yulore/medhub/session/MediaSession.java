@@ -18,18 +18,8 @@ import java.util.concurrent.locks.ReentrantLock;
 @Data
 @ToString
 @Slf4j
-public class Session {
-    private final Lock _lock = new ReentrantLock();
-
-    SpeechTranscriber speechTranscriber;
-    ASRAgent asrAgent;
-
-    final AtomicBoolean _isStartTranscription = new AtomicBoolean(false);
-    final AtomicBoolean _isTranscriptionStarted = new AtomicBoolean(false);
-    ScheduledExecutorService _delayExecutor = null;
-    long _testDelayMs = 0;
-
-    public Session(final boolean testEnableDelay, final long testDelayMs) {
+public class MediaSession {
+    public MediaSession(final boolean testEnableDelay, final long testDelayMs) {
         if (testEnableDelay) {
             _delayExecutor = Executors.newSingleThreadScheduledExecutor();
             _testDelayMs = testDelayMs;
@@ -108,4 +98,24 @@ public class Session {
             _delayExecutor.shutdownNow();
         }
     }
+
+    public boolean startPlaying() {
+        return _isPlaying.compareAndSet(false, true);
+    }
+
+    public boolean stopPlaying() {
+        return _isPlaying.compareAndSet(true, false);
+    }
+
+    private final Lock _lock = new ReentrantLock();
+
+    SpeechTranscriber speechTranscriber;
+    ASRAgent asrAgent;
+
+    final AtomicBoolean _isStartTranscription = new AtomicBoolean(false);
+    final AtomicBoolean _isTranscriptionStarted = new AtomicBoolean(false);
+    ScheduledExecutorService _delayExecutor = null;
+    long _testDelayMs = 0;
+
+    final AtomicBoolean _isPlaying = new AtomicBoolean(false);
 }

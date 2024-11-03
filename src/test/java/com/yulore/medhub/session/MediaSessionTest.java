@@ -3,11 +3,11 @@ package com.yulore.medhub.session;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
-class SessionTest {
+class MediaSessionTest {
 
     @Test
     void startTranscription() {
-        Session session = new Session(false, 0);
+        final MediaSession session = new MediaSession(false, 0);
 
         // return true for the first time
         assertTrue(session.startTranscription());

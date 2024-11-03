@@ -28,6 +28,7 @@ public class TTSTask {
                     //调用onComplete时表示所有TTS数据已接收完成，因此为整个合成数据的延迟。该延迟可能较大，不一定满足实时场景。
                     log.info("onComplete: name:{}, status:{}", response.getName(), response.getStatus());
                     _synthesizer.close();
+                    agent.decConnection();
                     onComplete.accept(response);
                 }
 
@@ -42,6 +43,7 @@ public class TTSTask {
                     //task_id是调用方和服务端通信的唯一标识，当遇到问题时需要提供task_id以便排查。
                     log.info("onFail: task_id:{}, status:{}, status_text:{}",
                             response.getTaskId(), response.getStatus(), response.getStatusText());
+                    agent.decConnection();
                     onFail.accept(response);
                 }
             });
@@ -60,10 +62,19 @@ public class TTSTask {
             _synthesizer.setText(text);
             // 是否开启字幕功能（返回相应文本的时间戳），默认不开启，需要注意并非所有发音人都支持该参数。
             // synthesizer.addCustomedParam("enable_subtitle", false);
-            //此方法将以上参数设置序列化为JSON格式发送给服务端，并等待服务端确认。
-            _synthesizer.start();
         } catch (Exception ex) {
             log.warn("failed to launch tts task, detail: {}", ex.toString());
+        }
+    }
+
+    public boolean start() {
+        try {
+            //此方法将以上参数设置序列化为JSON格式发送给服务端，并等待服务端确认。
+            _synthesizer.start();
+            return true;
+        } catch (Exception ex) {
+            log.warn("failed to start tts task, detail: {}", ex.toString());
+            return false;
         }
     }
 }
