@@ -34,6 +34,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 // 20241103: asr-hub rename to med-hub (Media Hub)
 
@@ -249,11 +250,13 @@ public class HubMain {
         final List<byte[]> bufs = new ArrayList<>();
         final long startInMs = System.currentTimeMillis();
         final TTSAgent agent = selectTTSAgent();
+        final AtomicInteger idx = new AtomicInteger(0);
         final TTSTask task = new TTSTask(agent, text,
                 (bytes) -> {
                     final byte[] bytesArray = new byte[bytes.remaining()];
                     bytes.get(bytesArray, 0, bytesArray.length);
                     bufs.add(bytesArray);
+                    log.info("{}: onData {} bytes", idx.incrementAndGet(), bytesArray.length);
                 },
                 (response)->playPcmTo(new ByteArrayListInputStream(bufs), webSocket, startInMs, session::stopPlaying),
                 (response)->{
@@ -269,20 +272,22 @@ public class HubMain {
                 new PayloadPlaybackStart("tts", 8000, 20, 1));
         final List<ScheduledFuture<?>> futures = new ArrayList<>();
         long delay = 20;
-        try {
-            final byte[] bytes = new byte[320];
-            while (is.read(bytes) == 320) {
-                final ScheduledFuture<?> future = _playbackExecutor.schedule(()->webSocket.send(bytes), delay, TimeUnit.MILLISECONDS);
-                futures.add(future);
-                delay += 20;
+        int idx = 0;
+        try (is) {
+            while (true) {
+                final byte[] bytes = new byte[320];
+                final int readSize = is.read(bytes);
+                log.info("{}: playPcmTo read {} bytes", ++idx, readSize);
+                if (readSize == 320) {
+                    final ScheduledFuture<?> future = _playbackExecutor.schedule(() -> webSocket.send(bytes), delay, TimeUnit.MILLISECONDS);
+                    futures.add(future);
+                    delay += 20;
+                } else {
+                    break;
+                }
             }
         } catch (IOException ex) {
             log.warn("playPcmTo: {}", ex.toString());
-        } finally {
-            try {
-                is.close();
-            } catch (IOException ignored) {
-            }
         }
 
         futures.add(_playbackExecutor.schedule(()->{
