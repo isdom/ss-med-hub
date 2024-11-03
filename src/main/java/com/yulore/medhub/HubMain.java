@@ -250,7 +250,11 @@ public class HubMain {
         final long startInMs = System.currentTimeMillis();
         final TTSAgent agent = selectTTSAgent();
         final TTSTask task = new TTSTask(agent, text,
-                (bytes) -> bufs.add(bytes.array()),
+                (bytes) -> {
+                    final byte[] bytesArray = new byte[bytes.remaining()];
+                    bytes.get(bytesArray, 0, bytesArray.length);
+                    bufs.add(bytesArray);
+                },
                 (response)->playPcmTo(new ByteArrayListInputStream(bufs), webSocket, startInMs, session::stopPlaying),
                 (response)->{
                     log.warn("tts failed: {}", response);
