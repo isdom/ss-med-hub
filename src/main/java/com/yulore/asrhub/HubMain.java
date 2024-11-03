@@ -8,7 +8,8 @@ import com.alibaba.nls.client.protocol.asr.SpeechTranscriberListener;
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriberResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.yulore.asrhub.nls.AsrAgent;
+import com.yulore.asrhub.nls.ASRAgent;
+import com.yulore.asrhub.nls.TTSAgent;
 import com.yulore.asrhub.session.Session;
 import com.yulore.asrhub.vo.*;
 import com.yulore.l16.L16File;
@@ -50,8 +51,11 @@ public class HubMain {
     @Value("${nls.url}")
     private String _nls_url;
 
-    @Value("#{${nls.accounts}}")
-    private Map<String,String> _nlsAccounts;
+    @Value("#{${nls.asr}}")
+    private Map<String,String> _all_asr;
+
+    @Value("#{${nls.tts}}")
+    private Map<String,String> _all_tts;
 
     @Value("${test.enable_delay}")
     private boolean _test_enable_delay;
@@ -59,7 +63,8 @@ public class HubMain {
     @Value("${test.delay_ms}")
     private long _test_delay_ms;
 
-    final List<AsrAgent> _agents = new ArrayList<>();
+    final List<ASRAgent> _asrAgents = new ArrayList<>();
+    final List<TTSAgent> _ttsAgents = new ArrayList<>();
 
     private ScheduledExecutorService _nlsAuthExecutor;
     
@@ -78,10 +83,10 @@ public class HubMain {
 
     @PostConstruct
     public void start() {
-        initASRAgents();
-
         //创建NlsClient实例应用全局创建一个即可。生命周期可和整个应用保持一致，默认服务地址为阿里云线上服务地址。
         _nlsClient = new NlsClient(_nls_url, "invalid_token");
+
+        initNlsAgents(_nlsClient);
 
         _sessionExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2);
         _playbackExecutor = Executors.newScheduledThreadPool(NettyRuntime.availableProcessors() * 2);
@@ -133,28 +138,42 @@ public class HubMain {
         _wsServer.start();
     }
 
-    private void initASRAgents() {
-        _agents.clear();
-        for (Map.Entry<String, String> entry : _nlsAccounts.entrySet()) {
-            log.info("nls account: {} / {}", entry.getKey(), entry.getValue());
+    private void initNlsAgents(final NlsClient client) {
+        _asrAgents.clear();
+        for (Map.Entry<String, String> entry : _all_asr.entrySet()) {
+            log.info("asr: {} / {}", entry.getKey(), entry.getValue());
             final String[] values = entry.getValue().split(" ");
-            log.info("nls values detail: {}", Arrays.toString(values));
-            final AsrAgent account = AsrAgent.parse(entry.getKey(), entry.getValue());
-            if (null == account) {
-                log.warn("nls account init failed by: {}/{}", entry.getKey(), entry.getValue());
+            log.info("asr values detail: {}", Arrays.toString(values));
+            final ASRAgent agent = ASRAgent.parse(entry.getKey(), entry.getValue());
+            if (null == agent) {
+                log.warn("asr init failed by: {}/{}", entry.getKey(), entry.getValue());
             } else {
-                _agents.add(account);
+                agent.setClient(client);
+                _asrAgents.add(agent);
             }
         }
-        log.info("nls account init, count:{}", _agents.size());
+        log.info("asr agent init, count:{}", _asrAgents.size());
+
+        for (Map.Entry<String, String> entry : _all_tts.entrySet()) {
+            log.info("tts: {} / {}", entry.getKey(), entry.getValue());
+            final String[] values = entry.getValue().split(" ");
+            log.info("tts values detail: {}", Arrays.toString(values));
+            final TTSAgent agent = TTSAgent.parse(entry.getKey(), entry.getValue());
+            if (null == agent) {
+                log.warn("tts init failed by: {}/{}", entry.getKey(), entry.getValue());
+            } else {
+                agent.setClient(client);
+                _ttsAgents.add(agent);
+            }
+        }
 
         _nlsAuthExecutor = Executors.newSingleThreadScheduledExecutor();
         _nlsAuthExecutor.scheduleAtFixedRate(this::checkAndUpdateNlsToken, 0, 10, TimeUnit.SECONDS);
     }
 
-    private AsrAgent selectAsrAgent() {
-        for (AsrAgent account : _agents) {
-            final AsrAgent selected = account.checkAndSelectIfhasIdle();
+    private ASRAgent selectAsrAgent() {
+        for (ASRAgent account : _asrAgents) {
+            final ASRAgent selected = account.checkAndSelectIfhasIdle();
             if (null != selected) {
                 log.info("select asr({}): {}/{}", account.getName(), account.get_connectingOrConnectedCount().get(), account.getLimit());
                 return selected;
@@ -164,8 +183,11 @@ public class HubMain {
     }
 
     private void checkAndUpdateNlsToken() {
-        for (AsrAgent account : _agents) {
-            account.checkAndUpdateAccessToken();
+        for (ASRAgent agent : _asrAgents) {
+            agent.checkAndUpdateAccessToken();
+        }
+        for (TTSAgent agent : _ttsAgents) {
+            agent.checkAndUpdateAccessToken();
         }
     }
 
@@ -185,8 +207,17 @@ public class HubMain {
             _sessionExecutor.submit(()-> handleStopTranscriptionCommand(cmd, webSocket));
         } else if ("Playback".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handlePlaybackCommand(cmd, webSocket));
+        } else if ("PlayTTS".equals(cmd.getHeader().get("name"))) {
+            _sessionExecutor.submit(()-> handlePlayTTSCommand(cmd, webSocket));
         } else {
             log.warn("handleHubCommand: Unknown Command: {}", cmd);
+        }
+    }
+
+    private void handlePlayTTSCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        final String text = cmd.getPayload().get("text");
+        if (text != null ) {
+
         }
     }
 
@@ -275,73 +306,64 @@ public class HubMain {
             }
 
             final long startConnectingInMs = System.currentTimeMillis();
-            final AsrAgent account = selectAsrAgent();
-            session.setAsrAccount(account);
+            final ASRAgent agent = selectAsrAgent();
+            session.setAsrAgent(agent);
 
-            speechTranscriber = buildSpeechTranscriber(_nlsClient, account, buildTranscriberListener(webSocket, account, startConnectingInMs));
+            speechTranscriber = buildSpeechTranscriber(agent, buildTranscriberListener(webSocket, agent, startConnectingInMs));
             session.setSpeechTranscriber(speechTranscriber);
         } catch (Exception ex) {
             // TODO: close websocket?
             log.error("StartTranscription: failed: {}", ex.toString());
-            throw ex;
+            throw new RuntimeException(ex);
         } finally {
             session.unlock();
         }
 
         try {
             speechTranscriber.start();
-        } catch (Exception e) {
-            log.error("speechTranscriber.start() error: {}", e.toString());
+        } catch (Exception ex) {
+            log.error("speechTranscriber.start() error: {}", ex.toString());
         }
     }
 
-    private SpeechTranscriber buildSpeechTranscriber(final NlsClient client, final AsrAgent account, final SpeechTranscriberListener listener) {
-        SpeechTranscriber transcriber = null;
-        try {
-            log.info("nls_url: {}", _nls_url);
+    private SpeechTranscriber buildSpeechTranscriber(final ASRAgent agent, final SpeechTranscriberListener listener) throws Exception {
+        //创建实例、建立连接。
+        final SpeechTranscriber transcriber = agent.buildSpeechTranscriber(listener);
 
-            //创建实例、建立连接。
-            transcriber = new SpeechTranscriber(client, account.currentToken(), listener);
-            transcriber.setAppKey(account.getAppKey());
+        //输入音频编码方式。
+        transcriber.setFormat(InputFormatEnum.PCM);
+        //输入音频采样率。
+        //transcriber.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
+        transcriber.setSampleRate(SampleRateEnum.SAMPLE_RATE_8K);
+        //是否返回中间识别结果。
+        transcriber.setEnableIntermediateResult(true);
+        //是否生成并返回标点符号。
+        transcriber.setEnablePunctuation(true);
+        //是否将返回结果规整化，比如将一百返回为100。
+        transcriber.setEnableITN(true);
 
-            //输入音频编码方式。
-            transcriber.setFormat(InputFormatEnum.PCM);
-            //输入音频采样率。
-            //transcriber.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
-            transcriber.setSampleRate(SampleRateEnum.SAMPLE_RATE_8K);
-            //是否返回中间识别结果。
-            transcriber.setEnableIntermediateResult(true);
-            //是否生成并返回标点符号。
-            transcriber.setEnablePunctuation(true);
-            //是否将返回结果规整化，比如将一百返回为100。
-            transcriber.setEnableITN(true);
-
-            //设置vad断句参数。默认值：800ms，有效值：200ms～2000ms。
-            //transcriber.addCustomedParam("max_sentence_silence", 600);
-            //设置是否语义断句。
-            //transcriber.addCustomedParam("enable_semantic_sentence_detection",false);
-            //设置是否开启过滤语气词，即声音顺滑。
-            //transcriber.addCustomedParam("disfluency",true);
-            //设置是否开启词模式。
-            //transcriber.addCustomedParam("enable_words",true);
-            //设置vad噪音阈值参数，参数取值为-1～+1，如-0.9、-0.8、0.2、0.9。
-            //取值越趋于-1，判定为语音的概率越大，亦即有可能更多噪声被当成语音被误识别。
-            //取值越趋于+1，判定为噪音的越多，亦即有可能更多语音段被当成噪音被拒绝识别。
-            //该参数属高级参数，调整需慎重和重点测试。
-            //transcriber.addCustomedParam("speech_noise_threshold",0.3);
-            //设置训练后的定制语言模型id。
-            //transcriber.addCustomedParam("customization_id","你的定制语言模型id");
-            //设置训练后的定制热词id。
-            //transcriber.addCustomedParam("vocabulary_id","你的定制热词id");
-
-        } catch (Exception e) {
-            log.error("createSpeechTranscriber error: {}", e.toString());
-        }
+        //设置vad断句参数。默认值：800ms，有效值：200ms～2000ms。
+        //transcriber.addCustomedParam("max_sentence_silence", 600);
+        //设置是否语义断句。
+        //transcriber.addCustomedParam("enable_semantic_sentence_detection",false);
+        //设置是否开启过滤语气词，即声音顺滑。
+        //transcriber.addCustomedParam("disfluency",true);
+        //设置是否开启词模式。
+        //transcriber.addCustomedParam("enable_words",true);
+        //设置vad噪音阈值参数，参数取值为-1～+1，如-0.9、-0.8、0.2、0.9。
+        //取值越趋于-1，判定为语音的概率越大，亦即有可能更多噪声被当成语音被误识别。
+        //取值越趋于+1，判定为噪音的越多，亦即有可能更多语音段被当成噪音被拒绝识别。
+        //该参数属高级参数，调整需慎重和重点测试。
+        //transcriber.addCustomedParam("speech_noise_threshold",0.3);
+        //设置训练后的定制语言模型id。
+        //transcriber.addCustomedParam("customization_id","你的定制语言模型id");
+        //设置训练后的定制热词id。
+        //transcriber.addCustomedParam("vocabulary_id","你的定制热词id");
         return transcriber;
     }
 
     @NotNull
-    private SpeechTranscriberListener buildTranscriberListener(final WebSocket webSocket, final AsrAgent account, final long startConnectingInMs) {
+    private SpeechTranscriberListener buildTranscriberListener(final WebSocket webSocket, final ASRAgent account, final long startConnectingInMs) {
         return new SpeechTranscriberListener() {
             @Override
             public void onTranscriberStart(final SpeechTranscriberResponse response) {
@@ -404,7 +426,7 @@ public class HubMain {
         };
     }
 
-    private void notifyTranscriptionStarted(final WebSocket webSocket, final AsrAgent account, final SpeechTranscriberResponse response) {
+    private void notifyTranscriptionStarted(final WebSocket webSocket, final ASRAgent account, final SpeechTranscriberResponse response) {
         final Session session = webSocket.getAttachment();
         session.transcriptionStarted();
         account.incConnected();
@@ -432,7 +454,7 @@ public class HubMain {
                         response.getTransSentenceText()));
     }
 
-    private void notifyTranscriptionCompleted(final WebSocket webSocket, final AsrAgent account, final SpeechTranscriberResponse response) {
+    private void notifyTranscriptionCompleted(final WebSocket webSocket, final ASRAgent account, final SpeechTranscriberResponse response) {
         // TODO: account.dec??
         sendEvent(webSocket, "TranscriptionCompleted", (Void)null);
     }

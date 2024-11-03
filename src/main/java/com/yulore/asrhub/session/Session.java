@@ -1,7 +1,7 @@
 package com.yulore.asrhub.session;
 
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriber;
-import com.yulore.asrhub.nls.AsrAgent;
+import com.yulore.asrhub.nls.ASRAgent;
 import lombok.Data;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +22,7 @@ public class Session {
     private final Lock _lock = new ReentrantLock();
 
     SpeechTranscriber speechTranscriber;
-    AsrAgent asrAccount;
+    ASRAgent asrAgent;
 
     final AtomicBoolean _isStartTranscription = new AtomicBoolean(false);
     final AtomicBoolean _isTranscriptionStarted = new AtomicBoolean(false);
@@ -62,12 +62,12 @@ public class Session {
         try {
             lock();
 
-            if (asrAccount == null) {
+            if (asrAgent == null) {
                 log.info("stopAndCloseTranscriber: {} has already stopAndCloseTranscriber, ignore", webSocket.getRemoteSocketAddress());
                 return;
             }
-            final AsrAgent asr = asrAccount;
-            asrAccount = null;
+            final ASRAgent asr = asrAgent;
+            asrAgent = null;
 
             asr.decConnection();
 
