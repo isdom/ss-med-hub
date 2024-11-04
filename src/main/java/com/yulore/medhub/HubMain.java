@@ -270,7 +270,6 @@ public class HubMain {
             log.error("PlayTTS: {} without Session, abort", webSocket.getRemoteSocketAddress());
             return;
         }
-
         if (!session.startPlaying()) {
             log.error("PlayTTS: {} playing another, abort this play command", webSocket.getRemoteSocketAddress());
             return;
@@ -327,11 +326,7 @@ public class HubMain {
         log.info("playPcmTo: schedule tts by {} send action", futures.size());
     }
 
-    private void handlePlaybackCommand(final HubCommandVO cmd, final WebSocket webSocket) {
-        final String file = cmd.getPayload().get("file");
-        if (file != null ) {
             /*
-            // {vars_playback_id=73cb4b57-0c54-42aa-98a9-9b81352c0cc4}/mnt/aicall/aispeech/dd_app_sb_3_0/c264515130674055869c16fcc2458109.wav
             final int begin = file.lastIndexOf('/');
             final int end = file.indexOf('.');
             final String fileid = file.substring(begin + 1, end);
@@ -366,42 +361,58 @@ public class HubMain {
                             l16file.header.channels));
             schedulePlayback(l16file, file, webSocket);
              */
-            final int prefixBegin = file.indexOf(_oss_match_prefix);
-            if (-1 == prefixBegin) {
-                log.warn("handlePlaybackCommand: can't match prefix for {}, ignore playback command!", file);
 
-            }
-            final String objectName = file.substring(prefixBegin + _oss_match_prefix.length());
-
-            _ossDownloader.submit(() -> {
-                try (final OSSObject ossObject = _ossClient.getObject(_oss_bucket, objectName)) {
-                    final ByteArrayOutputStream os = new ByteArrayOutputStream((int) ossObject.getObjectMetadata().getContentLength());
-                    ossObject.getObjectContent().transferTo(os);
-                    final AudioInputStream audioInputStream = AudioSystem.getAudioInputStream(new ByteArrayInputStream(os.toByteArray()));
-                    final AudioFormat format = audioInputStream.getFormat();
-
-                    // interval = 20 ms
-                    int interval = 20;
-
-                    int lenInBytes = (int) (format.getSampleRate() / (1000 / interval) * (format.getSampleSizeInBits() / 8)) * format.getChannels();
-                    log.info("wav info: sample rate: {}/interval: {}/channels: {}/bytes per interval: {}",
-                            format.getSampleRate(), interval, format.getChannels(), lenInBytes);
-
-                    sendEvent(webSocket, "PlaybackStart",
-                            new PayloadPlaybackStart(file,
-                                    (int) format.getSampleRate(),
-                                    interval,
-                                    format.getChannels()));
-
-                    schedulePlayback(audioInputStream, lenInBytes, interval, file, webSocket);
-                } catch (IOException | UnsupportedAudioFileException ex) {
-                    throw new RuntimeException(ex);
-                }
-            });
+    private void handlePlaybackCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        final String file = cmd.getPayload().get("file");
+        // {vars_playback_id=73cb4b57-0c54-42aa-98a9-9b81352c0cc4}/mnt/aicall/aispeech/dd_app_sb_3_0/c264515130674055869c16fcc2458109.wav
+        if (file == null ) {
+            log.warn("Playback: {} 's file is null, abort", webSocket.getRemoteSocketAddress());
+            return;
         }
+        final MediaSession session = webSocket.getAttachment();
+        if (session == null) {
+            log.error("Playback: {} without Session, abort", webSocket.getRemoteSocketAddress());
+            return;
+        }
+        final int prefixBegin = file.indexOf(_oss_match_prefix);
+        if (-1 == prefixBegin) {
+            log.warn("handlePlaybackCommand: can't match prefix for {}, ignore playback command!", file);
+            return;
+        }
+        if (!session.startPlaying()) {
+            log.error("Playback: {} playing another, abort this play command", webSocket.getRemoteSocketAddress());
+            return;
+        }
+        final String objectName = file.substring(prefixBegin + _oss_match_prefix.length());
+        _ossDownloader.submit(() -> {
+            try (final OSSObject ossObject = _ossClient.getObject(_oss_bucket, objectName)) {
+                final ByteArrayOutputStream os = new ByteArrayOutputStream((int) ossObject.getObjectMetadata().getContentLength());
+                ossObject.getObjectContent().transferTo(os);
+                final AudioInputStream audioInputStream = AudioSystem.getAudioInputStream(new ByteArrayInputStream(os.toByteArray()));
+                final AudioFormat format = audioInputStream.getFormat();
+
+                // interval = 20 ms
+                int interval = 20;
+
+                int lenInBytes = (int) (format.getSampleRate() / (1000 / interval) * (format.getSampleSizeInBits() / 8)) * format.getChannels();
+                log.info("wav info: sample rate: {}/interval: {}/channels: {}/bytes per interval: {}",
+                        format.getSampleRate(), interval, format.getChannels(), lenInBytes);
+
+                sendEvent(webSocket, "PlaybackStart",
+                        new PayloadPlaybackStart(file,
+                                (int) format.getSampleRate(),
+                                interval,
+                                format.getChannels()));
+
+                schedulePlayback(audioInputStream, lenInBytes, interval, file, webSocket, session::stopPlaying);
+            } catch (IOException | UnsupportedAudioFileException ex) {
+                throw new RuntimeException(ex);
+            }
+        });
     }
 
-    private void schedulePlayback(final InputStream is, final int lenInBytes, final int interval, final String file, final WebSocket webSocket) {
+    private void schedulePlayback(final InputStream is, final int lenInBytes, final int interval, final String file,
+                                  final WebSocket webSocket, final Runnable onEnd) {
         final List<ScheduledFuture<?>> futures = new ArrayList<>();
 
         long delay = interval;
@@ -422,9 +433,12 @@ public class HubMain {
         } catch (IOException ex) {
             log.warn("schedulePlayback: {}", ex.toString());
         }
-        futures.add(_playbackExecutor.schedule(()-> sendEvent(webSocket, "PlaybackStop", new PayloadPlaybackStop(file)),
+        futures.add(_playbackExecutor.schedule(()->{
+                    sendEvent(webSocket, "PlaybackStop", new PayloadPlaybackStop(file));
+                    onEnd.run();
+                },
                 delay, TimeUnit.MILLISECONDS));
-        log.info("schedulePlayback: schedule tts by {} send action", futures.size());
+        log.info("schedulePlayback: schedule playback by {} send action", futures.size());
     }
 
     private void schedulePlayback(final L16File l16file, final String file, final WebSocket webSocket) {
