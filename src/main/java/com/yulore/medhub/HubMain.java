@@ -1,6 +1,5 @@
 package com.yulore.medhub;
 
-import com.alibaba.nls.client.AccessToken;
 import com.alibaba.nls.client.protocol.InputFormatEnum;
 import com.alibaba.nls.client.protocol.NlsClient;
 import com.alibaba.nls.client.protocol.SampleRateEnum;
@@ -403,8 +402,10 @@ public class HubMain {
                                 (int) format.getSampleRate(),
                                 interval,
                                 format.getChannels()));
-
-                schedulePlayback(audioInputStream, lenInBytes, interval, file, webSocket, session::stopPlaying);
+                // schedulePlayback(audioInputStream, lenInBytes, interval, file, webSocket, session::stopPlaying);
+                schedulePlaybackOneByOne(audioInputStream, lenInBytes, interval, file, webSocket, session::stopPlaying,
+                        1,
+                        System.currentTimeMillis());
             } catch (IOException | UnsupportedAudioFileException ex) {
                 throw new RuntimeException(ex);
             }
@@ -439,6 +440,43 @@ public class HubMain {
                 },
                 delay, TimeUnit.MILLISECONDS));
         log.info("schedulePlayback: schedule playback by {} send action", futures.size());
+    }
+
+    private void schedulePlaybackOneByOne(final InputStream is,
+                                          final int lenInBytes,
+                                          final int interval,
+                                          final String file,
+                                          final WebSocket webSocket,
+                                          final Runnable onEnd,
+                                          final int idx,
+                                          final long startTimestamp) {
+        // final List<ScheduledFuture<?>> futures = new ArrayList<>();
+        try {
+            final byte[] bytes = new byte[lenInBytes];
+            final int readSize = is.read(bytes);
+            log.info("{}: schedulePlaybackOneByOne read {} bytes", idx, readSize);
+            final long delay = startTimestamp + (long) interval * idx - System.currentTimeMillis();
+            if (readSize == lenInBytes) {
+                final ScheduledFuture<?> future = _playbackExecutor.schedule(() -> {
+                    webSocket.send(bytes);
+                    schedulePlaybackOneByOne(is, lenInBytes, interval, file, webSocket, onEnd, idx+1, startTimestamp);
+                },  delay, TimeUnit.MILLISECONDS);
+                // futures.add(future);
+            } else {
+                is.close();
+                //futures.add(
+                _playbackExecutor.schedule(()->{
+                    sendEvent(webSocket, "PlaybackStop", new PayloadPlaybackStop(file));
+                    onEnd.run();
+                    log.info("schedulePlaybackOneByOne: schedule playback by {} send action", idx);
+                },
+                delay, TimeUnit.MILLISECONDS);
+                //);
+
+            }
+        } catch (IOException ex) {
+            log.warn("schedulePlaybackOneByOne: {}", ex.toString());
+        }
     }
 
     private void schedulePlayback(final L16File l16file, final String file, final WebSocket webSocket) {
