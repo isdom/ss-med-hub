@@ -26,6 +26,7 @@ dependencies {
     // implementation 'com.alibaba.nls:nls-sdk-common:2.2.5'
     // implementation 'com.alibaba.nls:nls-sdk-transcriber:2.2.5'
     // https://mvnrepository.com/artifact/org.java-websocket/Java-WebSocket
+    implementation 'com.aliyun.oss:aliyun-sdk-oss:3.18.1'
     implementation 'org.java-websocket:Java-WebSocket:1.5.7'
 
     implementation 'com.google.protobuf:protobuf-java:2.5.0'

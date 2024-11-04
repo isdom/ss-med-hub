@@ -1,11 +1,15 @@
 package com.yulore.medhub;
 
+import com.alibaba.nls.client.AccessToken;
 import com.alibaba.nls.client.protocol.InputFormatEnum;
 import com.alibaba.nls.client.protocol.NlsClient;
 import com.alibaba.nls.client.protocol.SampleRateEnum;
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriber;
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriberListener;
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriberResponse;
+import com.aliyun.oss.OSS;
+import com.aliyun.oss.OSSClientBuilder;
+import com.aliyun.oss.model.OSSObject;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yulore.medhub.nls.ASRAgent;
@@ -26,6 +30,10 @@ import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
+import javax.sound.sampled.AudioFormat;
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.UnsupportedAudioFileException;
 import java.io.*;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -83,6 +91,25 @@ public class HubMain {
 
     private ScheduledExecutorService _playbackExecutor;
 
+    @Value("${oss.endpoint}")
+    private String _oss_endpoint;
+
+    @Value("${oss.access_key_id}")
+    private String _oss_access_key_id;
+
+    @Value("${oss.access_key_secret}")
+    private String _oss_access_key_secret;
+
+    @Value("${oss.bucket}")
+    private String _oss_bucket;
+
+    @Value("${oss.match_prefix}")
+    private String _oss_match_prefix;
+
+    private OSS _ossClient;
+
+    private ExecutorService _ossDownloader;
+
     @Value("${l16.path}")
     private String _l16_path;
 
@@ -90,9 +117,11 @@ public class HubMain {
     public void start() {
         //创建NlsClient实例应用全局创建一个即可。生命周期可和整个应用保持一致，默认服务地址为阿里云线上服务地址。
         _nlsClient = new NlsClient(_nls_url, "invalid_token");
+        _ossClient = new OSSClientBuilder().build(_oss_endpoint, _oss_access_key_id, _oss_access_key_secret);
 
         initNlsAgents(_nlsClient);
 
+        _ossDownloader = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2);
         _sessionExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2);
         _playbackExecutor = Executors.newScheduledThreadPool(NettyRuntime.availableProcessors() * 2);
 
@@ -302,6 +331,7 @@ public class HubMain {
         final String file = cmd.getPayload().get("file");
         if (file != null ) {
             // {vars_playback_id=73cb4b57-0c54-42aa-98a9-9b81352c0cc4}/mnt/aicall/aispeech/dd_app_sb_3_0/c264515130674055869c16fcc2458109.wav
+            /*
             final int begin = file.lastIndexOf('/');
             final int end = file.indexOf('.');
             final String fileid = file.substring(begin + 1, end);
@@ -328,14 +358,66 @@ public class HubMain {
                     log.warn("handlePlaybackCommand: load {} failed: {}", fullPath, ex.toString());
                     return;
                 }
+            }*/
+            final int prefixBegin = file.indexOf(_oss_match_prefix);
+            if (-1 == prefixBegin) {
+                log.warn("handlePlaybackCommand: can't match prefix for {}, ignore playback command!", file);
+
             }
-            sendEvent(webSocket, "PlaybackStart",
-                    new PayloadPlaybackStart(file,
-                            l16file.header.rate,
-                            l16file.header.interval,
-                            l16file.header.channels));
-            schedulePlayback(l16file, file, webSocket);
+            final String objectName = file.substring(prefixBegin + _oss_match_prefix.length());
+
+            _ossDownloader.submit(() -> {
+                try (final OSSObject ossObject = _ossClient.getObject(_oss_bucket, objectName)) {
+                    final ByteArrayOutputStream os = new ByteArrayOutputStream((int) ossObject.getObjectMetadata().getContentLength());
+                    ossObject.getObjectContent().transferTo(os);
+                    final AudioInputStream audioInputStream = AudioSystem.getAudioInputStream(new ByteArrayInputStream(os.toByteArray()));
+                    final AudioFormat format = audioInputStream.getFormat();
+
+                    // interval = 20 ms
+                    int interval = 20;
+
+                    int lenInBytes = (int) (format.getSampleRate() / (1000 / interval) * (format.getSampleSizeInBits() / 8)) * format.getChannels();
+                    log.info("wav info: sample rate: {}/interval: {}/channels: {}/bytes per interval: {}",
+                            format.getSampleRate(), interval, format.getChannels(), lenInBytes);
+
+                    sendEvent(webSocket, "PlaybackStart",
+                            new PayloadPlaybackStart(file,
+                                    (int) format.getSampleRate(),
+                                    interval,
+                                    format.getChannels()));
+
+                    schedulePlayback(audioInputStream, lenInBytes, interval, file, webSocket);
+                } catch (IOException | UnsupportedAudioFileException ex) {
+                    throw new RuntimeException(ex);
+                }
+            });
         }
+    }
+
+    private void schedulePlayback(final InputStream is, final int lenInBytes, final int interval, final String file, final WebSocket webSocket) {
+        final List<ScheduledFuture<?>> futures = new ArrayList<>();
+
+        long delay = interval;
+        int idx = 0;
+        try (is) {
+            while (true) {
+                final byte[] bytes = new byte[lenInBytes];
+                final int readSize = is.read(bytes);
+                log.info("{}: schedulePlayback read {} bytes", ++idx, readSize);
+                if (readSize != -1) {
+                    final ScheduledFuture<?> future = _playbackExecutor.schedule(() -> webSocket.send(ByteBuffer.wrap(bytes, 0, readSize)), delay, TimeUnit.MILLISECONDS);
+                    futures.add(future);
+                    delay += interval;
+                } else {
+                    break;
+                }
+            }
+        } catch (IOException ex) {
+            log.warn("schedulePlayback: {}", ex.toString());
+        }
+        futures.add(_playbackExecutor.schedule(()-> sendEvent(webSocket, "PlaybackStop", new PayloadPlaybackStop(file)),
+                delay, TimeUnit.MILLISECONDS));
+        log.info("schedulePlayback: schedule tts by {} send action", futures.size());
     }
 
     private void schedulePlayback(final L16File l16file, final String file, final WebSocket webSocket) {
@@ -560,6 +642,7 @@ public class HubMain {
         _nlsAuthExecutor.shutdownNow();
         _sessionExecutor.shutdownNow();
         _playbackExecutor.shutdownNow();
+        _ossDownloader.shutdownNow();
 
         log.info("ASR-Hub: shutdown");
     }
