@@ -330,8 +330,8 @@ public class HubMain {
     private void handlePlaybackCommand(final HubCommandVO cmd, final WebSocket webSocket) {
         final String file = cmd.getPayload().get("file");
         if (file != null ) {
-            // {vars_playback_id=73cb4b57-0c54-42aa-98a9-9b81352c0cc4}/mnt/aicall/aispeech/dd_app_sb_3_0/c264515130674055869c16fcc2458109.wav
             /*
+            // {vars_playback_id=73cb4b57-0c54-42aa-98a9-9b81352c0cc4}/mnt/aicall/aispeech/dd_app_sb_3_0/c264515130674055869c16fcc2458109.wav
             final int begin = file.lastIndexOf('/');
             final int end = file.indexOf('.');
             final String fileid = file.substring(begin + 1, end);
@@ -358,7 +358,14 @@ public class HubMain {
                     log.warn("handlePlaybackCommand: load {} failed: {}", fullPath, ex.toString());
                     return;
                 }
-            }*/
+            }
+            sendEvent(webSocket, "PlaybackStart",
+                    new PayloadPlaybackStart(file,
+                            l16file.header.rate,
+                            l16file.header.interval,
+                            l16file.header.channels));
+            schedulePlayback(l16file, file, webSocket);
+             */
             final int prefixBegin = file.indexOf(_oss_match_prefix);
             if (-1 == prefixBegin) {
                 log.warn("handlePlaybackCommand: can't match prefix for {}, ignore playback command!", file);
@@ -404,8 +411,8 @@ public class HubMain {
                 final byte[] bytes = new byte[lenInBytes];
                 final int readSize = is.read(bytes);
                 log.info("{}: schedulePlayback read {} bytes", ++idx, readSize);
-                if (readSize != -1) {
-                    final ScheduledFuture<?> future = _playbackExecutor.schedule(() -> webSocket.send(ByteBuffer.wrap(bytes, 0, readSize)), delay, TimeUnit.MILLISECONDS);
+                if (readSize == lenInBytes) {
+                    final ScheduledFuture<?> future = _playbackExecutor.schedule(() -> webSocket.send(bytes), delay, TimeUnit.MILLISECONDS);
                     futures.add(future);
                     delay += interval;
                 } else {

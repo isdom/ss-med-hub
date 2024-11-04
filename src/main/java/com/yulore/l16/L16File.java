@@ -93,7 +93,7 @@ public class L16File {
                 slice.raw_len = readInt32(dis);
                 slice.raw_data = new byte[slice.raw_len];
                 dis.readFully(slice.raw_data);
-                log.info("readSlice: {}", idx++);
+                log.info("readSlice: {} => size:{}", idx++, slice.raw_len);
                 slices.add(slice);
             }
         } catch (EOFException ex) {
