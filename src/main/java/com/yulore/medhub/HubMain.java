@@ -270,10 +270,6 @@ public class HubMain {
             log.error("PlayTTS: {} without Session, abort", webSocket.getRemoteSocketAddress());
             return;
         }
-        if (!session.startPlaying()) {
-            log.error("PlayTTS: {} playing another, abort this play command", webSocket.getRemoteSocketAddress());
-            return;
-        }
 
         final List<byte[]> bufs = new ArrayList<>();
         final long startInMs = System.currentTimeMillis();
@@ -288,9 +284,7 @@ public class HubMain {
                 },
                 (response)->{
                     log.info("handlePlayTTSCommand: gen pcm stream cost={} ms", System.currentTimeMillis() - startInMs);
-                    sendEvent(webSocket, "PlaybackStart",
-                            new PayloadPlaybackStart("tts", 8000, 20, 1));
-                    new PlayPCMTask(_playbackExecutor,
+                    final PlayPCMTask pcmTask = new PlayPCMTask(_playbackExecutor,
                             new ByteArrayListInputStream(bufs),
                             320,
                             20,
@@ -298,8 +292,14 @@ public class HubMain {
                             ()->{
                                 sendEvent(webSocket, "PlaybackStop", new PayloadPlaybackStop("tts"));
                                 session.stopPlaying();
-                            }).start();
-                },//playPcmTo(new ByteArrayListInputStream(bufs), webSocket, startInMs, session::stopPlaying),
+                            });
+                    if (!session.startPlaying(pcmTask)) {
+                        log.error("PlayTTS: {} playing another, abort this play command", webSocket.getRemoteSocketAddress());
+                        return;
+                    }
+                    sendEvent(webSocket, "PlaybackStart", new PayloadPlaybackStart("tts", 8000, 20, 1));
+                    pcmTask.start();
+                },
                 (response)->{
                     log.warn("tts failed: {}", response);
                     session.stopPlaying();
@@ -308,38 +308,6 @@ public class HubMain {
     }
 
             /*
-    private void playPcmTo(final InputStream is, final WebSocket webSocket, final long startInMs, final Runnable onEnd) {
-        log.info("playPcmTo: gen pcm stream cost={} ms", System.currentTimeMillis() - startInMs);
-        sendEvent(webSocket, "PlaybackStart",
-                new PayloadPlaybackStart("tts", 8000, 20, 1));
-        final List<ScheduledFuture<?>> futures = new ArrayList<>();
-        long delay = 20;
-        int idx = 0;
-        try (is) {
-            while (true) {
-                final byte[] bytes = new byte[320];
-                final int readSize = is.read(bytes);
-                log.info("{}: playPcmTo read {} bytes", ++idx, readSize);
-                if (readSize == 320) {
-                    final ScheduledFuture<?> future = _playbackExecutor.schedule(() -> webSocket.send(bytes), delay, TimeUnit.MILLISECONDS);
-                    futures.add(future);
-                    delay += 20;
-                } else {
-                    break;
-                }
-            }
-        } catch (IOException ex) {
-            log.warn("playPcmTo: {}", ex.toString());
-        }
-
-        futures.add(_playbackExecutor.schedule(()->{
-                    sendEvent(webSocket, "PlaybackStop", new PayloadPlaybackStop("tts"));
-                    onEnd.run();
-                },
-                delay, TimeUnit.MILLISECONDS));
-        log.info("playPcmTo: schedule tts by {} send action", futures.size());
-    }
-
             final int begin = file.lastIndexOf('/');
             final int end = file.indexOf('.');
             final String fileid = file.substring(begin + 1, end);
@@ -392,10 +360,6 @@ public class HubMain {
             log.warn("handlePlaybackCommand: can't match prefix for {}, ignore playback command!", file);
             return;
         }
-        if (!session.startPlaying()) {
-            log.error("Playback: {} playing another, abort this play command", webSocket.getRemoteSocketAddress());
-            return;
-        }
         final String objectName = file.substring(prefixBegin + _oss_match_prefix.length());
         _ossDownloader.submit(() -> {
             try (final OSSObject ossObject = _ossClient.getObject(_oss_bucket, objectName)) {
@@ -411,13 +375,7 @@ public class HubMain {
                 log.info("wav info: sample rate: {}/interval: {}/channels: {}/bytes per interval: {}",
                         format.getSampleRate(), interval, format.getChannels(), lenInBytes);
 
-                sendEvent(webSocket, "PlaybackStart",
-                        new PayloadPlaybackStart(file,
-                                (int) format.getSampleRate(),
-                                interval,
-                                format.getChannels()));
-                // schedulePlayback(audioInputStream, lenInBytes, interval, file, webSocket, session::stopPlaying);
-                new PlayPCMTask(_playbackExecutor,
+                final PlayPCMTask task = new PlayPCMTask(_playbackExecutor,
                         audioInputStream,
                         lenInBytes,
                         interval,
@@ -425,8 +383,20 @@ public class HubMain {
                         ()->{
                             sendEvent(webSocket, "PlaybackStop", new PayloadPlaybackStop(file));
                             session.stopPlaying();
-                        }).start();
+                        });
+                if (!session.startPlaying(task)) {
+                    log.error("Playback: {} playing another, abort this play command", webSocket.getRemoteSocketAddress());
+                    audioInputStream.close();
+                    return;
+                }
+                sendEvent(webSocket, "PlaybackStart",
+                        new PayloadPlaybackStart(file,
+                                (int) format.getSampleRate(),
+                                interval,
+                                format.getChannels()));
+                task.start();
             } catch (IOException | UnsupportedAudioFileException ex) {
+                log.warn("handlePlaybackCommand: failed to load pcm: {}", ex.toString());
                 throw new RuntimeException(ex);
             }
         });

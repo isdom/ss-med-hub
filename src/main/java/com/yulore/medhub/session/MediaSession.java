@@ -2,6 +2,7 @@ package com.yulore.medhub.session;
 
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriber;
 import com.yulore.medhub.nls.ASRAgent;
+import com.yulore.medhub.task.PlayPCMTask;
 import lombok.Data;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
@@ -12,6 +13,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -99,12 +101,14 @@ public class MediaSession {
         }
     }
 
-    public boolean startPlaying() {
-        return _isPlaying.compareAndSet(false, true);
+    public boolean startPlaying(final PlayPCMTask task) {
+        return _playingTask.compareAndSet(null, task);
+        // return _isPlaying.compareAndSet(false, true);
     }
 
-    public boolean stopPlaying() {
-        return _isPlaying.compareAndSet(true, false);
+    public void stopPlaying() {
+        _playingTask.set(null);
+        // return _isPlaying.compareAndSet(true, false);
     }
 
     private final Lock _lock = new ReentrantLock();
@@ -118,4 +122,5 @@ public class MediaSession {
     long _testDelayMs = 0;
 
     final AtomicBoolean _isPlaying = new AtomicBoolean(false);
+    final AtomicReference<PlayPCMTask> _playingTask = new AtomicReference<>(null);
 }
