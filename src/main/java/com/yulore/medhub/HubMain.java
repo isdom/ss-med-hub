@@ -15,6 +15,7 @@ import com.yulore.medhub.nls.ASRAgent;
 import com.yulore.medhub.nls.TTSAgent;
 import com.yulore.medhub.nls.TTSTask;
 import com.yulore.medhub.session.MediaSession;
+import com.yulore.medhub.task.PlayPCMTask;
 import com.yulore.medhub.vo.*;
 import com.yulore.l16.L16File;
 import com.yulore.util.ByteArrayListInputStream;
@@ -403,9 +404,10 @@ public class HubMain {
                                 interval,
                                 format.getChannels()));
                 // schedulePlayback(audioInputStream, lenInBytes, interval, file, webSocket, session::stopPlaying);
-                schedulePlaybackOneByOne(audioInputStream, lenInBytes, interval, file, webSocket, session::stopPlaying,
-                        1,
-                        System.currentTimeMillis());
+                new PlayPCMTask(_playbackExecutor, audioInputStream, lenInBytes, interval, webSocket, ()->{
+                    sendEvent(webSocket, "PlaybackStop", new PayloadPlaybackStop(file));
+                    session.stopPlaying();
+                }).start();
             } catch (IOException | UnsupportedAudioFileException ex) {
                 throw new RuntimeException(ex);
             }
@@ -442,6 +444,7 @@ public class HubMain {
         log.info("schedulePlayback: schedule playback by {} send action", futures.size());
     }
 
+    /*
     private void schedulePlaybackOneByOne(final InputStream is,
                                           final int lenInBytes,
                                           final int interval,
@@ -478,6 +481,7 @@ public class HubMain {
             log.warn("schedulePlaybackOneByOne: {}", ex.toString());
         }
     }
+    */
 
     private void schedulePlayback(final L16File l16file, final String file, final WebSocket webSocket) {
         final List<ScheduledFuture<?>> futures = new ArrayList<>(l16file.slices.length + 1);
