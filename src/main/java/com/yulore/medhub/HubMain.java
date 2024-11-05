@@ -286,7 +286,20 @@ public class HubMain {
                     bufs.add(bytesArray);
                     log.info("{}: onData {} bytes", idx.incrementAndGet(), bytesArray.length);
                 },
-                (response)->playPcmTo(new ByteArrayListInputStream(bufs), webSocket, startInMs, session::stopPlaying),
+                (response)->{
+                    log.info("handlePlayTTSCommand: gen pcm stream cost={} ms", System.currentTimeMillis() - startInMs);
+                    sendEvent(webSocket, "PlaybackStart",
+                            new PayloadPlaybackStart("tts", 8000, 20, 1));
+                    new PlayPCMTask(_playbackExecutor,
+                            new ByteArrayListInputStream(bufs),
+                            320,
+                            20,
+                            webSocket,
+                            ()->{
+                                sendEvent(webSocket, "PlaybackStop", new PayloadPlaybackStop("tts"));
+                                session.stopPlaying();
+                            }).start();
+                },//playPcmTo(new ByteArrayListInputStream(bufs), webSocket, startInMs, session::stopPlaying),
                 (response)->{
                     log.warn("tts failed: {}", response);
                     session.stopPlaying();
@@ -294,6 +307,7 @@ public class HubMain {
         task.start();
     }
 
+            /*
     private void playPcmTo(final InputStream is, final WebSocket webSocket, final long startInMs, final Runnable onEnd) {
         log.info("playPcmTo: gen pcm stream cost={} ms", System.currentTimeMillis() - startInMs);
         sendEvent(webSocket, "PlaybackStart",
@@ -326,7 +340,6 @@ public class HubMain {
         log.info("playPcmTo: schedule tts by {} send action", futures.size());
     }
 
-            /*
             final int begin = file.lastIndexOf('/');
             final int end = file.indexOf('.');
             final String fileid = file.substring(begin + 1, end);
@@ -404,85 +417,22 @@ public class HubMain {
                                 interval,
                                 format.getChannels()));
                 // schedulePlayback(audioInputStream, lenInBytes, interval, file, webSocket, session::stopPlaying);
-                new PlayPCMTask(_playbackExecutor, audioInputStream, lenInBytes, interval, webSocket, ()->{
-                    sendEvent(webSocket, "PlaybackStop", new PayloadPlaybackStop(file));
-                    session.stopPlaying();
-                }).start();
+                new PlayPCMTask(_playbackExecutor,
+                        audioInputStream,
+                        lenInBytes,
+                        interval,
+                        webSocket,
+                        ()->{
+                            sendEvent(webSocket, "PlaybackStop", new PayloadPlaybackStop(file));
+                            session.stopPlaying();
+                        }).start();
             } catch (IOException | UnsupportedAudioFileException ex) {
                 throw new RuntimeException(ex);
             }
         });
     }
 
-    private void schedulePlayback(final InputStream is, final int lenInBytes, final int interval, final String file,
-                                  final WebSocket webSocket, final Runnable onEnd) {
-        final List<ScheduledFuture<?>> futures = new ArrayList<>();
-
-        long delay = interval;
-        int idx = 0;
-        try (is) {
-            while (true) {
-                final byte[] bytes = new byte[lenInBytes];
-                final int readSize = is.read(bytes);
-                log.info("{}: schedulePlayback read {} bytes", ++idx, readSize);
-                if (readSize == lenInBytes) {
-                    final ScheduledFuture<?> future = _playbackExecutor.schedule(() -> webSocket.send(bytes), delay, TimeUnit.MILLISECONDS);
-                    futures.add(future);
-                    delay += interval;
-                } else {
-                    break;
-                }
-            }
-        } catch (IOException ex) {
-            log.warn("schedulePlayback: {}", ex.toString());
-        }
-        futures.add(_playbackExecutor.schedule(()->{
-                    sendEvent(webSocket, "PlaybackStop", new PayloadPlaybackStop(file));
-                    onEnd.run();
-                },
-                delay, TimeUnit.MILLISECONDS));
-        log.info("schedulePlayback: schedule playback by {} send action", futures.size());
-    }
-
     /*
-    private void schedulePlaybackOneByOne(final InputStream is,
-                                          final int lenInBytes,
-                                          final int interval,
-                                          final String file,
-                                          final WebSocket webSocket,
-                                          final Runnable onEnd,
-                                          final int idx,
-                                          final long startTimestamp) {
-        // final List<ScheduledFuture<?>> futures = new ArrayList<>();
-        try {
-            final byte[] bytes = new byte[lenInBytes];
-            final int readSize = is.read(bytes);
-            log.info("{}: schedulePlaybackOneByOne read {} bytes", idx, readSize);
-            final long delay = startTimestamp + (long) interval * idx - System.currentTimeMillis();
-            if (readSize == lenInBytes) {
-                final ScheduledFuture<?> future = _playbackExecutor.schedule(() -> {
-                    webSocket.send(bytes);
-                    schedulePlaybackOneByOne(is, lenInBytes, interval, file, webSocket, onEnd, idx+1, startTimestamp);
-                },  delay, TimeUnit.MILLISECONDS);
-                // futures.add(future);
-            } else {
-                is.close();
-                //futures.add(
-                _playbackExecutor.schedule(()->{
-                    sendEvent(webSocket, "PlaybackStop", new PayloadPlaybackStop(file));
-                    onEnd.run();
-                    log.info("schedulePlaybackOneByOne: schedule playback by {} send action", idx);
-                },
-                delay, TimeUnit.MILLISECONDS);
-                //);
-
-            }
-        } catch (IOException ex) {
-            log.warn("schedulePlaybackOneByOne: {}", ex.toString());
-        }
-    }
-    */
-
     private void schedulePlayback(final L16File l16file, final String file, final WebSocket webSocket) {
         final List<ScheduledFuture<?>> futures = new ArrayList<>(l16file.slices.length + 1);
         for (L16File.L16Slice slice : l16file.slices) {
@@ -495,6 +445,7 @@ public class HubMain {
                 notifyStopDelay, TimeUnit.MILLISECONDS));
         log.info("schedulePlayback: schedule {} by {} send action", file, futures.size());
     }
+     */
 
     private static <PAYLOAD> void sendEvent(final WebSocket webSocket, final String eventName, final PAYLOAD payload) {
         final HubEventVO<PAYLOAD> event = new HubEventVO<>();

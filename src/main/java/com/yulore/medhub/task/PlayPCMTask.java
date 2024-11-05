@@ -27,7 +27,7 @@ public class PlayPCMTask {
         schedule(1, System.currentTimeMillis());
     }
 
-    public void schedule(final int idx, final long startTimestamp) {
+    private void schedule(final int idx, final long startTimestamp) {
         try {
             final byte[] bytes = new byte[_lenInBytes];
             final int readSize = _is.read(bytes);
