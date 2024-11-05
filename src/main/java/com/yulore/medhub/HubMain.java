@@ -295,19 +295,14 @@ public class HubMain {
                 },
                 (response)->{
                     log.info("handlePlayTTSCommand: gen pcm stream cost={} ms", System.currentTimeMillis() - startInMs);
-                    final PlayPCMTask pcmTask = new PlayPCMTask(_playbackExecutor,
+                    session.stopCurrentAndStartPlay(new PlayPCMTask(_playbackExecutor,
                             new ByteArrayListInputStream(bufs),
                             320,
+                            8000,
                             20,
                             1,
                             webSocket,
-                            (self)->{
-                                HubEventVO.sendEvent(webSocket, "PlaybackStop", new PayloadPlaybackStop("tts"));
-                                session.stopCurrentIfMatch(self);
-                            });
-                    session.stopCurrentAndStartPlay(pcmTask);
-                    HubEventVO.sendEvent(webSocket, "PlaybackStart", new PayloadPlaybackStart("tts", 8000, 20, 1));
-                    pcmTask.start();
+                            session::stopCurrentIfMatch));
                 },
                 (response)-> log.warn("tts failed: {}", response));
         task.start();
@@ -380,24 +375,14 @@ public class HubMain {
                 int lenInBytes = (int) (format.getSampleRate() / (1000 / interval) * (format.getSampleSizeInBits() / 8)) * format.getChannels();
                 log.info("wav info: sample rate: {}/interval: {}/channels: {}/bytes per interval: {}",
                         format.getSampleRate(), interval, format.getChannels(), lenInBytes);
-
-                final PlayPCMTask task = new PlayPCMTask(_playbackExecutor,
+                session.stopCurrentAndStartPlay(new PlayPCMTask(_playbackExecutor,
                         audioInputStream,
                         lenInBytes,
+                        (int) format.getSampleRate(),
                         interval,
                         format.getChannels(),
                         webSocket,
-                        (self)->{
-                            HubEventVO.sendEvent(webSocket, "PlaybackStop", new PayloadPlaybackStop(file));
-                            session.stopCurrentIfMatch(self);
-                        });
-                session.stopCurrentAndStartPlay(task);
-                HubEventVO.sendEvent(webSocket, "PlaybackStart",
-                        new PayloadPlaybackStart(file,
-                                (int) format.getSampleRate(),
-                                interval,
-                                format.getChannels()));
-                task.start();
+                        session::stopCurrentIfMatch));
             } catch (IOException | UnsupportedAudioFileException ex) {
                 log.warn("handlePlaybackCommand: failed to load pcm: {}", ex.toString());
                 throw new RuntimeException(ex);

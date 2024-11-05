@@ -101,23 +101,28 @@ public class MediaSession {
         }
     }
 
-    public void stopCurrentAndStartPlay(final PlayPCMTask task) {
-        final PlayPCMTask current = _playingTask.getAndSet(task);
+    public void stopCurrentAndStartPlay(final PlayPCMTask current) {
+        final PlayPCMTask previous = _playingTask.getAndSet(current);
+        if (previous != null) {
+            previous.stop();
+        }
         if (current != null) {
-            current.stop();
+            current.start();
         }
     }
 
-    public void stopCurrentIfMatch(final PlayPCMTask task) {
-        if (_playingTask.compareAndSet(task, null)) {
-            task.stop();
+    public void stopCurrentIfMatch(final PlayPCMTask current) {
+        if (_playingTask.compareAndSet(current, null)) {
+            if (current != null) {
+                current.stop();
+            }
         }
     }
 
     public void stopCurrentAnyway() {
-        final PlayPCMTask task = _playingTask.getAndSet(null);
-        if (task != null) {
-            task.stop();
+        final PlayPCMTask current = _playingTask.getAndSet(null);
+        if (current != null) {
+            current.stop();
         }
     }
 

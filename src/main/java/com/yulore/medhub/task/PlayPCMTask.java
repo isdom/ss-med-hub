@@ -1,5 +1,7 @@
 package com.yulore.medhub.task;
 
+import com.yulore.medhub.vo.HubEventVO;
+import com.yulore.medhub.vo.PayloadPlaybackStart;
 import com.yulore.medhub.vo.PayloadPlaybackStop;
 import lombok.AllArgsConstructor;
 import lombok.ToString;
@@ -22,19 +24,31 @@ public class PlayPCMTask {
     final ScheduledExecutorService _executor;
     final InputStream _is;
     final int _lenInBytes;
+    final int _sampleRate;
     final int _interval;
     final int _channels;
     final WebSocket _webSocket;
     final Consumer<PlayPCMTask> _onEnd;
-    final AtomicBoolean _isStopped = new AtomicBoolean(false);
     final AtomicReference<ScheduledFuture<?>> _currentFuture = new AtomicReference<>(null);
 
+    final AtomicBoolean _started = new AtomicBoolean(false);
+    final AtomicBoolean _stopped = new AtomicBoolean(false);
+    final AtomicBoolean _stopEventSended = new AtomicBoolean(false);
+
     public void start() {
-        schedule(1, System.currentTimeMillis());
+        if (_stopped.get()) {
+            log.warn("pcm task has stopped, can't start again");
+        }
+        if (_started.compareAndSet(false, true)) {
+            HubEventVO.sendEvent(_webSocket, "PlaybackStart", new PayloadPlaybackStart("pcm", _sampleRate, _interval, _channels));
+            schedule(1, System.currentTimeMillis());
+        } else {
+            log.warn("pcm task started, ignore multi-call start()");
+        }
     }
 
     private void schedule(final int idx, final long startTimestamp) {
-        if (_isStopped.get()) {
+        if (_stopped.get()) {
             // ignore if stopped flag set
             return;
         }
@@ -52,12 +66,15 @@ public class PlayPCMTask {
             } else {
                 _is.close();
                 current = _executor.schedule(()->{
+                            if (_stopEventSended.compareAndSet(false, true)) {
+                                HubEventVO.sendEvent(_webSocket, "PlaybackStop", new PayloadPlaybackStop("pcm"));
+                            }
                             _onEnd.accept(this);
                             log.info("schedule: schedule playback by {} send action", idx);
                         },
                         delay, TimeUnit.MILLISECONDS);
             }
-            if (_isStopped.get()) {
+            if (_stopped.get()) {
                 // cancel if stopped flag set
                 current.cancel(false);
             } else {
@@ -69,10 +86,15 @@ public class PlayPCMTask {
     }
 
     public void stop() {
-        if (_isStopped.compareAndSet(false, true)) {
-            final ScheduledFuture<?> current = _currentFuture.getAndSet(null);
-            if (null != current) {
-                current.cancel(false);
+        if (_stopped.compareAndSet(false, true)) {
+            if (_started.get()) {
+                final ScheduledFuture<?> current = _currentFuture.getAndSet(null);
+                if (null != current) {
+                    current.cancel(false);
+                }
+                if (_stopEventSended.compareAndSet(false, true)) {
+                    HubEventVO.sendEvent(_webSocket, "PlaybackStop", new PayloadPlaybackStop("pcm"));
+                }
             }
         }
     }
