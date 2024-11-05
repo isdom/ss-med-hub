@@ -108,8 +108,15 @@ public class MediaSession {
         }
     }
 
-    public void stopCurrent(final PlayPCMTask task) {
+    public void stopCurrentIfMatch(final PlayPCMTask task) {
         if (_playingTask.compareAndSet(task, null)) {
+            task.stop();
+        }
+    }
+
+    public void stopCurrentAnyway() {
+        final PlayPCMTask task = _playingTask.getAndSet(null);
+        if (task != null) {
             task.stop();
         }
     }

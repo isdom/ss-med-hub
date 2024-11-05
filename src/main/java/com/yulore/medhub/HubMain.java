@@ -254,9 +254,20 @@ public class HubMain {
             _sessionExecutor.submit(()-> handlePlaybackCommand(cmd, webSocket));
         } else if ("PlayTTS".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handlePlayTTSCommand(cmd, webSocket));
+        } else if ("StopPlayback".equals(cmd.getHeader().get("name"))) {
+            _sessionExecutor.submit(()-> handleStopPlaybackCommand(cmd, webSocket));
         } else {
             log.warn("handleHubCommand: Unknown Command: {}", cmd);
         }
+    }
+
+    private void handleStopPlaybackCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        final MediaSession session = webSocket.getAttachment();
+        if (session == null) {
+            log.error("StopPlayback: {} without Session, abort", webSocket.getRemoteSocketAddress());
+            return;
+        }
+        session.stopCurrentAnyway();
     }
 
     private void handlePlayTTSCommand(final HubCommandVO cmd, final WebSocket webSocket) {
@@ -288,13 +299,14 @@ public class HubMain {
                             new ByteArrayListInputStream(bufs),
                             320,
                             20,
+                            1,
                             webSocket,
                             (self)->{
-                                sendEvent(webSocket, "PlaybackStop", new PayloadPlaybackStop("tts"));
-                                session.stopCurrent(self);
+                                HubEventVO.sendEvent(webSocket, "PlaybackStop", new PayloadPlaybackStop("tts"));
+                                session.stopCurrentIfMatch(self);
                             });
                     session.stopCurrentAndStartPlay(pcmTask);
-                    sendEvent(webSocket, "PlaybackStart", new PayloadPlaybackStart("tts", 8000, 20, 1));
+                    HubEventVO.sendEvent(webSocket, "PlaybackStart", new PayloadPlaybackStart("tts", 8000, 20, 1));
                     pcmTask.start();
                 },
                 (response)-> log.warn("tts failed: {}", response));
@@ -373,13 +385,14 @@ public class HubMain {
                         audioInputStream,
                         lenInBytes,
                         interval,
+                        format.getChannels(),
                         webSocket,
                         (self)->{
-                            sendEvent(webSocket, "PlaybackStop", new PayloadPlaybackStop(file));
-                            session.stopCurrent(self);
+                            HubEventVO.sendEvent(webSocket, "PlaybackStop", new PayloadPlaybackStop(file));
+                            session.stopCurrentIfMatch(self);
                         });
                 session.stopCurrentAndStartPlay(task);
-                sendEvent(webSocket, "PlaybackStart",
+                HubEventVO.sendEvent(webSocket, "PlaybackStart",
                         new PayloadPlaybackStart(file,
                                 (int) format.getSampleRate(),
                                 interval,
@@ -406,20 +419,6 @@ public class HubMain {
         log.info("schedulePlayback: schedule {} by {} send action", file, futures.size());
     }
      */
-
-    private static <PAYLOAD> void sendEvent(final WebSocket webSocket, final String eventName, final PAYLOAD payload) {
-        final HubEventVO<PAYLOAD> event = new HubEventVO<>();
-        final HubEventVO.Header header = new HubEventVO.Header();
-        header.setName(eventName);
-        event.setHeader(header);
-        event.setPayload(payload);
-        try {
-            webSocket.send(new ObjectMapper().writeValueAsString(event));
-        } catch (JsonProcessingException ex) {
-            log.warn("sendEvent {}: {}, an error occurred when parseAsJson: {}",
-                    webSocket.getRemoteSocketAddress(), event, ex.toString());
-        }
-    }
 
     private void handleStartTranscriptionCommand(final HubCommandVO cmd, final WebSocket webSocket) {
         final MediaSession session = webSocket.getAttachment();
@@ -563,16 +562,16 @@ public class HubMain {
         final MediaSession session = webSocket.getAttachment();
         session.transcriptionStarted();
         account.incConnected();
-        sendEvent(webSocket, "TranscriptionStarted", (Void)null);
+        HubEventVO.sendEvent(webSocket, "TranscriptionStarted", (Void)null);
     }
 
     private void notifySentenceBegin(final WebSocket webSocket, final SpeechTranscriberResponse response) {
-        sendEvent(webSocket, "SentenceBegin",
+        HubEventVO.sendEvent(webSocket, "SentenceBegin",
                 new PayloadSentenceBegin(response.getTransSentenceIndex(), response.getTransSentenceTime()));
     }
 
     private void notifySentenceEnd(final WebSocket webSocket, final SpeechTranscriberResponse response) {
-        sendEvent(webSocket, "SentenceEnd",
+        HubEventVO.sendEvent(webSocket, "SentenceEnd",
                 new PayloadSentenceEnd(response.getTransSentenceIndex(),
                         response.getTransSentenceTime(),
                         response.getSentenceBeginTime(),
@@ -581,7 +580,7 @@ public class HubMain {
     }
 
     private void notifyTranscriptionResultChanged(final WebSocket webSocket, final SpeechTranscriberResponse response) {
-        sendEvent(webSocket, "TranscriptionResultChanged",
+        HubEventVO.sendEvent(webSocket, "TranscriptionResultChanged",
                 new PayloadTranscriptionResultChanged(response.getTransSentenceIndex(),
                         response.getTransSentenceTime(),
                         response.getTransSentenceText()));
@@ -589,7 +588,7 @@ public class HubMain {
 
     private void notifyTranscriptionCompleted(final WebSocket webSocket, final ASRAgent account, final SpeechTranscriberResponse response) {
         // TODO: account.dec??
-        sendEvent(webSocket, "TranscriptionCompleted", (Void)null);
+        HubEventVO.sendEvent(webSocket, "TranscriptionCompleted", (Void)null);
     }
 
     private void handleStopTranscriptionCommand(final HubCommandVO cmd, final WebSocket webSocket) {

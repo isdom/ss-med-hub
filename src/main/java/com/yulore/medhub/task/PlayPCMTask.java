@@ -23,6 +23,7 @@ public class PlayPCMTask {
     final InputStream _is;
     final int _lenInBytes;
     final int _interval;
+    final int _channels;
     final WebSocket _webSocket;
     final Consumer<PlayPCMTask> _onEnd;
     final AtomicBoolean _isStopped = new AtomicBoolean(false);
