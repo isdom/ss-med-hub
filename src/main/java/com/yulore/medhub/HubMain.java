@@ -289,21 +289,15 @@ public class HubMain {
                             320,
                             20,
                             webSocket,
-                            ()->{
+                            (self)->{
                                 sendEvent(webSocket, "PlaybackStop", new PayloadPlaybackStop("tts"));
-                                session.stopPlaying();
+                                session.stopCurrent(self);
                             });
-                    if (!session.startPlaying(pcmTask)) {
-                        log.error("PlayTTS: {} playing another, abort this play command", webSocket.getRemoteSocketAddress());
-                        return;
-                    }
+                    session.stopCurrentAndStartPlay(pcmTask);
                     sendEvent(webSocket, "PlaybackStart", new PayloadPlaybackStart("tts", 8000, 20, 1));
                     pcmTask.start();
                 },
-                (response)->{
-                    log.warn("tts failed: {}", response);
-                    session.stopPlaying();
-                });
+                (response)-> log.warn("tts failed: {}", response));
         task.start();
     }
 
@@ -380,15 +374,11 @@ public class HubMain {
                         lenInBytes,
                         interval,
                         webSocket,
-                        ()->{
+                        (self)->{
                             sendEvent(webSocket, "PlaybackStop", new PayloadPlaybackStop(file));
-                            session.stopPlaying();
+                            session.stopCurrent(self);
                         });
-                if (!session.startPlaying(task)) {
-                    log.error("Playback: {} playing another, abort this play command", webSocket.getRemoteSocketAddress());
-                    audioInputStream.close();
-                    return;
-                }
+                session.stopCurrentAndStartPlay(task);
                 sendEvent(webSocket, "PlaybackStart",
                         new PayloadPlaybackStart(file,
                                 (int) format.getSampleRate(),

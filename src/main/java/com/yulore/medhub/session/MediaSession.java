@@ -101,14 +101,17 @@ public class MediaSession {
         }
     }
 
-    public boolean startPlaying(final PlayPCMTask task) {
-        return _playingTask.compareAndSet(null, task);
-        // return _isPlaying.compareAndSet(false, true);
+    public void stopCurrentAndStartPlay(final PlayPCMTask task) {
+        final PlayPCMTask current = _playingTask.getAndSet(task);
+        if (current != null) {
+            current.stop();
+        }
     }
 
-    public void stopPlaying() {
-        _playingTask.set(null);
-        // return _isPlaying.compareAndSet(true, false);
+    public void stopCurrent(final PlayPCMTask task) {
+        if (_playingTask.compareAndSet(task, null)) {
+            task.stop();
+        }
     }
 
     private final Lock _lock = new ReentrantLock();
