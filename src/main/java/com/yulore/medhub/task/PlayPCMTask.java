@@ -14,6 +14,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -34,6 +35,7 @@ public class PlayPCMTask {
     final AtomicBoolean _started = new AtomicBoolean(false);
     final AtomicBoolean _stopped = new AtomicBoolean(false);
     final AtomicBoolean _stopEventSended = new AtomicBoolean(false);
+    final AtomicInteger _samples = new AtomicInteger(0);
 
     public void start() {
         if (_stopped.get()) {
@@ -56,18 +58,19 @@ public class PlayPCMTask {
             ScheduledFuture<?> current = null;
             final byte[] bytes = new byte[_lenInBytes];
             final int readSize = _is.read(bytes);
-            log.info("PlayPCMTask {}: schedule read {} bytes", idx, readSize);
+            // log.info("PlayPCMTask {}: schedule read {} bytes", idx, readSize);
             final long delay = startTimestamp + (long) _interval * idx - System.currentTimeMillis();
             if (readSize == _lenInBytes) {
                 current = _executor.schedule(() -> {
                     _webSocket.send(bytes);
+                    _samples.addAndGet(_sampleRate / (1000 / _interval));
                     schedule(idx+1, startTimestamp);
                 },  delay, TimeUnit.MILLISECONDS);
             } else {
                 _is.close();
                 current = _executor.schedule(()->{
                             if (_stopEventSended.compareAndSet(false, true)) {
-                                HubEventVO.sendEvent(_webSocket, "PlaybackStop", new PayloadPlaybackStop("pcm"));
+                                HubEventVO.sendEvent(_webSocket, "PlaybackStop", new PayloadPlaybackStop("pcm", _samples.get()));
                             }
                             _onEnd.accept(this);
                             log.info("schedule: schedule playback by {} send action", idx);
@@ -93,7 +96,7 @@ public class PlayPCMTask {
                     current.cancel(false);
                 }
                 if (_stopEventSended.compareAndSet(false, true)) {
-                    HubEventVO.sendEvent(_webSocket, "PlaybackStop", new PayloadPlaybackStop("pcm"));
+                    HubEventVO.sendEvent(_webSocket, "PlaybackStop", new PayloadPlaybackStop("pcm", _samples.get()));
                 }
             }
         }
