@@ -4,6 +4,7 @@ import com.yulore.medhub.vo.HubEventVO;
 import com.yulore.medhub.vo.PayloadPlaybackStart;
 import com.yulore.medhub.vo.PayloadPlaybackStop;
 import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
@@ -18,18 +19,17 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
-@AllArgsConstructor
+@RequiredArgsConstructor
 @ToString
 @Slf4j
 public class PlayPCMTask {
     final ScheduledExecutorService _executor;
     final InputStream _is;
-    final int _lenInBytes;
-    final int _sampleRate;
-    final int _interval;
-    final int _channels;
+    final SampleInfo _sampleInfo;
     final WebSocket _webSocket;
     final Consumer<PlayPCMTask> _onEnd;
+
+    int _lenInBytes;
     final AtomicReference<ScheduledFuture<?>> _currentFuture = new AtomicReference<>(null);
 
     final AtomicBoolean _started = new AtomicBoolean(false);
@@ -38,11 +38,12 @@ public class PlayPCMTask {
     final AtomicInteger _samples = new AtomicInteger(0);
 
     public void start() {
+        _lenInBytes = _sampleInfo.lenInBytes();
         if (_stopped.get()) {
             log.warn("pcm task has stopped, can't start again");
         }
         if (_started.compareAndSet(false, true)) {
-            HubEventVO.sendEvent(_webSocket, "PlaybackStart", new PayloadPlaybackStart("pcm", _sampleRate, _interval, _channels));
+            HubEventVO.sendEvent(_webSocket, "PlaybackStart", new PayloadPlaybackStart("pcm", _sampleInfo.sampleRate, _sampleInfo.interval, _sampleInfo.channels));
             schedule(1, System.currentTimeMillis());
         } else {
             log.warn("pcm task started, ignore multi-call start()");
@@ -59,11 +60,11 @@ public class PlayPCMTask {
             final byte[] bytes = new byte[_lenInBytes];
             final int readSize = _is.read(bytes);
             // log.info("PlayPCMTask {}: schedule read {} bytes", idx, readSize);
-            final long delay = startTimestamp + (long) _interval * idx - System.currentTimeMillis();
+            final long delay = startTimestamp + (long) _sampleInfo.interval * idx - System.currentTimeMillis();
             if (readSize == _lenInBytes) {
                 current = _executor.schedule(() -> {
                     _webSocket.send(bytes);
-                    _samples.addAndGet(_sampleRate / (1000 / _interval));
+                    _samples.addAndGet(_sampleInfo.sampleRate / (1000 / _sampleInfo.interval));
                     schedule(idx+1, startTimestamp);
                 },  delay, TimeUnit.MILLISECONDS);
             } else {

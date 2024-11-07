@@ -16,6 +16,7 @@ import com.yulore.medhub.nls.TTSAgent;
 import com.yulore.medhub.nls.TTSTask;
 import com.yulore.medhub.session.MediaSession;
 import com.yulore.medhub.task.PlayPCMTask;
+import com.yulore.medhub.task.SampleInfo;
 import com.yulore.medhub.vo.*;
 import com.yulore.l16.L16File;
 import com.yulore.util.ByteArrayListInputStream;
@@ -297,10 +298,7 @@ public class HubMain {
                     log.info("handlePlayTTSCommand: gen pcm stream cost={} ms", System.currentTimeMillis() - startInMs);
                     session.stopCurrentAndStartPlay(new PlayPCMTask(_playbackExecutor,
                             new ByteArrayListInputStream(bufs),
-                            320,
-                            8000,
-                            20,
-                            1,
+                            new SampleInfo(8000, 20, 16, 1),
                             webSocket,
                             session::stopCurrentIfMatch));
                 },
@@ -372,15 +370,11 @@ public class HubMain {
                 // interval = 20 ms
                 int interval = 20;
 
-                int lenInBytes = (int) (format.getSampleRate() / (1000 / interval) * (format.getSampleSizeInBits() / 8)) * format.getChannels();
-                log.info("wav info: sample rate: {}/interval: {}/channels: {}/bytes per interval: {}",
-                        format.getSampleRate(), interval, format.getChannels(), lenInBytes);
+                log.info("wav info: sample rate: {}/interval: {}/channels: {}",
+                        format.getSampleRate(), interval, format.getChannels());
                 session.stopCurrentAndStartPlay(new PlayPCMTask(_playbackExecutor,
                         audioInputStream,
-                        lenInBytes,
-                        (int) format.getSampleRate(),
-                        interval,
-                        format.getChannels(),
+                        new SampleInfo((int) format.getSampleRate(), interval, format.getSampleSizeInBits(), format.getChannels()),
                         webSocket,
                         session::stopCurrentIfMatch));
             } catch (IOException | UnsupportedAudioFileException ex) {
