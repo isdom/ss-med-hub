@@ -10,4 +10,5 @@ import lombok.ToString;
 public class PayloadPlaybackStop {
     String file;
     int samples;
+    boolean completed;
 }

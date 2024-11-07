@@ -110,8 +110,8 @@ public class HubMain {
 
     private ExecutorService _ossDownloader;
 
-    @Value("${l16.path}")
-    private String _l16_path;
+//    @Value("${l16.path}")
+//    private String _l16_path;
 
     @PostConstruct
     public void start() {

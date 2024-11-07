@@ -69,7 +69,7 @@ public class PlayPCMTask {
             } else {
                 _is.close();
                 current = _executor.schedule(()->{
-                            safeSendPlaybackStopEvent();
+                            safeSendPlaybackStopEvent(true);
                             _onEnd.accept(this);
                             log.info("schedule: schedule playback by {} send action", idx);
                         },
@@ -93,14 +93,14 @@ public class PlayPCMTask {
                 if (null != current) {
                     current.cancel(false);
                 }
-                safeSendPlaybackStopEvent();
+                safeSendPlaybackStopEvent(false);
             }
         }
     }
 
-    private void safeSendPlaybackStopEvent() {
+    private void safeSendPlaybackStopEvent(final boolean completed) {
         if (_stopEventSended.compareAndSet(false, true)) {
-            HubEventVO.sendEvent(_webSocket, "PlaybackStop", new PayloadPlaybackStop("pcm", _samples.get()));
+            HubEventVO.sendEvent(_webSocket, "PlaybackStop", new PayloadPlaybackStop("pcm", _samples.get(), completed));
         }
     }
 }
