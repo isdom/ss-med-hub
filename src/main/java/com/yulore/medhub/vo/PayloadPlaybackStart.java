@@ -8,6 +8,7 @@ import lombok.ToString;
 @Data
 @ToString
 public class PayloadPlaybackStart {
+    int id;
     String file;
     int rate;
     int interval;

@@ -23,6 +23,7 @@ import java.util.function.Consumer;
 @ToString
 @Slf4j
 public class PlayPCMTask {
+    final int _id;
     final ScheduledExecutorService _executor;
     final InputStream _is;
     final SampleInfo _sampleInfo;
@@ -43,7 +44,7 @@ public class PlayPCMTask {
             log.warn("pcm task has stopped, can't start again");
         }
         if (_started.compareAndSet(false, true)) {
-            HubEventVO.sendEvent(_webSocket, "PlaybackStart", new PayloadPlaybackStart("pcm", _sampleInfo.sampleRate, _sampleInfo.interval, _sampleInfo.channels));
+            HubEventVO.sendEvent(_webSocket, "PlaybackStart", new PayloadPlaybackStart(_id,"pcm", _sampleInfo.sampleRate, _sampleInfo.interval, _sampleInfo.channels));
             schedule(1, System.currentTimeMillis());
         } else {
             log.warn("pcm task started, ignore multi-call start()");
@@ -101,7 +102,7 @@ public class PlayPCMTask {
 
     private void safeSendPlaybackStopEvent(final boolean completed) {
         if (_stopEventSended.compareAndSet(false, true)) {
-            HubEventVO.sendEvent(_webSocket, "PlaybackStop", new PayloadPlaybackStop("pcm", _samples.get(), completed));
+            HubEventVO.sendEvent(_webSocket, "PlaybackStop", new PayloadPlaybackStop(_id,"pcm", _samples.get(), completed));
         }
     }
 }

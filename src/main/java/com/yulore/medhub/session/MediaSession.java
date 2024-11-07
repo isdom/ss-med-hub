@@ -1,6 +1,7 @@
 package com.yulore.medhub.session;
 
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriber;
+import com.yulore.l16.L16File;
 import com.yulore.medhub.nls.ASRAgent;
 import com.yulore.medhub.task.PlayPCMTask;
 import lombok.Data;
@@ -8,11 +9,11 @@ import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
 
+import java.io.InputStream;
 import java.nio.ByteBuffer;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -126,6 +127,12 @@ public class MediaSession {
         }
     }
 
+    public int addPlaybackStream(final InputStream playbackStream) {
+        final int id = _playbackId.incrementAndGet();
+        _id2stream.put(id, playbackStream);
+        return id;
+    }
+
     private final Lock _lock = new ReentrantLock();
 
     SpeechTranscriber speechTranscriber;
@@ -138,4 +145,6 @@ public class MediaSession {
 
     final AtomicBoolean _isPlaying = new AtomicBoolean(false);
     final AtomicReference<PlayPCMTask> _playingTask = new AtomicReference<>(null);
+    final AtomicInteger _playbackId = new AtomicInteger(0);
+    final ConcurrentMap<Integer, InputStream> _id2stream = new ConcurrentHashMap<>();
 }

@@ -8,6 +8,7 @@ import lombok.ToString;
 @Data
 @ToString
 public class PayloadPlaybackStop {
+    int id;
     String file;
     int samples;
     boolean completed;

@@ -88,7 +88,7 @@ public class HubMain {
 
     private ExecutorService _sessionExecutor;
 
-    private ConcurrentMap<String, L16File> _id2L16File = new ConcurrentHashMap<>();
+    // private ConcurrentMap<String, L16File> _id2L16File = new ConcurrentHashMap<>();
 
     private ScheduledExecutorService _playbackExecutor;
 
@@ -296,7 +296,8 @@ public class HubMain {
                 },
                 (response)->{
                     log.info("handlePlayTTSCommand: gen pcm stream cost={} ms", System.currentTimeMillis() - startInMs);
-                    session.stopCurrentAndStartPlay(new PlayPCMTask(_playbackExecutor,
+                    session.stopCurrentAndStartPlay(new PlayPCMTask(0,
+                            _playbackExecutor,
                             new ByteArrayListInputStream(bufs),
                             new SampleInfo(8000, 20, 16, 1),
                             webSocket,
@@ -364,15 +365,17 @@ public class HubMain {
             try (final OSSObject ossObject = _ossClient.getObject(_oss_bucket, objectName)) {
                 final ByteArrayOutputStream os = new ByteArrayOutputStream((int) ossObject.getObjectMetadata().getContentLength());
                 ossObject.getObjectContent().transferTo(os);
-                final AudioInputStream audioInputStream = AudioSystem.getAudioInputStream(new ByteArrayInputStream(os.toByteArray()));
+                final InputStream is = new ByteArrayInputStream(os.toByteArray());
+                final int id = session.addPlaybackStream(is);
+                final AudioInputStream audioInputStream = AudioSystem.getAudioInputStream(is);
                 final AudioFormat format = audioInputStream.getFormat();
 
                 // interval = 20 ms
                 int interval = 20;
 
-                log.info("wav info: sample rate: {}/interval: {}/channels: {}",
-                        format.getSampleRate(), interval, format.getChannels());
-                session.stopCurrentAndStartPlay(new PlayPCMTask(_playbackExecutor,
+                log.info("wav info: sample rate: {}/interval: {}/channels: {}", format.getSampleRate(), interval, format.getChannels());
+                session.stopCurrentAndStartPlay(new PlayPCMTask(id,
+                        _playbackExecutor,
                         audioInputStream,
                         new SampleInfo((int) format.getSampleRate(), interval, format.getSampleSizeInBits(), format.getChannels()),
                         webSocket,
