@@ -100,6 +100,7 @@ public class MediaSession {
         if (_delayExecutor != null) {
             _delayExecutor.shutdownNow();
         }
+        _id2stream.clear();
     }
 
     public void stopCurrentAndStartPlay(final PlayPCMTask current) {

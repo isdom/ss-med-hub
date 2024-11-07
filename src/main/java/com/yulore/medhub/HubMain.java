@@ -416,6 +416,7 @@ public class HubMain {
             final SampleInfo sampleInfo = new SampleInfo((int) format.getSampleRate(), interval, format.getSampleSizeInBits(), format.getChannels());
             if (samples > 0) {
                 audioInputStream.skip((long) samples * sampleInfo.sampleSizeInBytes());
+                log.info("playbackById: skip: {} samples", samples);
             }
             session.stopCurrentAndStartPlay(new PlayPCMTask(id,
                     _playbackExecutor,
