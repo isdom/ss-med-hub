@@ -127,10 +127,14 @@ public class MediaSession {
         }
     }
 
-    public int addPlaybackStream(final InputStream playbackStream) {
+    public int addPlaybackStream(final byte[] bytes) {
         final int id = _playbackId.incrementAndGet();
-        _id2stream.put(id, playbackStream);
+        _id2stream.put(id, bytes);
         return id;
+    }
+
+    public byte[] getPlaybackStream(final int id) {
+        return _id2stream.get(id);
     }
 
     private final Lock _lock = new ReentrantLock();
@@ -146,5 +150,5 @@ public class MediaSession {
     final AtomicBoolean _isPlaying = new AtomicBoolean(false);
     final AtomicReference<PlayPCMTask> _playingTask = new AtomicReference<>(null);
     final AtomicInteger _playbackId = new AtomicInteger(0);
-    final ConcurrentMap<Integer, InputStream> _id2stream = new ConcurrentHashMap<>();
+    final ConcurrentMap<Integer, byte[]> _id2stream = new ConcurrentHashMap<>();
 }

@@ -69,7 +69,7 @@ public class PlayPCMTask {
                     schedule(idx+1, startTimestamp);
                 },  delay, TimeUnit.MILLISECONDS);
             } else {
-                _is.close();
+                // _is.close();
                 current = _executor.schedule(()->{
                             safeSendPlaybackStopEvent(true);
                             _onEnd.accept(this);

@@ -18,7 +18,6 @@ import com.yulore.medhub.session.MediaSession;
 import com.yulore.medhub.task.PlayPCMTask;
 import com.yulore.medhub.task.SampleInfo;
 import com.yulore.medhub.vo.*;
-import com.yulore.l16.L16File;
 import com.yulore.util.ByteArrayListInputStream;
 import io.netty.util.NettyRuntime;
 import lombok.extern.slf4j.Slf4j;
@@ -344,17 +343,28 @@ public class HubMain {
              */
 
     private void handlePlaybackCommand(final HubCommandVO cmd, final WebSocket webSocket) {
-        final String file = cmd.getPayload().get("file");
-        // {vars_playback_id=73cb4b57-0c54-42aa-98a9-9b81352c0cc4}/mnt/aicall/aispeech/dd_app_sb_3_0/c264515130674055869c16fcc2458109.wav
-        if (file == null ) {
-            log.warn("Playback: {} 's file is null, abort", webSocket.getRemoteSocketAddress());
-            return;
-        }
         final MediaSession session = webSocket.getAttachment();
         if (session == null) {
             log.error("Playback: {} without Session, abort", webSocket.getRemoteSocketAddress());
             return;
         }
+
+        final String file = cmd.getPayload().get("file");
+        final String playbackId = cmd.getPayload().get("id");
+        // {vars_playback_id=73cb4b57-0c54-42aa-98a9-9b81352c0cc4}/mnt/aicall/aispeech/dd_app_sb_3_0/c264515130674055869c16fcc2458109.wav
+        if (file == null && playbackId == null) {
+            log.warn("Playback: {} 's file & id is null, abort", webSocket.getRemoteSocketAddress());
+            return;
+        }
+        log.info("handlePlaybackCommand: command payload ==> file:{}, id:{}", file, playbackId);
+        if (file != null) {
+            playbackByFile(file, cmd, session, webSocket);
+        } else {
+            playbackById(Integer.parseInt(playbackId), cmd, session, webSocket);
+        }
+    }
+
+    private void playbackByFile(final String file, final HubCommandVO cmd, final MediaSession session, final WebSocket webSocket) {
         final int prefixBegin = file.indexOf(_oss_match_prefix);
         if (-1 == prefixBegin) {
             log.warn("handlePlaybackCommand: can't match prefix for {}, ignore playback command!", file);
@@ -365,15 +375,15 @@ public class HubMain {
             try (final OSSObject ossObject = _ossClient.getObject(_oss_bucket, objectName)) {
                 final ByteArrayOutputStream os = new ByteArrayOutputStream((int) ossObject.getObjectMetadata().getContentLength());
                 ossObject.getObjectContent().transferTo(os);
-                final InputStream is = new ByteArrayInputStream(os.toByteArray());
-                final int id = session.addPlaybackStream(is);
+                final int id = session.addPlaybackStream(os.toByteArray());
+                final InputStream is = new ByteArrayInputStream(session.getPlaybackStream(id));
                 final AudioInputStream audioInputStream = AudioSystem.getAudioInputStream(is);
                 final AudioFormat format = audioInputStream.getFormat();
 
                 // interval = 20 ms
                 int interval = 20;
 
-                log.info("wav info: sample rate: {}/interval: {}/channels: {}", format.getSampleRate(), interval, format.getChannels());
+                log.info("playbackByFile: sample rate: {}/interval: {}/channels: {}", format.getSampleRate(), interval, format.getChannels());
                 session.stopCurrentAndStartPlay(new PlayPCMTask(id,
                         _playbackExecutor,
                         audioInputStream,
@@ -381,10 +391,51 @@ public class HubMain {
                         webSocket,
                         session::stopCurrentIfMatch));
             } catch (IOException | UnsupportedAudioFileException ex) {
-                log.warn("handlePlaybackCommand: failed to load pcm: {}", ex.toString());
+                log.warn("playbackByFile: failed to load pcm: {}", ex.toString());
                 throw new RuntimeException(ex);
             }
         });
+    }
+
+    private void playbackById(final int id, final HubCommandVO cmd, final MediaSession session, final WebSocket webSocket) {
+        final int samples = getIntValueByName(cmd.getPayload(), "samples", 0);
+        try {
+            final byte[] bytes = session.getPlaybackStream(id);
+            if (bytes == null) {
+                log.warn("playbackById: failed to load bytes by id: {}", id);
+                return;
+            }
+            final InputStream is = new ByteArrayInputStream(bytes);
+            final AudioInputStream audioInputStream = AudioSystem.getAudioInputStream(is);
+            final AudioFormat format = audioInputStream.getFormat();
+
+            // interval = 20 ms
+            int interval = 20;
+
+            log.info("playbackById: sample rate: {}/interval: {}/channels: {}", format.getSampleRate(), interval, format.getChannels());
+            final SampleInfo sampleInfo = new SampleInfo((int) format.getSampleRate(), interval, format.getSampleSizeInBits(), format.getChannels());
+            if (samples > 0) {
+                audioInputStream.skip((long) samples * sampleInfo.sampleSizeInBytes());
+            }
+            session.stopCurrentAndStartPlay(new PlayPCMTask(id,
+                    _playbackExecutor,
+                    audioInputStream,
+                    sampleInfo,
+                    webSocket,
+                    session::stopCurrentIfMatch));
+        } catch (IOException | UnsupportedAudioFileException ex) {
+            log.warn("playbackById: failed to load pcm: {}", ex.toString());
+            throw new RuntimeException(ex);
+        }
+    }
+
+    private int getIntValueByName(final Map<String, String> map, final String name, final int defaultValue) {
+        final String value = map.get(name);
+        try {
+            return value == null ? defaultValue : Integer.parseInt(value);
+        } catch (NumberFormatException ex) {
+            return defaultValue;
+        }
     }
 
     /*
