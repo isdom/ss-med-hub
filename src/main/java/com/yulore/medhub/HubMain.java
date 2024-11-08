@@ -295,7 +295,7 @@ public class HubMain {
                 },
                 (response)->{
                     log.info("handlePlayTTSCommand: gen pcm stream cost={} ms", System.currentTimeMillis() - startInMs);
-                    session.stopCurrentAndStartPlay(new PlayPCMTask(0,
+                    session.stopCurrentAndStartPlay(new PlayPCMTask(0, 0,
                             _playbackExecutor,
                             new ByteArrayListInputStream(bufs),
                             new SampleInfo(8000, 20, 16, 1),
@@ -384,7 +384,7 @@ public class HubMain {
                 int interval = 20;
 
                 log.info("playbackByFile: sample rate: {}/interval: {}/channels: {}", format.getSampleRate(), interval, format.getChannels());
-                session.stopCurrentAndStartPlay(new PlayPCMTask(id,
+                session.stopCurrentAndStartPlay(new PlayPCMTask(id, 0,
                         _playbackExecutor,
                         audioInputStream,
                         new SampleInfo((int) format.getSampleRate(), interval, format.getSampleSizeInBits(), format.getChannels()),
@@ -412,13 +412,13 @@ public class HubMain {
             // interval = 20 ms
             int interval = 20;
 
-            log.info("playbackById: sample rate: {}/interval: {}/channels: {}", format.getSampleRate(), interval, format.getChannels());
+            log.info("playbackById: sample rate: {}/interval: {}/channels: {}/samples: {}", format.getSampleRate(), interval, format.getChannels(), samples);
             final SampleInfo sampleInfo = new SampleInfo((int) format.getSampleRate(), interval, format.getSampleSizeInBits(), format.getChannels());
             if (samples > 0) {
                 audioInputStream.skip((long) samples * sampleInfo.sampleSizeInBytes());
                 log.info("playbackById: skip: {} samples", samples);
             }
-            session.stopCurrentAndStartPlay(new PlayPCMTask(id,
+            session.stopCurrentAndStartPlay(new PlayPCMTask(id, samples,
                     _playbackExecutor,
                     audioInputStream,
                     sampleInfo,

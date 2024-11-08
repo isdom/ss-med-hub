@@ -24,6 +24,7 @@ import java.util.function.Consumer;
 @Slf4j
 public class PlayPCMTask {
     final int _id;
+    final int _initialSamples;
     final ScheduledExecutorService _executor;
     final InputStream _is;
     final SampleInfo _sampleInfo;
@@ -40,6 +41,7 @@ public class PlayPCMTask {
 
     public void start() {
         _lenInBytes = _sampleInfo.lenInBytes();
+        _samples.set(_initialSamples);
         if (_stopped.get()) {
             log.warn("pcm task has stopped, can't start again");
         }
