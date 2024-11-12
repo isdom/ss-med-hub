@@ -44,10 +44,6 @@ import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
-// 20241103: asr-hub rename to med-hub (Media Hub)
-
-// Press Shift twice to open the Search Everywhere dialog and type `show whitespaces`,
-// then press Enter. You can now see whitespace characters in your code.
 @Slf4j
 @Component
 public class HubMain {
