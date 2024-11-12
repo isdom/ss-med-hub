@@ -1,6 +1,6 @@
 #!/bin/bash
 
-PIDFILE=~/pids/asr-hub.pid
+PIDFILE=~/pids/med-hub.pid
 
 if [ ! -f ${PIDFILE} ]
 then

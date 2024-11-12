@@ -28,6 +28,6 @@ else
        echo "warn: ${PIDFILE} process !NOT! exist, just rm pid file, please try run start_hub.sh again!"
        rm ${PIDFILE}
     else
-       echo "error: asr-hub $(cat ${PIDFILE}) process already exist, Abort!"
+       echo "error: med-hub $(cat ${PIDFILE}) process already exist, Abort!"
     fi
 fi
