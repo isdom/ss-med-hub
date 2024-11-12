@@ -39,6 +39,17 @@ public class MediaSession {
         _lock.unlock();
     }
 
+    public void scheduleCheckIdle(final ScheduledExecutorService executor, final long delay, final Runnable sendCheckEvent) {
+        _checkIdleFuture.set(executor.schedule(()->{
+            try {
+                sendCheckEvent.run();
+            } catch (Exception ex) {
+                log.warn("exception when sendCheckEvent: {}", ex.toString());
+            }
+            scheduleCheckIdle(executor, delay, sendCheckEvent);
+        }, delay, TimeUnit.MILLISECONDS));
+    }
+
     public boolean startTranscription() {
         return _isStartTranscription.compareAndSet(false, true);
     }
@@ -101,6 +112,10 @@ public class MediaSession {
             _delayExecutor.shutdownNow();
         }
         _id2stream.clear();
+        final ScheduledFuture<?> future = _checkIdleFuture.getAndSet(null);
+        if (future != null) {
+            future.cancel(false);
+        }
     }
 
     public void stopCurrentAndStartPlay(final PlayPCMTask current) {
@@ -152,4 +167,5 @@ public class MediaSession {
     final AtomicReference<PlayPCMTask> _playingTask = new AtomicReference<>(null);
     final AtomicInteger _playbackId = new AtomicInteger(0);
     final ConcurrentMap<Integer, byte[]> _id2stream = new ConcurrentHashMap<>();
+    final AtomicReference<ScheduledFuture<?>>   _checkIdleFuture = new AtomicReference<>(null);
 }

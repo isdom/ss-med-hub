@@ -89,7 +89,7 @@ public class HubMain {
 
     // private ConcurrentMap<String, L16File> _id2L16File = new ConcurrentHashMap<>();
 
-    private ScheduledExecutorService _playbackExecutor;
+    private ScheduledExecutorService _scheduledExecutor;
 
     @Value("${oss.endpoint}")
     private String _oss_endpoint;
@@ -123,14 +123,17 @@ public class HubMain {
 
         _ossDownloader = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2);
         _sessionExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2);
-        _playbackExecutor = Executors.newScheduledThreadPool(NettyRuntime.availableProcessors() * 2);
+        _scheduledExecutor = Executors.newScheduledThreadPool(NettyRuntime.availableProcessors() * 2);
 
         _wsServer = new WebSocketServer(new InetSocketAddress(_ws_host, _ws_port)) {
                     @Override
                     public void onOpen(final WebSocket webSocket, final ClientHandshake clientHandshake) {
                         log.info("new connection to {}", webSocket.getRemoteSocketAddress());
                         // init session attach with webSocket
-                        webSocket.setAttachment(new MediaSession(_test_enable_delay, _test_delay_ms));
+                        final MediaSession session = new MediaSession(_test_enable_delay, _test_delay_ms);
+                        webSocket.setAttachment(session);
+                        session.scheduleCheckIdle(_scheduledExecutor, 5000L,
+                                ()->HubEventVO.<Void>sendEvent(webSocket, "CheckIdle", null)); // 5 seconds
                     }
 
                     @Override
@@ -296,7 +299,7 @@ public class HubMain {
                 (response)->{
                     log.info("handlePlayTTSCommand: gen pcm stream cost={} ms", System.currentTimeMillis() - startInMs);
                     session.stopCurrentAndStartPlay(new PlayPCMTask(0, 0,
-                            _playbackExecutor,
+                            _scheduledExecutor,
                             new ByteArrayListInputStream(bufs),
                             new SampleInfo(8000, 20, 16, 1),
                             webSocket,
@@ -385,7 +388,7 @@ public class HubMain {
 
                 log.info("playbackByFile: sample rate: {}/interval: {}/channels: {}", format.getSampleRate(), interval, format.getChannels());
                 session.stopCurrentAndStartPlay(new PlayPCMTask(id, 0,
-                        _playbackExecutor,
+                        _scheduledExecutor,
                         audioInputStream,
                         new SampleInfo((int) format.getSampleRate(), interval, format.getSampleSizeInBits(), format.getChannels()),
                         webSocket,
@@ -419,7 +422,7 @@ public class HubMain {
                 log.info("playbackById: skip: {} samples", samples);
             }
             session.stopCurrentAndStartPlay(new PlayPCMTask(id, samples,
-                    _playbackExecutor,
+                    _scheduledExecutor,
                     audioInputStream,
                     sampleInfo,
                     webSocket,
@@ -648,7 +651,7 @@ public class HubMain {
 
         _nlsAuthExecutor.shutdownNow();
         _sessionExecutor.shutdownNow();
-        _playbackExecutor.shutdownNow();
+        _scheduledExecutor.shutdownNow();
         _ossDownloader.shutdownNow();
 
         log.info("ASR-Hub: shutdown");
