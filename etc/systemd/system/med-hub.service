@@ -1,5 +1,5 @@
 [Unit]
-Description=asr-hub
+Description=med-hub
 Wants=network-online.target
 Requires=network.target local-fs.target
 After=network.target network-online.target local-fs.target
@@ -7,15 +7,15 @@ After=network.target network-online.target local-fs.target
 [Service]
 ; service
 Type=simple
-PIDFile=/home/asr-hub/pids/asr-hub.pid
+PIDFile=/home/med-hub/pids/med-hub.pid
 ; PermissionsStartOnly has been deprecated in favor of the ExecStart= and similar series, see:
 ; https://github.com/NixOS/nixpkgs/issues/53852
 ; PermissionsStartOnly=true
 ; -nonat disables Network Address Translation probing at FreeSWITCH start, which might not be what you want!
 ; blank ExecStart= line flushes the list
 ;ExecStart=
-ExecStart=/home/asr-hub/start_hub.sh
-ExecStop=/home/asr-hub/stop_hub.sh
+ExecStart=/home/med-hub/start_hub.sh
+ExecStop=/home/med-hub/stop_hub.sh
 
 ;TimeoutStartSec=45
 ;TimeoutStopSec=45
@@ -24,9 +24,9 @@ Restart=on-failure
 ;UMask=0007
 
 ; exec
-WorkingDirectory=/home/asr-hub
-User=asr-hub
-Group=asr-hub
+WorkingDirectory=/home/med-hub
+User=med-hub
+Group=med-hub
 ;LimitCORE=infinity
 ;LimitNOFILE=100000
 ;LimitNPROC=60000

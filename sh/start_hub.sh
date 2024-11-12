@@ -2,7 +2,7 @@
 
 source ~/env.sh
 
-PIDFILE=~/pids/asr-hub.pid
+PIDFILE=~/pids/med-hub.pid
 
 if [ ! -f ${PIDFILE} ]
 then
@@ -17,7 +17,7 @@ then
       -Dio.netty.leakDetection.level=PARANOID \
       -Dio.netty.leakDetection.maxRecords=50 \
       -Dio.netty.leakDetection.acquireAndReleaseOnly=true \
-      -jar ~/asr-hub-1.0-SNAPSHOT.jar \
+      -jar ~/med-hub-1.0-SNAPSHOT.jar \
       --spring.profiles.active=dev  \
       2>&1 &
 

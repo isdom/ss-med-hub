@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <configuration>
-    <contextName>asr-hub</contextName>
+    <contextName>med-hub</contextName>
     <!-- variable name="HOSTNAME" value="${HOSTNAME}" /-->
     <variable file="logback_vars.properties" />
     <property name="pattern" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg %n"/>
