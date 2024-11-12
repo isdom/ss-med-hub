@@ -76,6 +76,9 @@ public class HubMain {
     @Value("${test.delay_ms}")
     private long _test_delay_ms;
 
+    @Value("${session.check_idle_interval_ms}")
+    private long _check_idle_interval_ms;
+
     final List<ASRAgent> _asrAgents = new ArrayList<>();
     final List<TTSAgent> _ttsAgents = new ArrayList<>();
 
@@ -86,8 +89,6 @@ public class HubMain {
     private NlsClient _nlsClient;
 
     private ExecutorService _sessionExecutor;
-
-    // private ConcurrentMap<String, L16File> _id2L16File = new ConcurrentHashMap<>();
 
     private ScheduledExecutorService _scheduledExecutor;
 
@@ -132,7 +133,7 @@ public class HubMain {
                         // init session attach with webSocket
                         final MediaSession session = new MediaSession(_test_enable_delay, _test_delay_ms);
                         webSocket.setAttachment(session);
-                        session.scheduleCheckIdle(_scheduledExecutor, 5000L,
+                        session.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms,
                                 ()->HubEventVO.<Void>sendEvent(webSocket, "CheckIdle", null)); // 5 seconds
                     }
 
