@@ -111,9 +111,6 @@ public class HubMain {
 
     private ExecutorService _ossDownloader;
 
-//    @Value("${l16.path}")
-//    private String _l16_path;
-
     @PostConstruct
     public void start() {
         //创建NlsClient实例应用全局创建一个即可。生命周期可和整个应用保持一致，默认服务地址为阿里云线上服务地址。
