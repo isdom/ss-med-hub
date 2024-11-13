@@ -7,4 +7,4 @@ nacos:
 
 spring:
   application:
-    name: asr-proxy
+    name: med-hub

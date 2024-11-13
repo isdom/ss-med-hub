@@ -43,10 +43,10 @@ public class MediaSession {
         _checkIdleFuture.set(executor.schedule(()->{
             try {
                 sendCheckEvent.run();
+                scheduleCheckIdle(executor, delay, sendCheckEvent);
             } catch (Exception ex) {
-                log.warn("exception when sendCheckEvent: {}", ex.toString());
+                log.warn("exception when sendCheckEvent: {}, stop checkIdle", ex.toString());
             }
-            scheduleCheckIdle(executor, delay, sendCheckEvent);
         }, delay, TimeUnit.MILLISECONDS));
     }
 
