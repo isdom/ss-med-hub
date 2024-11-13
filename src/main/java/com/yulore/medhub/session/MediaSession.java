@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
+import org.java_websocket.exceptions.WebsocketNotConnectedException;
 
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -44,6 +45,8 @@ public class MediaSession {
             try {
                 sendCheckEvent.run();
                 scheduleCheckIdle(executor, delay, sendCheckEvent);
+            } catch (WebsocketNotConnectedException ex) {
+                log.info("ws disconnected when sendCheckEvent: {}, stop checkIdle", ex.toString());
             } catch (Exception ex) {
                 log.warn("exception when sendCheckEvent: {}, stop checkIdle", ex.toString());
             }
