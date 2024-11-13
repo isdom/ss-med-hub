@@ -22,6 +22,7 @@ import com.yulore.util.ByteArrayListInputStream;
 import io.netty.util.NettyRuntime;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
+import org.java_websocket.exceptions.WebsocketNotConnectedException;
 import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.server.WebSocketServer;
 import org.jetbrains.annotations.NotNull;
@@ -593,33 +594,53 @@ public class HubMain {
         final MediaSession session = webSocket.getAttachment();
         session.transcriptionStarted();
         account.incConnected();
-        HubEventVO.sendEvent(webSocket, "TranscriptionStarted", (Void)null);
+        try {
+            HubEventVO.sendEvent(webSocket, "TranscriptionStarted", (Void) null);
+        } catch (WebsocketNotConnectedException ex) {
+            log.info("ws disconnected when sendEvent TranscriptionStarted: {}", ex.toString());
+        }
     }
 
     private void notifySentenceBegin(final WebSocket webSocket, final SpeechTranscriberResponse response) {
-        HubEventVO.sendEvent(webSocket, "SentenceBegin",
-                new PayloadSentenceBegin(response.getTransSentenceIndex(), response.getTransSentenceTime()));
+        try {
+            HubEventVO.sendEvent(webSocket, "SentenceBegin",
+                    new PayloadSentenceBegin(response.getTransSentenceIndex(), response.getTransSentenceTime()));
+        } catch (WebsocketNotConnectedException ex) {
+            log.info("ws disconnected when sendEvent SentenceBegin: {}", ex.toString());
+        }
     }
 
     private void notifySentenceEnd(final WebSocket webSocket, final SpeechTranscriberResponse response) {
-        HubEventVO.sendEvent(webSocket, "SentenceEnd",
-                new PayloadSentenceEnd(response.getTransSentenceIndex(),
-                        response.getTransSentenceTime(),
-                        response.getSentenceBeginTime(),
-                        response.getTransSentenceText(),
-                        response.getConfidence()));
+        try {
+            HubEventVO.sendEvent(webSocket, "SentenceEnd",
+                    new PayloadSentenceEnd(response.getTransSentenceIndex(),
+                            response.getTransSentenceTime(),
+                            response.getSentenceBeginTime(),
+                            response.getTransSentenceText(),
+                            response.getConfidence()));
+        } catch (WebsocketNotConnectedException ex) {
+            log.info("ws disconnected when sendEvent SentenceEnd: {}", ex.toString());
+        }
     }
 
     private void notifyTranscriptionResultChanged(final WebSocket webSocket, final SpeechTranscriberResponse response) {
-        HubEventVO.sendEvent(webSocket, "TranscriptionResultChanged",
-                new PayloadTranscriptionResultChanged(response.getTransSentenceIndex(),
-                        response.getTransSentenceTime(),
-                        response.getTransSentenceText()));
+        try {
+            HubEventVO.sendEvent(webSocket, "TranscriptionResultChanged",
+                    new PayloadTranscriptionResultChanged(response.getTransSentenceIndex(),
+                            response.getTransSentenceTime(),
+                            response.getTransSentenceText()));
+        } catch (WebsocketNotConnectedException ex) {
+            log.info("ws disconnected when sendEvent TranscriptionResultChanged: {}", ex.toString());
+        }
     }
 
     private void notifyTranscriptionCompleted(final WebSocket webSocket, final ASRAgent account, final SpeechTranscriberResponse response) {
-        // TODO: account.dec??
-        HubEventVO.sendEvent(webSocket, "TranscriptionCompleted", (Void)null);
+        try {
+            // TODO: account.dec??
+            HubEventVO.sendEvent(webSocket, "TranscriptionCompleted", (Void)null);
+        } catch (WebsocketNotConnectedException ex) {
+            log.info("ws disconnected when sendEvent TranscriptionCompleted: {}", ex.toString());
+        }
     }
 
     private void handleStopTranscriptionCommand(final HubCommandVO cmd, final WebSocket webSocket) {
