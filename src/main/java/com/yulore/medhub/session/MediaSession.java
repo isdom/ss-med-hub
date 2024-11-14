@@ -86,8 +86,8 @@ public class MediaSession {
                     log.info("transcriber wait for complete");
                     speechTranscriber.stop();
                     log.info("transcriber stop() latency : {} ms", System.currentTimeMillis() - now);
-                } catch (Exception e) {
-                    log.warn("handleStopAsrCommand error: {}", e.toString());
+                } catch (Exception ex) {
+                    log.warn("handleStopAsrCommand error: {}", ex.toString());
                 }
 
                 speechTranscriber.close();
