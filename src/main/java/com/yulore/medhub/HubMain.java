@@ -19,6 +19,7 @@ import com.yulore.medhub.task.PlayPCMTask;
 import com.yulore.medhub.task.SampleInfo;
 import com.yulore.medhub.vo.*;
 import com.yulore.util.ByteArrayListInputStream;
+import com.yulore.util.NamedThreadFactory;
 import io.netty.util.NettyRuntime;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
@@ -116,9 +117,9 @@ public class HubMain {
 
         initNlsAgents(_nlsClient);
 
-        _ossDownloader = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2);
-        _sessionExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2);
-        _scheduledExecutor = Executors.newScheduledThreadPool(NettyRuntime.availableProcessors() * 2);
+        _ossDownloader = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2, new NamedThreadFactory("ossDownloader"));
+        _sessionExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2, new NamedThreadFactory("sessionExecutor"));
+        _scheduledExecutor = Executors.newScheduledThreadPool(NettyRuntime.availableProcessors() * 2, new NamedThreadFactory("scheduledExecutor"));
 
         _wsServer = new WebSocketServer(new InetSocketAddress(_ws_host, _ws_port)) {
                     @Override
@@ -199,7 +200,7 @@ public class HubMain {
             }
         }
 
-        _nlsAuthExecutor = Executors.newSingleThreadScheduledExecutor();
+        _nlsAuthExecutor = Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory("nlsAuthExecutor"));
         _nlsAuthExecutor.scheduleAtFixedRate(this::checkAndUpdateNlsToken, 0, 10, TimeUnit.SECONDS);
     }
 

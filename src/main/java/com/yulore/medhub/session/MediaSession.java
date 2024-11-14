@@ -4,6 +4,7 @@ import com.alibaba.nls.client.protocol.asr.SpeechTranscriber;
 import com.yulore.l16.L16File;
 import com.yulore.medhub.nls.ASRAgent;
 import com.yulore.medhub.task.PlayPCMTask;
+import com.yulore.util.NamedThreadFactory;
 import lombok.Data;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
@@ -25,7 +26,7 @@ import java.util.concurrent.locks.ReentrantLock;
 public class MediaSession {
     public MediaSession(final boolean testEnableDelay, final long testDelayMs) {
         if (testEnableDelay) {
-            _delayExecutor = Executors.newSingleThreadScheduledExecutor();
+            _delayExecutor = Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory("delayExecutor"));
             _testDelayMs = testDelayMs;
         }
     }
