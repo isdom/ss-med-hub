@@ -1,7 +1,5 @@
 package com.yulore.util;
 
-import org.jetbrains.annotations.NotNull;
-
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 
