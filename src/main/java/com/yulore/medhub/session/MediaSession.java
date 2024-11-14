@@ -1,17 +1,15 @@
 package com.yulore.medhub.session;
 
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriber;
-import com.yulore.l16.L16File;
 import com.yulore.medhub.nls.ASRAgent;
 import com.yulore.medhub.task.PlayPCMTask;
-import com.yulore.util.NamedThreadFactory;
+import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.Data;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
 import org.java_websocket.exceptions.WebsocketNotConnectedException;
 
-import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -26,7 +24,7 @@ import java.util.concurrent.locks.ReentrantLock;
 public class MediaSession {
     public MediaSession(final boolean testEnableDelay, final long testDelayMs) {
         if (testEnableDelay) {
-            _delayExecutor = Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory("delayExecutor"));
+            _delayExecutor = Executors.newSingleThreadScheduledExecutor(new DefaultThreadFactory("delayExecutor"));
             _testDelayMs = testDelayMs;
         }
     }
