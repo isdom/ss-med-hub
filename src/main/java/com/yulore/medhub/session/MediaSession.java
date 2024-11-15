@@ -65,6 +65,7 @@ public class MediaSession {
     }
 
     public void stopAndCloseTranscriber(final WebSocket webSocket) {
+        ASRAgent agent = null;
         try {
             lock();
 
@@ -72,7 +73,7 @@ public class MediaSession {
                 log.info("stopAndCloseTranscriber: {} has already stopAndCloseTranscriber, ignore", webSocket.getRemoteSocketAddress());
                 return;
             }
-            final ASRAgent agent = asrAgent;
+            agent = asrAgent;
             asrAgent = null;
 
             agent.decConnection();
@@ -96,6 +97,9 @@ public class MediaSession {
             }
         } finally {
             unlock();
+            if (agent != null) {
+                log.info("release asr({}): {}/{}", agent.getName(), agent.get_connectingOrConnectedCount().get(), agent.getLimit());
+            }
         }
     }
 
