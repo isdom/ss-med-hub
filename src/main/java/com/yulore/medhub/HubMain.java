@@ -39,10 +39,7 @@ import javax.sound.sampled.UnsupportedAudioFileException;
 import java.io.*;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -124,7 +121,14 @@ public class HubMain {
         _wsServer = new WebSocketServer(new InetSocketAddress(_ws_host, _ws_port)) {
                     @Override
                     public void onOpen(final WebSocket webSocket, final ClientHandshake clientHandshake) {
-                        log.info("new connection to {}", webSocket.getRemoteSocketAddress());
+                        log.info("new connection from {}, to: {}, uri path: {}",
+                                webSocket.getRemoteSocketAddress(),
+                                webSocket.getLocalSocketAddress(),
+                                clientHandshake.getResourceDescriptor());
+                        for (Iterator<String> it = clientHandshake.iterateHttpFields(); it.hasNext(); ) {
+                            final String key = it.next();
+                            log.info("{}: {}", key, clientHandshake.getFieldValue(key));
+                        }
                         // init session attach with webSocket
                         final MediaSession session = new MediaSession(_test_enable_delay, _test_delay_ms);
                         webSocket.setAttachment(session);
