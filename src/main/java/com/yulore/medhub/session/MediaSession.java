@@ -44,9 +44,9 @@ public class MediaSession {
             try {
                 sendCheckEvent.run();
                 scheduleCheckIdle(executor, delay, sendCheckEvent);
-            } catch (WebsocketNotConnectedException ex) {
+            } catch (final WebsocketNotConnectedException ex) {
                 log.info("ws disconnected when sendCheckEvent: {}, stop checkIdle", ex.toString());
-            } catch (Exception ex) {
+            } catch (final Exception ex) {
                 log.warn("exception when sendCheckEvent: {}, stop checkIdle", ex.toString());
             }
         }, delay, TimeUnit.MILLISECONDS));
@@ -85,7 +85,7 @@ public class MediaSession {
                     log.info("transcriber wait for complete");
                     speechTranscriber.stop();
                     log.info("transcriber stop() latency : {} ms", System.currentTimeMillis() - now);
-                } catch (Exception ex) {
+                } catch (final Exception ex) {
                     log.warn("handleStopAsrCommand error: {}", ex.toString());
                 }
 
