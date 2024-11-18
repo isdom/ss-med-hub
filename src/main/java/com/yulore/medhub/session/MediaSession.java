@@ -28,6 +28,7 @@ public class MediaSession {
             _testDelayMs = testDelayMs;
         }
         _sessionId = sessionId;
+        _sessionBeginInMs = System.currentTimeMillis();
     }
 
     public void lock() {
@@ -44,11 +45,12 @@ public class MediaSession {
         _checkIdleFuture.set(executor.schedule(()->{
             try {
                 sendCheckEvent.run();
+                _checkIdleCount.incrementAndGet();
                 scheduleCheckIdle(executor, delay, sendCheckEvent);
             } catch (final WebsocketNotConnectedException ex) {
-                log.info("ws disconnected when sendCheckEvent: {}, stop checkIdle", ex.toString());
+                log.info("{} 's ws disconnected when sendCheckEvent: {}, stop checkIdle", _sessionId, ex.toString());
             } catch (final Exception ex) {
-                log.warn("exception when sendCheckEvent: {}, stop checkIdle", ex.toString());
+                log.warn("{} exception when sendCheckEvent: {}, stop checkIdle", _sessionId, ex.toString());
             }
         }, delay, TimeUnit.MILLISECONDS));
     }
@@ -123,7 +125,8 @@ public class MediaSession {
         if (future != null) {
             future.cancel(false);
         }
-        log.info("{} 's MediaSession close()", _sessionId);
+        log.info("{} 's MediaSession close(), lasted: {} s, check idle {} times",
+                _sessionId, (System.currentTimeMillis() - _sessionBeginInMs) / 1000.0f, _checkIdleCount.get());
     }
 
     public void stopCurrentAndStartPlay(final PlayPCMTask current) {
@@ -177,4 +180,6 @@ public class MediaSession {
     final AtomicInteger _playbackId = new AtomicInteger(0);
     final ConcurrentMap<Integer, byte[]> _id2stream = new ConcurrentHashMap<>();
     final AtomicReference<ScheduledFuture<?>>   _checkIdleFuture = new AtomicReference<>(null);
+    final AtomicInteger _checkIdleCount = new AtomicInteger(0);
+    final long _sessionBeginInMs;
 }
