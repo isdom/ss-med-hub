@@ -22,11 +22,12 @@ import java.util.concurrent.locks.ReentrantLock;
 @ToString
 @Slf4j
 public class MediaSession {
-    public MediaSession(final boolean testEnableDelay, final long testDelayMs) {
+    public MediaSession(final boolean testEnableDelay, final long testDelayMs, final String sessionId) {
         if (testEnableDelay) {
             _delayExecutor = Executors.newSingleThreadScheduledExecutor(new DefaultThreadFactory("delayExecutor"));
             _testDelayMs = testDelayMs;
         }
+        _sessionId = sessionId;
     }
 
     public void lock() {
@@ -122,6 +123,7 @@ public class MediaSession {
         if (future != null) {
             future.cancel(false);
         }
+        log.info("{} 's MediaSession close()", _sessionId);
     }
 
     public void stopCurrentAndStartPlay(final PlayPCMTask current) {
@@ -159,6 +161,7 @@ public class MediaSession {
         return _id2stream.get(id);
     }
 
+    private final String _sessionId;
     private final Lock _lock = new ReentrantLock();
 
     SpeechTranscriber speechTranscriber;

@@ -130,7 +130,7 @@ public class HubMain {
                             log.info("{}: {}", key, clientHandshake.getFieldValue(key));
                         }
                         // init session attach with webSocket
-                        final MediaSession session = new MediaSession(_test_enable_delay, _test_delay_ms);
+                        final MediaSession session = new MediaSession(_test_enable_delay, _test_delay_ms, clientHandshake.getFieldValue("x-sessionid"));
                         webSocket.setAttachment(session);
                         session.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms,
                                 ()->HubEventVO.<Void>sendEvent(webSocket, "CheckIdle", null)); // 5 seconds
@@ -138,9 +138,13 @@ public class HubMain {
 
                     @Override
                     public void onClose(WebSocket webSocket, int code, String reason, boolean remote) {
-                        log.info("closed {} with exit code {} additional info: {}", webSocket.getRemoteSocketAddress(), code, reason);
+                        final MediaSession session = webSocket.<MediaSession>getAttachment();
+                        log.info("closed {} with exit code {} additional info: {}, session: {}",
+                                webSocket.getRemoteSocketAddress(), code, reason, session != null ? session.get_sessionId() : "(null)");
                         stopAndCloseTranscriber(webSocket);
-                        webSocket.<MediaSession>getAttachment().close();
+                        if (session != null) {
+                            session.close();
+                        }
                     }
 
                     @Override
