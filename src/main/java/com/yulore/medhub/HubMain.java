@@ -482,7 +482,7 @@ public class HubMain {
             final ASRAgent agent = selectASRAgent();
             session.setAsrAgent(agent);
 
-            speechTranscriber = buildSpeechTranscriber(agent, buildTranscriberListener(webSocket, agent, startConnectingInMs));
+            speechTranscriber = buildSpeechTranscriber(agent, buildTranscriberListener(webSocket, agent, session.get_sessionId(), startConnectingInMs));
             session.setSpeechTranscriber(speechTranscriber);
         } catch (Exception ex) {
             // TODO: close websocket?
@@ -536,12 +536,13 @@ public class HubMain {
     }
 
     @NotNull
-    private SpeechTranscriberListener buildTranscriberListener(final WebSocket webSocket, final ASRAgent account, final long startConnectingInMs) {
+    private SpeechTranscriberListener buildTranscriberListener(final WebSocket webSocket, final ASRAgent account, final String sessionId, final long startConnectingInMs) {
         return new SpeechTranscriberListener() {
             @Override
             public void onTranscriberStart(final SpeechTranscriberResponse response) {
                 //task_id是调用方和服务端通信的唯一标识，遇到问题时，需要提供此task_id。
-                log.info("onTranscriberStart: task_id={}, name={}, status={}, cost={} ms",
+                log.info("onTranscriberStart: sessionId={}, task_id={}, name={}, status={}, cost={} ms",
+                        sessionId,
                         response.getTaskId(),
                         response.getName(),
                         response.getStatus(),
@@ -551,14 +552,15 @@ public class HubMain {
 
             @Override
             public void onSentenceBegin(final SpeechTranscriberResponse response) {
-                log.info("onSentenceBegin: task_id={}, name={}, status={}",
-                        response.getTaskId(), response.getName(), response.getStatus());
+                log.info("onSentenceBegin: sessionId={}, task_id={}, name={}, status={}",
+                        sessionId, response.getTaskId(), response.getName(), response.getStatus());
                 notifySentenceBegin(webSocket, response);
             }
 
             @Override
             public void onSentenceEnd(final SpeechTranscriberResponse response) {
-                log.info("onSentenceEnd: task_id={}, name={}, status={}, index={}, result={}, confidence={}, begin_time={}, time={}",
+                log.info("onSentenceEnd: sessionId={}, task_id={}, name={}, status={}, index={}, result={}, confidence={}, begin_time={}, time={}",
+                        sessionId,
                         response.getTaskId(),
                         response.getName(),
                         response.getStatus(),
@@ -572,7 +574,8 @@ public class HubMain {
 
             @Override
             public void onTranscriptionResultChange(final SpeechTranscriberResponse response) {
-                log.info("onTranscriptionResultChange: task_id={}, name={}, status={}, index={}, result={}, time={}",
+                log.info("onTranscriptionResultChange: sessionId={}, task_id={}, name={}, status={}, index={}, result={}, time={}",
+                        sessionId,
                         response.getTaskId(),
                         response.getName(),
                         response.getStatus(),
@@ -584,14 +587,15 @@ public class HubMain {
 
             @Override
             public void onTranscriptionComplete(final SpeechTranscriberResponse response) {
-                log.info("onTranscriptionComplete: task_id={}, name={}, status={}",
-                        response.getTaskId(), response.getName(), response.getStatus());
+                log.info("onTranscriptionComplete: sessionId={}, task_id={}, name={}, status={}",
+                        sessionId, response.getTaskId(), response.getName(), response.getStatus());
                 notifyTranscriptionCompleted(webSocket, account, response);
             }
 
             @Override
             public void onFail(final SpeechTranscriberResponse response) {
-                log.warn("onFail: task_id={}, status={}, status_text={}",
+                log.warn("onFail: sessionId={}, task_id={}, status={}, status_text={}",
+                        sessionId,
                         response.getTaskId(),
                         response.getStatus(),
                         response.getStatusText());
