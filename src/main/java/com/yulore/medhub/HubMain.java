@@ -106,6 +106,8 @@ public class HubMain {
 
     private ExecutorService _ossDownloader;
 
+    private AtomicInteger _currentWSConnection = new AtomicInteger(0);
+
     @PostConstruct
     public void start() {
         //创建NlsClient实例应用全局创建一个即可。生命周期可和整个应用保持一致，默认服务地址为阿里云线上服务地址。
@@ -121,7 +123,8 @@ public class HubMain {
         _wsServer = new WebSocketServer(new InetSocketAddress(_ws_host, _ws_port)) {
                     @Override
                     public void onOpen(final WebSocket webSocket, final ClientHandshake clientHandshake) {
-                        log.info("new connection from {}, to: {}, uri path: {}",
+                        log.info("wscount/{}: new connection from {}, to: {}, uri path: {}",
+                                _currentWSConnection.incrementAndGet(),
                                 webSocket.getRemoteSocketAddress(),
                                 webSocket.getLocalSocketAddress(),
                                 clientHandshake.getResourceDescriptor());
@@ -139,7 +142,8 @@ public class HubMain {
                     @Override
                     public void onClose(WebSocket webSocket, int code, String reason, boolean remote) {
                         final MediaSession session = webSocket.<MediaSession>getAttachment();
-                        log.info("closed {} with exit code {} additional info: {}, session: {}",
+                        log.info("wscount/{}: closed {} with exit code {} additional info: {}, session: {}",
+                                _currentWSConnection.decrementAndGet(),
                                 webSocket.getRemoteSocketAddress(), code, reason, session != null ? session.get_sessionId() : "(null)");
                         stopAndCloseTranscriber(webSocket);
                         if (session != null) {
