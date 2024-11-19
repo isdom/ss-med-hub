@@ -120,7 +120,7 @@ public class HubMain {
         _sessionExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2, new DefaultThreadFactory("sessionExecutor"));
         _scheduledExecutor = Executors.newScheduledThreadPool(NettyRuntime.availableProcessors() * 2, new DefaultThreadFactory("scheduledExecutor"));
 
-        _wsServer = new WebSocketServer(new InetSocketAddress(_ws_host, _ws_port)) {
+        _wsServer = new WebSocketServer(new InetSocketAddress(_ws_host, _ws_port), NettyRuntime.availableProcessors() * 2) {
                     @Override
                     public void onOpen(final WebSocket webSocket, final ClientHandshake clientHandshake) {
                         log.info("wscount/{}: new connection from {}, to: {}, uri path: {}",
