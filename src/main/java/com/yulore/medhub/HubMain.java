@@ -267,9 +267,16 @@ public class HubMain {
             _sessionExecutor.submit(()-> handlePlayTTSCommand(cmd, webSocket));
         } else if ("StopPlayback".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handleStopPlaybackCommand(cmd, webSocket));
+        } else if ("OpenStream".equals(cmd.getHeader().get("name"))) {
+            _sessionExecutor.submit(()-> handleOpenStreamCommand(cmd, webSocket));
         } else {
             log.warn("handleHubCommand: Unknown Command: {}", cmd);
         }
+    }
+
+    private void handleOpenStreamCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        log.info("open path: {}", cmd.getPayload().get("path"));
+        HubEventVO.sendEvent(webSocket, "StreamOpened", null);
     }
 
     private void handleStopPlaybackCommand(final HubCommandVO cmd, final WebSocket webSocket) {
@@ -316,42 +323,6 @@ public class HubMain {
                 (response)-> log.warn("tts failed: {}", response));
         task.start();
     }
-
-            /*
-            final int begin = file.lastIndexOf('/');
-            final int end = file.indexOf('.');
-            final String fileid = file.substring(begin + 1, end);
-            log.info("handlePlaybackCommand: try load file: {}", fileid);
-            L16File l16file = _id2L16File.get(fileid);
-            if (l16file == null ) {
-                final String fullPath = _l16_path + fileid + ".l16";
-                final File l16 = new File(fullPath);
-                if (!l16.exists()) {
-                    log.warn("handlePlaybackCommand: {} not exist, ignore playback {}", fullPath, fileid);
-                    return;
-                }
-                try (final DataInputStream is = new DataInputStream(new FileInputStream(l16))) {
-                    l16file = L16File.loadL16(is);
-                    if (l16file == null) {
-                        log.warn("handlePlaybackCommand: load {} failed!", fullPath);
-                        return;
-                    }
-                    final L16File prevL16file = _id2L16File.putIfAbsent(fileid, l16file);
-                    if (prevL16file != null) {
-                        l16file = prevL16file;
-                    }
-                } catch (IOException ex) {
-                    log.warn("handlePlaybackCommand: load {} failed: {}", fullPath, ex.toString());
-                    return;
-                }
-            }
-            sendEvent(webSocket, "PlaybackStart",
-                    new PayloadPlaybackStart(file,
-                            l16file.header.rate,
-                            l16file.header.interval,
-                            l16file.header.channels));
-            schedulePlayback(l16file, file, webSocket);
-             */
 
     private void handlePlaybackCommand(final HubCommandVO cmd, final WebSocket webSocket) {
         final MediaSession session = webSocket.getAttachment();
