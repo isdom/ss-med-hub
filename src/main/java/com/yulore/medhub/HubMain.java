@@ -74,6 +74,9 @@ public class HubMain {
     @Value("${session.check_idle_interval_ms}")
     private long _check_idle_interval_ms;
 
+    @Value("${session.enable_idle_resource}")
+    private String _enable_idle_resource;
+
     final List<ASRAgent> _asrAgents = new ArrayList<>();
     final List<TTSAgent> _ttsAgents = new ArrayList<>();
 
@@ -128,15 +131,21 @@ public class HubMain {
                                 webSocket.getRemoteSocketAddress(),
                                 webSocket.getLocalSocketAddress(),
                                 clientHandshake.getResourceDescriptor());
-                        for (Iterator<String> it = clientHandshake.iterateHttpFields(); it.hasNext(); ) {
-                            final String key = it.next();
-                            log.info("{}: {}", key, clientHandshake.getFieldValue(key));
-                        }
+//                        for (Iterator<String> it = clientHandshake.iterateHttpFields(); it.hasNext(); ) {
+//                            final String key = it.next();
+//                            log.info("{}: {}", key, clientHandshake.getFieldValue(key));
+//                        }
                         // init session attach with webSocket
-                        final MediaSession session = new MediaSession(_test_enable_delay, _test_delay_ms, clientHandshake.getFieldValue("x-sessionid"));
+                        final String sessionId = clientHandshake.getFieldValue("x-sessionid");
+                        final MediaSession session = new MediaSession(_test_enable_delay, _test_delay_ms, sessionId);
                         webSocket.setAttachment(session);
-                        session.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms,
-                                ()->HubEventVO.<Void>sendEvent(webSocket, "CheckIdle", null)); // 5 seconds
+                        if (_enable_idle_resource.equals(clientHandshake.getResourceDescriptor())) {
+                            session.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms,
+                                    ()->HubEventVO.<Void>sendEvent(webSocket, "CheckIdle", null)); // 5 seconds
+                            log.info("ws path match: {}, enable check idle for {}", _enable_idle_resource, sessionId);
+                        } else {
+                            log.info("ws path !NOT! match: {}, disable check idle for {}", _enable_idle_resource, sessionId);
+                        }
                     }
 
                     @Override
