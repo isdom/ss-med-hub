@@ -11,10 +11,12 @@ import com.aliyun.oss.OSSClientBuilder;
 import com.aliyun.oss.model.OSSObject;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yulore.medhub.cache.LocalStreamService;
 import com.yulore.medhub.nls.ASRAgent;
 import com.yulore.medhub.nls.TTSAgent;
 import com.yulore.medhub.nls.TTSTask;
 import com.yulore.medhub.session.MediaSession;
+import com.yulore.medhub.session.StreamSession;
 import com.yulore.medhub.task.PlayPCMTask;
 import com.yulore.medhub.task.SampleInfo;
 import com.yulore.medhub.vo.*;
@@ -27,6 +29,7 @@ import org.java_websocket.exceptions.WebsocketNotConnectedException;
 import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.server.WebSocketServer;
 import org.jetbrains.annotations.NotNull;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -74,8 +77,8 @@ public class HubMain {
     @Value("${session.check_idle_interval_ms}")
     private long _check_idle_interval_ms;
 
-    @Value("${session.enable_idle_resource}")
-    private String _enable_idle_resource;
+    @Value("${session.match_resource}")
+    private String _match_resource;
 
     final List<ASRAgent> _asrAgents = new ArrayList<>();
     final List<TTSAgent> _ttsAgents = new ArrayList<>();
@@ -109,7 +112,10 @@ public class HubMain {
 
     private ExecutorService _ossDownloader;
 
-    private AtomicInteger _currentWSConnection = new AtomicInteger(0);
+    private final AtomicInteger _currentWSConnection = new AtomicInteger(0);
+
+    @Autowired
+    private LocalStreamService _lssService;
 
     @PostConstruct
     public void start() {
@@ -135,16 +141,17 @@ public class HubMain {
 //                            final String key = it.next();
 //                            log.info("{}: {}", key, clientHandshake.getFieldValue(key));
 //                        }
-                        // init session attach with webSocket
-                        final String sessionId = clientHandshake.getFieldValue("x-sessionid");
-                        final MediaSession session = new MediaSession(_test_enable_delay, _test_delay_ms, sessionId);
-                        webSocket.setAttachment(session);
-                        if (_enable_idle_resource.equals(clientHandshake.getResourceDescriptor())) {
+                        if (_match_resource.equals(clientHandshake.getResourceDescriptor())) {
+                            // init session attach with webSocket
+                            final String sessionId = clientHandshake.getFieldValue("x-sessionid");
+                            final MediaSession session = new MediaSession(_test_enable_delay, _test_delay_ms, sessionId);
+                            webSocket.setAttachment(session);
                             session.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms,
                                     ()->HubEventVO.<Void>sendEvent(webSocket, "CheckIdle", null)); // 5 seconds
-                            log.info("ws path match: {}, enable check idle for {}", _enable_idle_resource, sessionId);
+                            log.info("ws path match: {}, using ws as MediaSession {}", _match_resource, sessionId);
                         } else {
-                            log.info("ws path !NOT! match: {}, disable check idle for {}", _enable_idle_resource, sessionId);
+                            log.info("ws path {} !NOT! match: {}, NOT MediaSession: {}",
+                                    clientHandshake.getResourceDescriptor(), _match_resource, webSocket.getRemoteSocketAddress());
                         }
                     }
 
@@ -278,14 +285,102 @@ public class HubMain {
             _sessionExecutor.submit(()-> handleStopPlaybackCommand(cmd, webSocket));
         } else if ("OpenStream".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handleOpenStreamCommand(cmd, webSocket));
+        } else if ("GetFileLen".equals(cmd.getHeader().get("name"))) {
+            _sessionExecutor.submit(()-> handleGetFileLenCommand(cmd, webSocket));
+        } else if ("FileSeek".equals(cmd.getHeader().get("name"))) {
+            _sessionExecutor.submit(()-> handleFileSeekCommand(cmd, webSocket));
+        } else if ("FileRead".equals(cmd.getHeader().get("name"))) {
+            _sessionExecutor.submit(()-> handleFileReadCommand(cmd, webSocket));
+        } else if ("FileTell".equals(cmd.getHeader().get("name"))) {
+            _sessionExecutor.submit(()-> handleFileTellCommand(cmd, webSocket));
         } else {
             log.warn("handleHubCommand: Unknown Command: {}", cmd);
         }
     }
 
     private void handleOpenStreamCommand(final HubCommandVO cmd, final WebSocket webSocket) {
-        log.info("open path: {}", cmd.getPayload().get("path"));
-        HubEventVO.sendEvent(webSocket, "StreamOpened", null);
+        final String path = cmd.getPayload().get("path");
+        log.info("open stream => path: {}", path);
+        _lssService.asLocal(path, (ss)->{
+            ss.get_is().mark(Integer.MAX_VALUE);
+            webSocket.setAttachment(ss);
+            HubEventVO.sendEvent(webSocket, "StreamOpened", null);
+        });
+    }
+
+    private void handleGetFileLenCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        log.info("get file len:");
+        final StreamSession ss = webSocket.getAttachment();
+        if (ss == null) {
+            return;
+        }
+        HubEventVO.sendEvent(webSocket, "GetFileLenResult", new PayloadGetFileLenResult(ss.get_length()));
+    }
+
+    private void handleFileSeekCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        final int offset = Integer.parseInt(cmd.getPayload().get("offset"));
+        final int whence = Integer.parseInt(cmd.getPayload().get("whence"));
+        log.info("file seek => offset: {}, whence: {}", offset, whence);
+        final StreamSession ss = webSocket.getAttachment();
+        if (ss == null) {
+            return;
+        }
+        try {
+            int seek_from_start = -1;
+            switch (whence) {
+                case 0: //SEEK_SET:
+                    seek_from_start = offset;
+                    break;
+                case 1: //SEEK_CUR:
+                    seek_from_start = ss.get_length() - ss.get_is().available() + offset;
+                    break;
+                case 2: //SEEK_END:
+                    seek_from_start = ss.get_length() + offset;
+                    break;
+                default:
+                    //return ss.get_length() - ss.get_is().available();
+            }
+            // from begin
+            if (seek_from_start >= 0) {
+                ss.get_is().reset();
+                ss.get_is().skip(seek_from_start);
+            }
+            HubEventVO.sendEvent(webSocket, "FileSeekResult", new PayloadFileSeekResult(ss.get_length() - ss.get_is().available()));
+        } catch (IOException ignored) {
+        }
+    }
+
+    private void handleFileReadCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        final int count = Integer.parseInt(cmd.getPayload().get("count"));
+        log.info("file read => count: {}", count);
+        final StreamSession ss = webSocket.getAttachment();
+        if (ss == null) {
+            return;
+        }
+        try {
+            final byte[] bytes4read = new byte[count];
+            final int readed = ss.get_is().read(bytes4read);
+            // HubEventVO.sendEvent(webSocket, "FileReadResult", null);
+            if (readed == bytes4read.length) {
+                webSocket.send(bytes4read);
+            } else {
+                webSocket.send(ByteBuffer.wrap(bytes4read, 0, readed));
+            }
+            log.info("file read => request read count: {}, actual read bytes: {}", count, readed);
+        } catch (IOException ignored) {
+        }
+    }
+
+    private void handleFileTellCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        final StreamSession ss = webSocket.getAttachment();
+        if (ss == null) {
+            return;
+        }
+        try {
+            log.info("file tell: current pos: {}", ss.get_length() - ss.get_is().available());
+            HubEventVO.sendEvent(webSocket, "FileTellResult", new PayloadFileSeekResult(ss.get_length() - ss.get_is().available()));
+        } catch (IOException ignored) {
+        }
     }
 
     private void handleStopPlaybackCommand(final HubCommandVO cmd, final WebSocket webSocket) {
