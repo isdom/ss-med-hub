@@ -151,7 +151,7 @@ public class HubMain {
                             // init session attach with webSocket
                             final String sessionId = clientHandshake.getFieldValue("x-sessionid");
                             final MediaSession session = new MediaSession(sessionId, _test_enable_delay, _test_delay_ms,
-                                    _test_enable_disconnect, _test_disconnect_probability, ()->webSocket.close(2000, "test_disconnect"));
+                                    _test_enable_disconnect, _test_disconnect_probability, ()->webSocket.close(1006, "test_disconnect"));
                             webSocket.setAttachment(session);
                             session.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms,
                                     ()->HubEventVO.<Void>sendEvent(webSocket, "CheckIdle", null)); // 5 seconds
