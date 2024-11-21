@@ -74,6 +74,12 @@ public class HubMain {
     @Value("${test.delay_ms}")
     private long _test_delay_ms;
 
+    @Value("${test.enable_disconnect}")
+    private boolean _test_enable_disconnect;
+
+    @Value("${test.disconnect_probability}")
+    private float _test_disconnect_probability;
+
     @Value("${session.check_idle_interval_ms}")
     private long _check_idle_interval_ms;
 
@@ -144,7 +150,8 @@ public class HubMain {
                         if (_match_resource.equals(clientHandshake.getResourceDescriptor())) {
                             // init session attach with webSocket
                             final String sessionId = clientHandshake.getFieldValue("x-sessionid");
-                            final MediaSession session = new MediaSession(_test_enable_delay, _test_delay_ms, sessionId);
+                            final MediaSession session = new MediaSession(sessionId, _test_enable_delay, _test_delay_ms,
+                                    _test_enable_disconnect, _test_disconnect_probability, ()->webSocket.close(2000, "test_disconnect"));
                             webSocket.setAttachment(session);
                             session.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms,
                                     ()->HubEventVO.<Void>sendEvent(webSocket, "CheckIdle", null)); // 5 seconds

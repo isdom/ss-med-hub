@@ -22,11 +22,16 @@ import java.util.concurrent.locks.ReentrantLock;
 @ToString
 @Slf4j
 public class MediaSession {
-    public MediaSession(final boolean testEnableDelay, final long testDelayMs, final String sessionId) {
+    public MediaSession(final String sessionId, final boolean testEnableDelay, final long testDelayMs, final boolean testEnableDisconnect, final float testDisconnectProbability, final Runnable doDisconnect) {
         if (testEnableDelay) {
             _delayExecutor = Executors.newSingleThreadScheduledExecutor(new DefaultThreadFactory("delayExecutor"));
             _testDelayMs = testDelayMs;
         }
+        if (testEnableDisconnect && Math.random() < testDisconnectProbability) {
+            _testDisconnectTimeout = (long)(Math.random() * 5000) + 5000L; // 5s ~ 10s
+            log.info("{}: enable disconnect test feature, timeout: {} ms", sessionId, _testDisconnectTimeout);
+        }
+        _doDisconnect = doDisconnect;
         _sessionId = sessionId;
         _sessionBeginInMs = System.currentTimeMillis();
     }
@@ -44,6 +49,12 @@ public class MediaSession {
     public void scheduleCheckIdle(final ScheduledExecutorService executor, final long delay, final Runnable sendCheckEvent) {
         _checkIdleFuture.set(executor.schedule(()->{
             try {
+                if (_testDisconnectTimeout > 0 && (System.currentTimeMillis() - _sessionBeginInMs > _testDisconnectTimeout)) {
+                    _doDisconnect.run();
+                    log.info("{}: do disconnect test feature", _sessionId);
+                    return;
+                }
+
                 sendCheckEvent.run();
                 _checkIdleCount.incrementAndGet();
                 scheduleCheckIdle(executor, delay, sendCheckEvent);
@@ -174,6 +185,8 @@ public class MediaSession {
     final AtomicBoolean _isTranscriptionStarted = new AtomicBoolean(false);
     ScheduledExecutorService _delayExecutor = null;
     long _testDelayMs = 0;
+    long _testDisconnectTimeout = -1;
+    final Runnable _doDisconnect;
 
     final AtomicBoolean _isPlaying = new AtomicBoolean(false);
     final AtomicReference<PlayPCMTask> _playingTask = new AtomicReference<>(null);

@@ -7,7 +7,7 @@ class MediaSessionTest {
 
     @Test
     void startTranscription() {
-        final MediaSession session = new MediaSession(false, 0, "test");
+        final MediaSession session = new MediaSession("test", false, 0, false, 0.0f, ()->{});
 
         // return true for the first time
         assertTrue(session.startTranscription());
