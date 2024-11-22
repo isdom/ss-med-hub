@@ -49,7 +49,7 @@ public class TTSTask {
             });
 
             //设置返回音频的编码格式
-            _synthesizer.setFormat(OutputFormatEnum.PCM);
+            _synthesizer.setFormat(OutputFormatEnum.WAV);
             //设置返回音频的采样率
             _synthesizer.setSampleRate(SampleRateEnum.SAMPLE_RATE_8K);
             //发音人
