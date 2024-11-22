@@ -12,6 +12,7 @@ import com.aliyun.oss.model.OSSObject;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yulore.medhub.cache.LocalStreamService;
+import com.yulore.medhub.cache.OSSStreamTask;
 import com.yulore.medhub.nls.ASRAgent;
 import com.yulore.medhub.nls.TTSAgent;
 import com.yulore.medhub.nls.TTSTask;
@@ -308,7 +309,7 @@ public class HubMain {
     private void handleOpenStreamCommand(final HubCommandVO cmd, final WebSocket webSocket) {
         final String path = cmd.getPayload().get("path");
         log.info("open stream => path: {}", path);
-        _lssService.asLocal(path, (ss)->{
+        _lssService.asLocal(new OSSStreamTask(path, _ossClient), (ss)->{
             ss.get_is().mark(Integer.MAX_VALUE);
             webSocket.setAttachment(ss);
             HubEventVO.sendEvent(webSocket, "StreamOpened", null);

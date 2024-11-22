@@ -29,16 +29,6 @@ import java.util.function.Consumer;
 @Slf4j
 @Component
 public class LocalStreamService {
-    @Value("${oss.endpoint}")
-    private String _oss_endpoint;
-
-    @Value("${oss.access_key_id}")
-    private String _oss_access_key_id;
-
-    @Value("${oss.access_key_secret}")
-    private String _oss_access_key_secret;
-
-    private OSS _ossClient;
 
     /*
     oss_bucket: ylhz-aicall
@@ -52,7 +42,6 @@ public class LocalStreamService {
 
     @PostConstruct
     public void start() {
-        _ossClient = new OSSClientBuilder().build(_oss_endpoint, _oss_access_key_id, _oss_access_key_secret);
         _lssExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
                 new DefaultThreadFactory("lssExecutor"));
     }
@@ -61,35 +50,11 @@ public class LocalStreamService {
     public void stop() {
         // 关闭客户端 - 注：关闭后不支持再次 start, 一般伴随JVM关闭而关闭
         _lssExecutor.shutdownNow();
-        _ossClient.shutdown();
     }
 
-    public void asLocal(final String path, final Consumer<StreamSession> consumer) {
-        // eg: {bucket=ylhz-aicall,url=ws://172.18.86.131:6789/playback,vars_playback_id=45af9503-a0ca-47d3-bb73-13a5afde65ea,content_id=2088788,vars_start_timestamp=1732028219711854}aispeech/dd_app_sb_3_0/c264515130674055869c16fcc2458109.wav
-        final int leftBracePos = path.indexOf('{');
-        if (leftBracePos == -1) {
-            log.warn("{} missing vars, ignore", path);
-            return;
-        }
-        final int rightBracePos = path.indexOf('}');
-        if (rightBracePos == -1) {
-            log.warn("{} missing vars, ignore", path);
-            return;
-        }
-        final String vars = path.substring(leftBracePos + 1, rightBracePos);
-        int bucketBeginIdx = vars.indexOf("bucket=");
-        if (bucketBeginIdx == -1) {
-            log.warn("{} missing bucket field, ignore", path);
-            return;
-        }
-
-        int bucketEndIdx = vars.indexOf(',', bucketBeginIdx);
-
-        final String bucketName = vars.substring(bucketBeginIdx + 7, bucketEndIdx == -1 ? vars.length() : bucketEndIdx);
-        final String objectName = path.substring(rightBracePos + 1);
-        final String key = objectName.replace('/', '_');
-
-        log.info("asLocal: try get Stream for bucket:{}, objectName:{} as {}", bucketName, objectName, key);
+    public void asLocal(final BuildStreamTask streamTask, final Consumer<StreamSession> consumer) {
+        final String key = streamTask.key();
+        log.info("asLocal: try get Stream for {}", key);
         final LoadAndCahceTask task = _key2task.get(key);
         if (task != null) {
             task.onCached(consumer);
@@ -97,7 +62,7 @@ public class LocalStreamService {
             return;
         }
         // not load before, try to load
-        final LoadAndCahceTask myTask = new LoadAndCahceTask();
+        final LoadAndCahceTask myTask = new LoadAndCahceTask(streamTask);
         final LoadAndCahceTask prevTask = _key2task.putIfAbsent(key, myTask);
         if (prevTask != null) {
             // another has start task already
@@ -108,27 +73,21 @@ public class LocalStreamService {
         log.info("asLocal: {} its_my_task", key);
         // it's me, first start task
         myTask.onCached(consumer);
-        _lssExecutor.submit(()->myTask.start(bucketName, objectName));
+        _lssExecutor.submit(myTask::start);
     }
 
-    class LoadAndCahceTask {
+    static class LoadAndCahceTask {
         private final Lock _lock = new ReentrantLock();
         private byte[] _bytes = null;
         private final List<Consumer<StreamSession>> _consumers = new ArrayList<>();
+        private final BuildStreamTask _streamTask;
 
-        public void start(final String bucketName, final String objectName) {
-            log.info("start load: {} from bucket: {}", objectName, bucketName);
-            byte[] bytes;
-            final long startInMs = System.currentTimeMillis();
-            try (final OSSObject ossObject = _ossClient.getObject(bucketName, objectName);
-                 final ByteArrayOutputStream os = new ByteArrayOutputStream()) {
-                ossObject.getObjectContent().transferTo(os);
-                bytes = os.toByteArray();
-                log.info("and save content size {}, total cost: {} ms", bytes.length, System.currentTimeMillis() - startInMs);
-            } catch (IOException ex) {
-                log.warn("start failed: {}", ex.toString());
-                throw new RuntimeException(ex);
-            }
+        public LoadAndCahceTask(final BuildStreamTask streamTask) {
+            _streamTask = streamTask;
+        }
+
+        public void start() {
+            final byte[] bytes = _streamTask.buildStream();
 
             List<Consumer<StreamSession>> todo;
             _lock.lock();
