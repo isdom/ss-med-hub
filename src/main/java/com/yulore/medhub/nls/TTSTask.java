@@ -15,7 +15,7 @@ public class TTSTask {
     private SpeechSynthesizer _synthesizer = null;
 
     public TTSTask(final TTSAgent agent,
-                   final String text,
+                   final Consumer<SpeechSynthesizer> setupSynthesizer,
                    final Consumer<ByteBuffer> onData,
                    final Consumer<SpeechSynthesizerResponse> onComplete,
                    final Consumer<SpeechSynthesizerResponse> onFail
@@ -59,9 +59,9 @@ public class TTSTask {
             //语速，范围是-500~500，默认是0。
             //synthesizer.setSpeechRate(100);
             //设置用于语音合成的文本
-            _synthesizer.setText(text);
             // 是否开启字幕功能（返回相应文本的时间戳），默认不开启，需要注意并非所有发音人都支持该参数。
             // synthesizer.addCustomedParam("enable_subtitle", false);
+            setupSynthesizer.accept(_synthesizer);
         } catch (Exception ex) {
             log.warn("failed to launch tts task, detail: {}", ex.toString());
         }

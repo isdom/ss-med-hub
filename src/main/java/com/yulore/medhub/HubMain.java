@@ -312,11 +312,22 @@ public class HubMain {
         final String path = cmd.getPayload().get("path");
         log.info("open stream => path: {}", path);
 
-        _lssService.asLocal(getTaskOf(path), (ss) -> {
+        final BuildStreamTask bst = getTaskOf(path);
+        if (bst.key() != null) {
+            // cahced
+            _lssService.asLocal(bst, (ss) -> {
+                ss.get_is().mark(Integer.MAX_VALUE);
+                webSocket.setAttachment(ss);
+                HubEventVO.sendEvent(webSocket, "StreamOpened", null);
+            });
+        } else {
+            // not cached
+            final byte[] bytes = bst.buildStream();
+            final StreamSession ss = new StreamSession(new ByteArrayInputStream(bytes), bytes.length);
             ss.get_is().mark(Integer.MAX_VALUE);
             webSocket.setAttachment(ss);
             HubEventVO.sendEvent(webSocket, "StreamOpened", null);
-        });
+        }
     }
 
     private BuildStreamTask getTaskOf(final String path) {
@@ -427,7 +438,8 @@ public class HubMain {
         final long startInMs = System.currentTimeMillis();
         final TTSAgent agent = selectTTSAgent();
         final AtomicInteger idx = new AtomicInteger(0);
-        final TTSTask task = new TTSTask(agent, text,
+        final TTSTask task = new TTSTask(agent,
+                (synthesizer)->synthesizer.setText(text),
                 (bytes) -> {
                     final byte[] bytesArray = new byte[bytes.remaining()];
                     bytes.get(bytesArray, 0, bytesArray.length);
@@ -543,21 +555,6 @@ public class HubMain {
             return defaultValue;
         }
     }
-
-    /*
-    private void schedulePlayback(final L16File l16file, final String file, final WebSocket webSocket) {
-        final List<ScheduledFuture<?>> futures = new ArrayList<>(l16file.slices.length + 1);
-        for (L16File.L16Slice slice : l16file.slices) {
-            final ScheduledFuture<?> future = _playbackExecutor.schedule(()->webSocket.send(slice.raw_data),
-                    slice.from_start / 1000, TimeUnit.MILLISECONDS);
-            futures.add(future);
-        }
-        final long notifyStopDelay = l16file.slices[l16file.slices.length - 1].from_start / 1000 + l16file.header.interval;
-        futures.add(_playbackExecutor.schedule(()->sendEvent(webSocket, "PlaybackStop", new PayloadPlaybackStop(file)),
-                notifyStopDelay, TimeUnit.MILLISECONDS));
-        log.info("schedulePlayback: schedule {} by {} send action", file, futures.size());
-    }
-     */
 
     private void handleStartTranscriptionCommand(final HubCommandVO cmd, final WebSocket webSocket) {
         final MediaSession session = webSocket.getAttachment();

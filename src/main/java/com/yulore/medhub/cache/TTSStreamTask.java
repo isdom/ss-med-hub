@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class TTSStreamTask implements BuildStreamTask {
     public TTSStreamTask(final String path, final TTSAgent agent) {
         _agent = agent;
-        // eg: {type=tts,url=ws://172.18.86.131:6789/playback,vars_playback_id=<uuid>,content_id=2088788,vars_start_timestamp=1732028219711854}
+        // eg: {type=tts,voice=xxx,url=ws://172.18.86.131:6789/playback,vars_playback_id=<uuid>,content_id=2088788,vars_start_timestamp=1732028219711854}
         //          'StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(content)'.wav
         final int leftBracePos = path.indexOf('{');
         if (leftBracePos == -1) {
@@ -36,13 +36,16 @@ public class TTSStreamTask implements BuildStreamTask {
         }
         final String vars = path.substring(leftBracePos + 1, rightBracePos);
 
-        _key = path.substring(rightBracePos + 1, path.lastIndexOf(".wav"));
-        _text = StringUnicodeEncoderDecoder.decodeUnicodeSequenceToString(_key);
+        _voice = VarsUtil.extractValue(vars, "voice");
+        _pitchRate = VarsUtil.extractValue(vars, "pitch_rate");
+        _speechRate = VarsUtil.extractValue(vars, "speech_rate");
+        final String key = path.substring(rightBracePos + 1, path.lastIndexOf(".wav"));
+        _text = StringUnicodeEncoderDecoder.decodeUnicodeSequenceToString(key);
     }
 
     @Override
     public String key() {
-        return _key;
+        return null;
     }
 
     @Override
@@ -52,7 +55,19 @@ public class TTSStreamTask implements BuildStreamTask {
         final AtomicInteger idx = new AtomicInteger(0);
         final long startInMs = System.currentTimeMillis();
 
-        final TTSTask task = new TTSTask(_agent, _text,
+        final TTSTask task = new TTSTask(_agent,
+                (synthesizer)->{
+                    synthesizer.setText(_text);
+                    if (null != _voice) {
+                        synthesizer.setVoice(_voice);
+                    }
+                    if (null != _pitchRate) {
+                        synthesizer.setPitchRate(Integer.parseInt(_pitchRate));
+                    }
+                    if (null != _speechRate) {
+                        synthesizer.setSpeechRate(Integer.parseInt(_speechRate));
+                    }
+                },
                 (bytes) -> {
                     final byte[] bytesArray = new byte[bytes.remaining()];
                     bytes.get(bytesArray, 0, bytesArray.length);
@@ -79,6 +94,9 @@ public class TTSStreamTask implements BuildStreamTask {
     }
 
     private final TTSAgent _agent;
-    private String _key;
+    // private String _key;
     private String _text;
+    private String _voice;
+    private String _pitchRate;
+    private String _speechRate;
 }

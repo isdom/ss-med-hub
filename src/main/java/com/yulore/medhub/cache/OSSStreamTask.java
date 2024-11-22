@@ -26,15 +26,13 @@ public class OSSStreamTask implements BuildStreamTask {
             return;
         }
         final String vars = path.substring(leftBracePos + 1, rightBracePos);
-        int bucketBeginIdx = vars.indexOf("bucket=");
-        if (bucketBeginIdx == -1) {
+
+        _bucketName = VarsUtil.extractValue(vars, "bucket");
+        if (null == _bucketName) {
             log.warn("{} missing bucket field, ignore", path);
             return;
         }
 
-        int bucketEndIdx = vars.indexOf(',', bucketBeginIdx);
-
-        _bucketName = vars.substring(bucketBeginIdx + 7, bucketEndIdx == -1 ? vars.length() : bucketEndIdx);
         _objectName = path.substring(rightBracePos + 1);
         _key = _objectName.replace('/', '_');
     }
