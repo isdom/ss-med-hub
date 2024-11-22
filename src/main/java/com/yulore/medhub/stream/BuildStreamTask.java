@@ -1,4 +1,4 @@
-package com.yulore.medhub.cache;
+package com.yulore.medhub.stream;
 
 public interface BuildStreamTask {
     public String key();

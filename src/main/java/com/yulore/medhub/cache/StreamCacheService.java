@@ -1,14 +1,10 @@
 package com.yulore.medhub.cache;
 
-import com.aliyun.oss.OSS;
-import com.aliyun.oss.OSSClientBuilder;
-import com.aliyun.oss.model.OSSObject;
 import com.yulore.medhub.session.StreamSession;
-import com.yulore.util.ByteArrayListInputStream;
+import com.yulore.medhub.stream.BuildStreamTask;
 import io.netty.util.NettyRuntime;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
@@ -16,19 +12,17 @@ import javax.annotation.PreDestroy;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 @Slf4j
 @Component
-public class LocalStreamService {
+public class StreamCacheService {
 
     /*
     oss_bucket: ylhz-aicall
@@ -36,20 +30,20 @@ public class LocalStreamService {
     local_path: /var/znc/wav_cache/
     */
 
-    private ExecutorService _lssExecutor;
+    private ExecutorService _scsExecutor;
 
     private final ConcurrentMap<String, LoadAndCahceTask> _key2task = new ConcurrentHashMap<>();
 
     @PostConstruct
     public void start() {
-        _lssExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
-                new DefaultThreadFactory("lssExecutor"));
+        _scsExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
+                new DefaultThreadFactory("scsExecutor"));
     }
 
     @PreDestroy
     public void stop() {
         // 关闭客户端 - 注：关闭后不支持再次 start, 一般伴随JVM关闭而关闭
-        _lssExecutor.shutdownNow();
+        _scsExecutor.shutdownNow();
     }
 
     public void asLocal(final BuildStreamTask streamTask, final Consumer<StreamSession> consumer) {
@@ -73,7 +67,7 @@ public class LocalStreamService {
         log.info("asLocal: {} its_my_task", key);
         // it's me, first start task
         myTask.onCached(consumer);
-        _lssExecutor.submit(myTask::start);
+        _scsExecutor.submit(myTask::start);
     }
 
     static class LoadAndCahceTask {

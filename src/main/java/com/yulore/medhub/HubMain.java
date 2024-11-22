@@ -11,10 +11,10 @@ import com.aliyun.oss.OSSClientBuilder;
 import com.aliyun.oss.model.OSSObject;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.yulore.medhub.cache.BuildStreamTask;
-import com.yulore.medhub.cache.LocalStreamService;
-import com.yulore.medhub.cache.OSSStreamTask;
-import com.yulore.medhub.cache.TTSStreamTask;
+import com.yulore.medhub.stream.BuildStreamTask;
+import com.yulore.medhub.cache.StreamCacheService;
+import com.yulore.medhub.stream.OSSStreamTask;
+import com.yulore.medhub.stream.TTSStreamTask;
 import com.yulore.medhub.nls.ASRAgent;
 import com.yulore.medhub.nls.TTSAgent;
 import com.yulore.medhub.nls.TTSTask;
@@ -124,7 +124,7 @@ public class HubMain {
     private final AtomicInteger _currentWSConnection = new AtomicInteger(0);
 
     @Autowired
-    private LocalStreamService _lssService;
+    private StreamCacheService _lssService;
 
     @PostConstruct
     public void start() {

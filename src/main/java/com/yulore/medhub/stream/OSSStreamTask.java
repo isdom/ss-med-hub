@@ -1,8 +1,7 @@
-package com.yulore.medhub.cache;
+package com.yulore.medhub.stream;
 
 
 import com.aliyun.oss.OSS;
-import com.aliyun.oss.OSSClient;
 import com.aliyun.oss.model.OSSObject;
 import lombok.extern.slf4j.Slf4j;
 
