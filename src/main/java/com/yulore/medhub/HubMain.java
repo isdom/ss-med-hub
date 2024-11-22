@@ -143,10 +143,6 @@ public class HubMain {
                                 webSocket.getRemoteSocketAddress(),
                                 webSocket.getLocalSocketAddress(),
                                 clientHandshake.getResourceDescriptor());
-//                        for (Iterator<String> it = clientHandshake.iterateHttpFields(); it.hasNext(); ) {
-//                            final String key = it.next();
-//                            log.info("{}: {}", key, clientHandshake.getFieldValue(key));
-//                        }
                         if (_match_resource.equals(clientHandshake.getResourceDescriptor())) {
                             // init session attach with webSocket
                             final String sessionId = clientHandshake.getFieldValue("x-sessionid");
