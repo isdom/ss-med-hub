@@ -77,4 +77,8 @@ public class TTSTask {
             return false;
         }
     }
+
+    public void waitForComplete() throws Exception {
+        _synthesizer.waitForComplete();
+    }
 }

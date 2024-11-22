@@ -11,8 +11,10 @@ import com.aliyun.oss.OSSClientBuilder;
 import com.aliyun.oss.model.OSSObject;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yulore.medhub.cache.BuildStreamTask;
 import com.yulore.medhub.cache.LocalStreamService;
 import com.yulore.medhub.cache.OSSStreamTask;
+import com.yulore.medhub.cache.TTSStreamTask;
 import com.yulore.medhub.nls.ASRAgent;
 import com.yulore.medhub.nls.TTSAgent;
 import com.yulore.medhub.nls.TTSTask;
@@ -309,11 +311,20 @@ public class HubMain {
     private void handleOpenStreamCommand(final HubCommandVO cmd, final WebSocket webSocket) {
         final String path = cmd.getPayload().get("path");
         log.info("open stream => path: {}", path);
-        _lssService.asLocal(new OSSStreamTask(path, _ossClient), (ss)->{
+
+        _lssService.asLocal(getTaskOf(path), (ss) -> {
             ss.get_is().mark(Integer.MAX_VALUE);
             webSocket.setAttachment(ss);
             HubEventVO.sendEvent(webSocket, "StreamOpened", null);
         });
+    }
+
+    private BuildStreamTask getTaskOf(final String path) {
+        if (path.contains("type=tts")) {
+            return new TTSStreamTask(path, selectTTSAgent());
+        } else {
+            return new OSSStreamTask(path, _ossClient);
+        }
     }
 
     private void handleGetFileLenCommand(final HubCommandVO cmd, final WebSocket webSocket) {
