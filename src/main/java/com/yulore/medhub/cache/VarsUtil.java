@@ -8,7 +8,7 @@ public class VarsUtil {
         final String prefix = name + "=";
         int varBeginIdx = vars.indexOf(prefix);
         if (varBeginIdx == -1) {
-            log.warn("{} missing {} field, ignore", vars, name);
+            log.info("{} missing {} field, ignore", vars, name);
             return null;
         }
 
