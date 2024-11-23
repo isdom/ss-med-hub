@@ -388,8 +388,8 @@ public class HubMain {
         }
         if (ss.tell() >= Integer.MAX_VALUE / 2) {
             // impossible position
-            log.info("try to read from {} pos, send 0 bytes to rms client", ss.tell());
             webSocket.send(new byte[0]);
+            log.info("try to read from {} pos, send 0 bytes to rms client", ss.tell());
             return;
         }
 
@@ -408,8 +408,10 @@ public class HubMain {
             ss.unlock();
         }
         try {
+            ss.lock();
             final byte[] bytes4read = new byte[count4read];
             final int readed = ss.genInputStream().read(bytes4read);
+            ss.seekFromStart(ss.tell() + readed);
             if (readed == bytes4read.length) {
                 webSocket.send(bytes4read);
             } else {
@@ -417,6 +419,8 @@ public class HubMain {
             }
             log.info("file read => request read count: {}, actual read bytes: {}", count4read, readed);
         } catch (IOException ignored) {
+        } finally {
+            ss.unlock();
         }
         return true;
     }
