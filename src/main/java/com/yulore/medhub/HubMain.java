@@ -407,6 +407,7 @@ public class HubMain {
         } finally {
             ss.unlock();
         }
+        final int posBeforeRead = ss.tell();
         try {
             ss.lock();
             final byte[] bytes4read = new byte[count4read];
@@ -418,7 +419,9 @@ public class HubMain {
                 webSocket.send(ByteBuffer.wrap(bytes4read, 0, readed));
             }
             log.info("file read => request read count: {}, actual read bytes: {}", count4read, readed);
-        } catch (IOException ignored) {
+        } catch (IOException ex) {
+            log.warn("file read => request read count: {}/length:{}/pos before read:{}, failed: {}",
+                    count4read, ss.length(), posBeforeRead, ex.toString());
         } finally {
             ss.unlock();
         }
