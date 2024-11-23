@@ -381,11 +381,12 @@ public class HubMain {
 
     private void handleFileReadCommand(final HubCommandVO cmd, final WebSocket webSocket) {
         final int count = Integer.parseInt(cmd.getPayload().get("count"));
-        log.info("file read => count: {}", count);
         final StreamSession ss = webSocket.getAttachment();
         if (ss == null) {
+            log.warn("file read => count: {}, and ss is null", count);
             return;
         }
+        log.info("file read => count: {}/ss.length:{}/ss.tell:{}", count, ss.length(), ss.tell());
         if (ss.tell() >= Integer.MAX_VALUE / 2) {
             // impossible position
             webSocket.send(new byte[0]);
@@ -412,6 +413,12 @@ public class HubMain {
             ss.lock();
             final byte[] bytes4read = new byte[count4read];
             final int readed = ss.genInputStream().read(bytes4read);
+            if (readed <= 0) {
+                log.info("file read => request read count: {}, no_more_data read", count4read);
+                webSocket.send(new byte[0]);
+                return true;
+            }
+            // readed > 0
             ss.seekFromStart(ss.tell() + readed);
             if (readed == bytes4read.length) {
                 webSocket.send(bytes4read);
