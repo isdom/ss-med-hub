@@ -96,11 +96,7 @@ public class StreamSession {
             _lock.lock();
             _bufs.add(bytes);
             _length += bytes.length;
-            if (_onDataChanged != null) {
-                if (_onDataChanged.apply(this)) {
-                    _onDataChanged = null;
-                }
-            }
+            callOnDataChanged();
         } finally {
             _lock.unlock();
         }
@@ -110,8 +106,17 @@ public class StreamSession {
         try {
             _lock.lock();
             _streaming = false;
+            callOnDataChanged();
         } finally {
             _lock.unlock();
+        }
+    }
+
+    private void callOnDataChanged() {
+        if (_onDataChanged != null) {
+            if (_onDataChanged.apply(this)) {
+                _onDataChanged = null;
+            }
         }
     }
 
