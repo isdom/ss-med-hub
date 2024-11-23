@@ -121,6 +121,7 @@ public class CosyStreamTask implements BuildStreamTask {
             //设置返回音频的采样率。
             synthesizer.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
             synthesizer.startStreamInputTts();
+            _agent.incConnected();
             synthesizer.setMinSendIntervalMS(100);
             synthesizer.sendStreamInputTts(_text);
             //通知服务端流入文本数据发送完毕，阻塞等待服务端处理完成。
@@ -132,6 +133,8 @@ public class CosyStreamTask implements BuildStreamTask {
             if (null != synthesizer) {
                 synthesizer.close();
             }
+            _agent.decConnected();
+            _agent.decConnection();
         }
     }
 
