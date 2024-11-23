@@ -348,6 +348,12 @@ public class HubMain {
         log.info("open stream => path: {}", path);
 
         final BuildStreamTask bst = getTaskOf(path);
+        if (bst == null) {
+            // TODO: define StreamOpened failed event
+            HubEventVO.sendEvent(webSocket, "StreamOpened", null);
+            log.warn("OpenStream failed for {}", path);
+            return;
+        }
         if (bst.key() != null) {
             // cached
             _lssService.asLocal(bst, (ss) -> {
@@ -369,12 +375,17 @@ public class HubMain {
     }
 
     private BuildStreamTask getTaskOf(final String path) {
-        if (path.contains("type=tts")) {
-            return new TTSStreamTask(path, selectTTSAgent());
-        } else if (path.contains("type=cosy")) {
-            return new CosyStreamTask(path, selectCosyAgent());
-        } else {
-            return new OSSStreamTask(path, _ossClient);
+        try {
+            if (path.contains("type=tts")) {
+                return new TTSStreamTask(path, selectTTSAgent());
+            } else if (path.contains("type=cosy")) {
+                return new CosyStreamTask(path, selectCosyAgent());
+            } else {
+                return new OSSStreamTask(path, _ossClient);
+            }
+        } catch (Exception ex) {
+            log.warn("getTaskOf failed: {}", ex.toString());
+            return null;
         }
     }
 
