@@ -387,10 +387,33 @@ public class HubMain {
             return;
         }
         log.info("file read => count: {}/ss.length:{}/ss.tell:{}", count, ss.length(), ss.tell());
-        if (ss.tell() >= Integer.MAX_VALUE / 2) {
-            // impossible position
+        /*
+        mod_sndrms read .wav file's op seq:
+        =======================================================
+        file read => count: 12/ss.length:2147483647/ss.tell:0
+        file read => count: 4/ss.length:2147483647/ss.tell:12
+        file read => count: 4/ss.length:2147483647/ss.tell:16
+        file read => count: 2/ss.length:2147483647/ss.tell:20
+        file read => count: 2/ss.length:2147483647/ss.tell:22
+        file read => count: 4/ss.length:2147483647/ss.tell:24
+        file read => count: 4/ss.length:2147483647/ss.tell:28
+        file read => count: 2/ss.length:2147483647/ss.tell:32
+        file read => count: 2/ss.length:2147483647/ss.tell:34
+        file read => count: 4/ss.length:2147483647/ss.tell:36
+        file read => count: 4/ss.length:2147483647/ss.tell:40
+        file read => count: 4/ss.length:2147483647/ss.tell:198444  <-- streaming, and sndfile lib try to jump to eof
+        file read => count: 4/ss.length:94042/ss.tell:198444
+        file read => count: 4/ss.length:94042/ss.tell:44
+        file read => count: 32768/ss.length:94042/ss.tell:44
+        file read => count: 32768/ss.length:94042/ss.tell:32812
+        file read => count: 32768/ss.length:94042/ss.tell:65580
+        file read => count: 32768/ss.length:94042/ss.tell:94042
+        =======================================================
+         */
+        if (ss.streaming() && count <= 12 && ss.tell() >= 1024 ) {
+            // streaming, and sndfile lib try to jump to eof
             webSocket.send(new byte[0]);
-            log.info("try to read from {} pos, send 0 bytes to rms client", ss.tell());
+            log.info("try to read: {} bytes from: {} pos when length: {}, send 0 bytes to rms client", count, ss.tell(), ss.length());
             return;
         }
 
