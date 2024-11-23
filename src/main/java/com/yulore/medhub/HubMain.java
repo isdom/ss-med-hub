@@ -316,17 +316,20 @@ public class HubMain {
         if (bst.key() != null) {
             // cahced
             _lssService.asLocal(bst, (ss) -> {
-                ss.get_is().mark(Integer.MAX_VALUE);
                 webSocket.setAttachment(ss);
                 HubEventVO.sendEvent(webSocket, "StreamOpened", null);
             });
         } else {
             // not cached
-            final byte[] bytes = bst.buildStream();
-            final StreamSession ss = new StreamSession(new ByteArrayInputStream(bytes), bytes.length);
-            ss.get_is().mark(Integer.MAX_VALUE);
-            webSocket.setAttachment(ss);
-            HubEventVO.sendEvent(webSocket, "StreamOpened", null);
+            final StreamSession _ss = new StreamSession();
+            webSocket.setAttachment(_ss);
+
+            _ss.onDataChange((ss) -> {
+                HubEventVO.sendEvent(webSocket, "StreamOpened", null);
+                return true;
+            });
+            bst.buildStream(_ss::appendData,
+                    (isOK) -> _ss.appendCompleted());
         }
     }
 
@@ -344,7 +347,7 @@ public class HubMain {
         if (ss == null) {
             return;
         }
-        HubEventVO.sendEvent(webSocket, "GetFileLenResult", new PayloadGetFileLenResult(ss.get_length()));
+        HubEventVO.sendEvent(webSocket, "GetFileLenResult", new PayloadGetFileLenResult(ss.length()));
     }
 
     private void handleFileSeekCommand(final HubCommandVO cmd, final WebSocket webSocket) {
@@ -355,29 +358,25 @@ public class HubMain {
         if (ss == null) {
             return;
         }
-        try {
-            int seek_from_start = -1;
-            switch (whence) {
-                case 0: //SEEK_SET:
-                    seek_from_start = offset;
-                    break;
-                case 1: //SEEK_CUR:
-                    seek_from_start = ss.get_length() - ss.get_is().available() + offset;
-                    break;
-                case 2: //SEEK_END:
-                    seek_from_start = ss.get_length() + offset;
-                    break;
-                default:
-                    //return ss.get_length() - ss.get_is().available();
-            }
-            // from begin
-            if (seek_from_start >= 0) {
-                ss.get_is().reset();
-                ss.get_is().skip(seek_from_start);
-            }
-            HubEventVO.sendEvent(webSocket, "FileSeekResult", new PayloadFileSeekResult(ss.get_length() - ss.get_is().available()));
-        } catch (IOException ignored) {
+        int seek_from_start = -1;
+        switch (whence) {
+            case 0: //SEEK_SET:
+                seek_from_start = offset;
+                break;
+            case 1: //SEEK_CUR:
+                seek_from_start = ss.tell() + offset;
+                break;
+            case 2: //SEEK_END:
+                seek_from_start = ss.length() + offset;
+                break;
+            default:
         }
+        int pos = 0;
+        // from begin
+        if (seek_from_start >= 0) {
+            pos = ss.seekFromStart(seek_from_start);
+        }
+        HubEventVO.sendEvent(webSocket, "FileSeekResult", new PayloadFileSeekResult(pos));
     }
 
     private void handleFileReadCommand(final HubCommandVO cmd, final WebSocket webSocket) {
@@ -387,18 +386,39 @@ public class HubMain {
         if (ss == null) {
             return;
         }
+        if (ss.tell() >= Integer.MAX_VALUE / 2) {
+            // impossible position
+            log.info("try to read from {} pos, send 0 bytes to rms client", ss.tell());
+            webSocket.send(new byte[0]);
+            return;
+        }
+
+        readLaterOrNow(ss, count, webSocket);
+    }
+
+    private static boolean readLaterOrNow(final StreamSession ss, final int count4read, final WebSocket webSocket) {
         try {
-            final byte[] bytes4read = new byte[count];
-            final int readed = ss.get_is().read(bytes4read);
-            // HubEventVO.sendEvent(webSocket, "FileReadResult", null);
+            ss.lock();
+            if (ss.needMoreData(count4read)) {
+                ss.onDataChange((ignore) -> readLaterOrNow(ss, count4read, webSocket));
+                log.info("need more data for read: {} bytes, read on append data.", count4read);
+                return false;
+            }
+        } finally {
+            ss.unlock();
+        }
+        try {
+            final byte[] bytes4read = new byte[count4read];
+            final int readed = ss.genInputStream().read(bytes4read);
             if (readed == bytes4read.length) {
                 webSocket.send(bytes4read);
             } else {
                 webSocket.send(ByteBuffer.wrap(bytes4read, 0, readed));
             }
-            log.info("file read => request read count: {}, actual read bytes: {}", count, readed);
+            log.info("file read => request read count: {}, actual read bytes: {}", count4read, readed);
         } catch (IOException ignored) {
         }
+        return true;
     }
 
     private void handleFileTellCommand(final HubCommandVO cmd, final WebSocket webSocket) {
@@ -406,11 +426,8 @@ public class HubMain {
         if (ss == null) {
             return;
         }
-        try {
-            log.info("file tell: current pos: {}", ss.get_length() - ss.get_is().available());
-            HubEventVO.sendEvent(webSocket, "FileTellResult", new PayloadFileSeekResult(ss.get_length() - ss.get_is().available()));
-        } catch (IOException ignored) {
-        }
+        log.info("file tell: current pos: {}", ss.tell());
+        HubEventVO.sendEvent(webSocket, "FileTellResult", new PayloadFileSeekResult(ss.tell()));
     }
 
     private void handleStopPlaybackCommand(final HubCommandVO cmd, final WebSocket webSocket) {

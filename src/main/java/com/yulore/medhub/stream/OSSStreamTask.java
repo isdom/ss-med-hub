@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.function.Consumer;
 
 @Slf4j
 public class OSSStreamTask implements BuildStreamTask {
@@ -42,7 +43,7 @@ public class OSSStreamTask implements BuildStreamTask {
     }
 
     @Override
-    public byte[] buildStream() {
+    public void buildStream(final Consumer<byte[]> onPart, final Consumer<Boolean> onCompleted) {
         log.info("start load: {} from bucket: {}", _objectName, _bucketName);
         byte[] bytes;
         final long startInMs = System.currentTimeMillis();
@@ -51,11 +52,13 @@ public class OSSStreamTask implements BuildStreamTask {
             ossObject.getObjectContent().transferTo(os);
             bytes = os.toByteArray();
             log.info("and save content size {}, total cost: {} ms", bytes.length, System.currentTimeMillis() - startInMs);
+            onPart.accept(bytes);
+            onCompleted.accept(true);
         } catch (IOException ex) {
             log.warn("start failed: {}", ex.toString());
-            throw new RuntimeException(ex);
+            // throw new RuntimeException(ex);
+            onCompleted.accept(false);
         }
-        return bytes;
     }
 
     private final OSS _ossClient;

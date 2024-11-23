@@ -1,5 +1,6 @@
 package com.yulore.medhub.cache;
 
+import com.google.common.primitives.Bytes;
 import com.yulore.medhub.session.StreamSession;
 import com.yulore.medhub.stream.BuildStreamTask;
 import io.netty.util.NettyRuntime;
@@ -16,6 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
@@ -71,6 +73,7 @@ public class StreamCacheService {
     }
 
     static class LoadAndCahceTask {
+        static final byte[] EMPTY_BYTES = new byte[0];
         private final Lock _lock = new ReentrantLock();
         private byte[] _bytes = null;
         private final List<Consumer<StreamSession>> _consumers = new ArrayList<>();
@@ -81,17 +84,20 @@ public class StreamCacheService {
         }
 
         public void start() {
-            final byte[] bytes = _streamTask.buildStream();
-
-            List<Consumer<StreamSession>> todo;
-            _lock.lock();
-            _bytes = bytes;
-            todo = new ArrayList<>(_consumers);
-            _consumers.clear();
-            _lock.unlock();
-            for (Consumer<StreamSession> consumer : todo) {
-                processConsumer(consumer);
-            }
+            final AtomicReference<byte[]> bytesRef = new AtomicReference<>(EMPTY_BYTES);
+            _streamTask.buildStream(
+                    (bytes) -> bytesRef.set(Bytes.concat(bytesRef.get(), bytes)),
+                    (isOK) -> {
+                        List<Consumer<StreamSession>> todo;
+                        _lock.lock();
+                        _bytes = bytesRef.get();
+                        todo = new ArrayList<>(_consumers);
+                        _consumers.clear();
+                        _lock.unlock();
+                        for (Consumer<StreamSession> consumer : todo) {
+                            processConsumer(consumer);
+                        }
+                    });
         }
 
         public void onCached(final Consumer<StreamSession> consumer) {
@@ -107,7 +113,10 @@ public class StreamCacheService {
 
         private void processConsumer(final Consumer<StreamSession> consumer) {
             try {
-                consumer.accept(new StreamSession(new ByteArrayInputStream(_bytes), _bytes.length));
+                final StreamSession ss = new StreamSession();
+                ss.appendData(_bytes);
+                ss.appendCompleted();
+                consumer.accept(ss);
             } catch (Exception ex) {
                 log.warn("exception when process consumer.accept: {}", ex.toString());
             }

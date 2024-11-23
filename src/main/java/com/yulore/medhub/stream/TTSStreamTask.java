@@ -13,6 +13,7 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 @Slf4j
 public class TTSStreamTask implements BuildStreamTask {
@@ -45,9 +46,8 @@ public class TTSStreamTask implements BuildStreamTask {
     }
 
     @Override
-    public byte[] buildStream() {
+    public void buildStream(final Consumer<byte[]> onPart, final Consumer<Boolean> onCompleted) {
         log.info("start gen tts: {}", _text);
-        final List<byte[]> bufs = new ArrayList<>();
         final AtomicInteger idx = new AtomicInteger(0);
         final long startInMs = System.currentTimeMillis();
 
@@ -67,26 +67,18 @@ public class TTSStreamTask implements BuildStreamTask {
                 (bytes) -> {
                     final byte[] bytesArray = new byte[bytes.remaining()];
                     bytes.get(bytesArray, 0, bytesArray.length);
-                    bufs.add(bytesArray);
+                    onPart.accept(bytesArray);
                     log.info("TTSStreamTask: {}: onData {} bytes", idx.incrementAndGet(), bytesArray.length);
                 },
                 (response)->{
+                    onCompleted.accept(true);
                     log.info("TTSStreamTask: gen pcm stream cost={} ms", System.currentTimeMillis() - startInMs);
                 },
-                (response)-> log.warn("tts failed: {}", response));
+                (response)-> {
+                    onCompleted.accept(false);
+                    log.warn("tts failed: {}", response);
+                });
         task.start();
-        try {
-            task.waitForComplete();
-        } catch (Exception ignored) {
-        }
-
-        final ByteArrayOutputStream os = new ByteArrayOutputStream();
-        try (InputStream is = new ByteArrayListInputStream(bufs)) {
-            is.transferTo(os);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-        return os.toByteArray();
     }
 
     private final TTSAgent _agent;
