@@ -84,7 +84,8 @@ public class TTSAgent {
 
     public void decConnection() {
         // 减少 连接中或已连接的计数
-        _connectingOrConnectedCount.decrementAndGet();
+        final int count = _connectingOrConnectedCount.decrementAndGet();
+        log.info("release tts({}): {}/{}", name, count, limit);
     }
 
     public void incConnected() {
