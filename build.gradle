@@ -28,8 +28,6 @@ dependencies {
     implementation 'com.alibaba.nls:nls-sdk-common:2.2.17'
     implementation 'com.alibaba.nls:nls-sdk-transcriber:2.2.17'
     implementation 'com.alibaba.nls:nls-sdk-tts:2.2.17'
-    // implementation 'com.alibaba.nls:nls-sdk-common:2.2.5'
-    // implementation 'com.alibaba.nls:nls-sdk-transcriber:2.2.5'
 
     implementation 'com.tencentcloudapi:tencentcloud-speech-sdk-java:1.0.53'
 

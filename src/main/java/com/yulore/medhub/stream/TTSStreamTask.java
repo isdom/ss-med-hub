@@ -72,7 +72,7 @@ public class TTSStreamTask implements BuildStreamTask {
                 },
                 (response)->{
                     onCompleted.accept(true);
-                    log.info("TTSStreamTask: gen pcm stream cost={} ms", System.currentTimeMillis() - startInMs);
+                    log.info("TTSStreamTask: gen wav stream cost={} ms", System.currentTimeMillis() - startInMs);
                 },
                 (response)-> {
                     onCompleted.accept(false);

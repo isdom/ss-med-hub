@@ -11,8 +11,10 @@ import com.aliyun.oss.OSSClientBuilder;
 import com.aliyun.oss.model.OSSObject;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yulore.medhub.nls.CosyAgent;
 import com.yulore.medhub.stream.BuildStreamTask;
 import com.yulore.medhub.cache.StreamCacheService;
+import com.yulore.medhub.stream.CosyStreamTask;
 import com.yulore.medhub.stream.OSSStreamTask;
 import com.yulore.medhub.stream.TTSStreamTask;
 import com.yulore.medhub.nls.ASRAgent;
@@ -71,6 +73,9 @@ public class HubMain {
     @Value("#{${nls.tts}}")
     private Map<String,String> _all_tts;
 
+    @Value("#{${nls.cosy}}")
+    private Map<String,String> _all_cosy;
+
     @Value("${test.enable_delay}")
     private boolean _test_enable_delay;
 
@@ -91,6 +96,7 @@ public class HubMain {
 
     final List<ASRAgent> _asrAgents = new ArrayList<>();
     final List<TTSAgent> _ttsAgents = new ArrayList<>();
+    final List<CosyAgent> _cosyAgents = new ArrayList<>();
 
     private ScheduledExecutorService _nlsAuthExecutor;
     
@@ -237,6 +243,21 @@ public class HubMain {
                 _ttsAgents.add(agent);
             }
         }
+        log.info("tts agent init, count:{}", _ttsAgents.size());
+
+        for (Map.Entry<String, String> entry : _all_cosy.entrySet()) {
+            log.info("cosy: {} / {}", entry.getKey(), entry.getValue());
+            final String[] values = entry.getValue().split(" ");
+            log.info("cosy values detail: {}", Arrays.toString(values));
+            final CosyAgent agent = CosyAgent.parse(entry.getKey(), entry.getValue());
+            if (null == agent) {
+                log.warn("cosy init failed by: {}/{}", entry.getKey(), entry.getValue());
+            } else {
+                agent.setClient(client);
+                _cosyAgents.add(agent);
+            }
+        }
+        log.info("cosy agent init, count:{}", _cosyAgents.size());
 
         _nlsAuthExecutor = Executors.newSingleThreadScheduledExecutor(new DefaultThreadFactory("nlsAuthExecutor"));
         _nlsAuthExecutor.scheduleAtFixedRate(this::checkAndUpdateNlsToken, 0, 10, TimeUnit.SECONDS);
@@ -264,11 +285,25 @@ public class HubMain {
         throw new RuntimeException("all tts agent has full");
     }
 
+    private CosyAgent selectCosyAgent() {
+        for (CosyAgent agent : _cosyAgents) {
+            final CosyAgent selected = agent.checkAndSelectIfhasIdle();
+            if (null != selected) {
+                log.info("select cosy({}): {}/{}", agent.getName(), agent.get_connectingOrConnectedCount().get(), agent.getLimit());
+                return selected;
+            }
+        }
+        throw new RuntimeException("all cosy agent has full");
+    }
+
     private void checkAndUpdateNlsToken() {
         for (ASRAgent agent : _asrAgents) {
             agent.checkAndUpdateAccessToken();
         }
         for (TTSAgent agent : _ttsAgents) {
+            agent.checkAndUpdateAccessToken();
+        }
+        for (CosyAgent agent : _cosyAgents) {
             agent.checkAndUpdateAccessToken();
         }
     }
@@ -314,7 +349,7 @@ public class HubMain {
 
         final BuildStreamTask bst = getTaskOf(path);
         if (bst.key() != null) {
-            // cahced
+            // cached
             _lssService.asLocal(bst, (ss) -> {
                 webSocket.setAttachment(ss);
                 HubEventVO.sendEvent(webSocket, "StreamOpened", null);
@@ -336,6 +371,8 @@ public class HubMain {
     private BuildStreamTask getTaskOf(final String path) {
         if (path.contains("type=tts")) {
             return new TTSStreamTask(path, selectTTSAgent());
+        } else if (path.contains("type=cosy")) {
+            return new CosyStreamTask(path, selectCosyAgent());
         } else {
             return new OSSStreamTask(path, _ossClient);
         }
