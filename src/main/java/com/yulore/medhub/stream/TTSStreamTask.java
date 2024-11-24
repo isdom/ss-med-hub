@@ -1,6 +1,9 @@
 package com.yulore.medhub.stream;
 
 
+import com.alibaba.nls.client.protocol.OutputFormatEnum;
+import com.alibaba.nls.client.protocol.SampleRateEnum;
+import com.alibaba.nls.client.protocol.tts.SpeechSynthesizer;
 import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.medhub.nls.TTSAgent;
 import com.yulore.medhub.nls.TTSTask;
@@ -17,8 +20,10 @@ import java.util.function.Consumer;
 
 @Slf4j
 public class TTSStreamTask implements BuildStreamTask {
-    public TTSStreamTask(final String path, final TTSAgent agent) {
+    public TTSStreamTask(final String path, final TTSAgent agent,final Consumer<SpeechSynthesizer> onSynthesizer) {
         _agent = agent;
+        _onSynthesizer = onSynthesizer;
+
         // eg: {type=tts,voice=xxx,url=ws://172.18.86.131:6789/playback,vars_playback_id=<uuid>,content_id=2088788,vars_start_timestamp=1732028219711854}
         //          'StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(content)'.wav
         final int leftBracePos = path.indexOf('{');
@@ -54,14 +59,22 @@ public class TTSStreamTask implements BuildStreamTask {
         final TTSTask task = new TTSTask(_agent,
                 (synthesizer)->{
                     synthesizer.setText(_text);
-                    if (null != _voice) {
+                    if (null != _voice && !_voice.isEmpty()) {
                         synthesizer.setVoice(_voice);
                     }
-                    if (null != _pitchRate) {
+                    if (null != _pitchRate && !_pitchRate.isEmpty()) {
                         synthesizer.setPitchRate(Integer.parseInt(_pitchRate));
                     }
-                    if (null != _speechRate) {
+                    if (null != _speechRate && !_speechRate.isEmpty()) {
                         synthesizer.setSpeechRate(Integer.parseInt(_speechRate));
+                    }
+                    //设置返回音频的编码格式
+                    synthesizer.setFormat(OutputFormatEnum.WAV);
+                    //设置返回音频的采样率
+                    synthesizer.setSampleRate(SampleRateEnum.SAMPLE_RATE_8K);
+
+                    if (_onSynthesizer != null) {
+                        _onSynthesizer.accept(synthesizer);
                     }
                 },
                 (bytes) -> {
@@ -82,6 +95,7 @@ public class TTSStreamTask implements BuildStreamTask {
     }
 
     private final TTSAgent _agent;
+    private final Consumer<SpeechSynthesizer> _onSynthesizer;
     // private String _key;
     private String _text;
     private String _voice;

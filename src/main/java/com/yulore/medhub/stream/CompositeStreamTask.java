@@ -1,11 +1,16 @@
 package com.yulore.medhub.stream;
 
 
+import com.alibaba.nls.client.protocol.OutputFormatEnum;
+import com.alibaba.nls.client.protocol.SampleRateEnum;
 import com.aliyun.oss.OSS;
 import com.aliyun.oss.model.OSSObject;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.medhub.cache.StreamCacheService;
+import com.yulore.medhub.nls.CosyAgent;
+import com.yulore.medhub.nls.TTSAgent;
 import com.yulore.medhub.vo.HubCommandVO;
 import com.yulore.medhub.vo.HubEventVO;
 import lombok.Data;
@@ -21,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 @Slf4j
 public class CompositeStreamTask implements BuildStreamTask {
@@ -35,8 +41,11 @@ public class CompositeStreamTask implements BuildStreamTask {
         String x;
     }
 
-    public CompositeStreamTask(final String path, final OSS ossClient) {
+    public CompositeStreamTask(final String path, final OSS ossClient, final Supplier<TTSAgent> selectTTS, final Supplier<CosyAgent> selectCosy) {
         _ossClient = ossClient;
+        _selectTTS = selectTTS;
+        _selectCosy = selectCosy;
+
         // eg: rms://{type=cp,url=ws://172.18.86.131:6789/cp,[{"b":"ylhz-aicall","p":"aispeech/wxrecoding/100007/f32a59ff70394bf7b1c2fe8455f5b3b1.wav"},
         //     {"t":"tts","v":"voice-8874311","x":"我这边是美易借钱的,就是之前的国美易卡."},
         //     {"b":"ylhz-aicall","p":"aispeech/wxrecoding/100007/2981cf9558f1415f8113cce725700070.wav"}],...}
@@ -75,31 +84,68 @@ public class CompositeStreamTask implements BuildStreamTask {
     public void doBuildStream(final Consumer<byte[]> onPart, final Consumer<Boolean> onCompleted) {
         while (!_cvos.isEmpty()) {
             final CVO current = _cvos.remove(0);
-            if (current.b == null) {
-                // not support tts or cosy now, skip
+            if (current.b != null) {
+                log.info("support CVO => OSS Stream: {}", current);
+                new OSSStreamTask("{bucket=" + current.b + "}" + current.p, _ossClient)
+                        .buildStream((bytes) -> {
+                            try {
+                                // extract pcm part
+                                final ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                                AudioSystem.getAudioInputStream(new ByteArrayInputStream(bytes)).transferTo(bos);
+                                onPart.accept(bos.toByteArray());
+                            } catch (UnsupportedAudioFileException | IOException ex) {
+                                log.warn("failed to extract pcm from wav: {}", ex.toString());
+                                throw new RuntimeException(ex);
+                            }
+                        },
+                        (isOK) -> {
+                            doBuildStream(onPart, onCompleted);
+                        });
+                return;
+            } else if (current.t != null && current.t.equals("tts")) {
+                log.info("support CVO => TTS Stream: {}", current);
+                new TTSStreamTask(cvo2tts(current), _selectTTS.get(), (synthesizer) -> {
+                    //设置返回音频的编码格式
+                    synthesizer.setFormat(OutputFormatEnum.PCM);
+                    //设置返回音频的采样率
+                    synthesizer.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
+                }).buildStream(onPart,
+                        (isOK) -> {
+                            doBuildStream(onPart, onCompleted);
+                        });
+                return;
+            } else if (current.t != null && current.t.equals("cosy")) {
+                log.info("support CVO => Cosy Stream: {}", current);
+                new CosyStreamTask(cvo2cosy(current), _selectCosy.get(), (synthesizer)->{
+                    //设置返回音频的编码格式
+                    synthesizer.setFormat(OutputFormatEnum.PCM);
+                    //设置返回音频的采样率。
+                    synthesizer.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
+                }).buildStream(onPart,
+                        (isOK) -> {
+                            doBuildStream(onPart, onCompleted);
+                        });
+                return;
+            } else {
+                // unknown cvo type, skip
                 log.info("not support cvo: {}, skip", current);
                 continue;
             }
-            final BuildStreamTask bst = new OSSStreamTask("{bucket=" + current.b + "}" + current.p, _ossClient);
-            bst.buildStream((bytes) -> {
-                        try {
-                            // extract pcm part
-                            final ByteArrayOutputStream bos = new ByteArrayOutputStream();
-                            AudioSystem.getAudioInputStream(new ByteArrayInputStream(bytes)).transferTo(bos);
-                            onPart.accept(bos.toByteArray());
-                        } catch (UnsupportedAudioFileException | IOException ex) {
-                            log.warn("failed to extract pcm from wav: {}", ex.toString());
-                            throw new RuntimeException(ex);
-                        }
-                    },
-                    (isOK) -> {
-                        doBuildStream(onPart, onCompleted);
-                    });
-            return;
         }
         onCompleted.accept(true);
     }
 
+    static private String cvo2tts(final CVO cvo) {
+        // {type=tts,voice=xxx,url=ws://172.18.86.131:6789/playback,vars_playback_id=<uuid>,content_id=2088788,vars_start_timestamp=1732028219711854}
+            //          'StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(content)'.wav
+        return String.format("{type=tts,voice=%s}%s.wav", cvo.v, StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(cvo.x));
+    }
+
+    static private String cvo2cosy(final CVO cvo) {
+        // eg: {type=cosy,voice=xxx,url=ws://172.18.86.131:6789/cosy,vars_playback_id=<uuid>,content_id=2088788,vars_start_timestamp=1732028219711854}
+        //          'StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(content)'.wav
+        return String.format("{type=cosy,voice=%s}%s.wav", cvo.v, StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(cvo.x));
+    }
 
     static private byte[] genWaveHeader() {
         final ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -210,6 +256,8 @@ public class CompositeStreamTask implements BuildStreamTask {
         dos.writeByte(i1);
     }
 
-    private final OSS _ossClient;
     private final List<CVO> _cvos = new ArrayList<>();
+    private final OSS _ossClient;
+    private final Supplier<TTSAgent> _selectTTS;
+    private final Supplier<CosyAgent> _selectCosy;
 }

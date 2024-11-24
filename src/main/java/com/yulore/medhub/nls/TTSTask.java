@@ -47,11 +47,6 @@ public class TTSTask {
                     onFail.accept(response);
                 }
             });
-
-            //设置返回音频的编码格式
-            _synthesizer.setFormat(OutputFormatEnum.WAV);
-            //设置返回音频的采样率
-            _synthesizer.setSampleRate(SampleRateEnum.SAMPLE_RATE_8K);
             //发音人
             // synthesizer.setVoice("siyue");
             //语调，范围是-500~500，可选，默认是0。

@@ -2,6 +2,7 @@ package com.yulore.medhub.stream;
 
 import com.alibaba.nls.client.protocol.OutputFormatEnum;
 import com.alibaba.nls.client.protocol.SampleRateEnum;
+import com.alibaba.nls.client.protocol.tts.SpeechSynthesizer;
 import com.alibaba.nls.client.protocol.tts.StreamInputTts;
 import com.alibaba.nls.client.protocol.tts.StreamInputTtsListener;
 import com.alibaba.nls.client.protocol.tts.StreamInputTtsResponse;
@@ -15,8 +16,9 @@ import java.util.function.Consumer;
 
 @Slf4j
 public class CosyStreamTask implements BuildStreamTask {
-    public CosyStreamTask(final String path, final CosyAgent agent) {
+    public CosyStreamTask(final String path, final CosyAgent agent,final Consumer<StreamInputTts> onSynthesizer) {
         _agent = agent;
+        _onSynthesizer = onSynthesizer;
         // eg: {type=cosy,voice=xxx,url=ws://172.18.86.131:6789/cosy,vars_playback_id=<uuid>,content_id=2088788,vars_start_timestamp=1732028219711854}
         //          'StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(content)'.wav
         final int leftBracePos = path.indexOf('{');
@@ -105,21 +107,27 @@ public class CosyStreamTask implements BuildStreamTask {
         StreamInputTts synthesizer = null;
         try {
             synthesizer = _agent.buildCosyvoiceSynthesizer(listener);
-            if (null != _voice) {
+            if (null != _voice && !_voice.isEmpty()) {
                 synthesizer.setVoice(_voice);
             }
-            if (null != _pitchRate) {
+            if (null != _pitchRate && !_pitchRate.isEmpty()) {
                 synthesizer.setPitchRate(Integer.parseInt(_pitchRate));
             }
-            if (null != _speechRate) {
+            if (null != _speechRate && !_speechRate.isEmpty()) {
                 synthesizer.setSpeechRate(Integer.parseInt(_speechRate));
             }
             //音量，范围是0~100，可选，默认50。
             synthesizer.setVolume(100);
 
+            //设置返回音频的编码格式
             synthesizer.setFormat(OutputFormatEnum.WAV);
             //设置返回音频的采样率。
             synthesizer.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
+
+            if (_onSynthesizer != null) {
+                _onSynthesizer.accept(synthesizer);
+            }
+
             synthesizer.startStreamInputTts();
             _agent.incConnected();
             synthesizer.setMinSendIntervalMS(100);
@@ -139,6 +147,7 @@ public class CosyStreamTask implements BuildStreamTask {
     }
 
     private final CosyAgent _agent;
+    private final Consumer<StreamInputTts> _onSynthesizer;
     // private String _key;
     private String _text;
     private String _voice;
