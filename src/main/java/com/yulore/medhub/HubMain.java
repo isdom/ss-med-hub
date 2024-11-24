@@ -374,7 +374,7 @@ public class HubMain {
     private BuildStreamTask getTaskOf(final String path) {
         try {
             if (path.contains("type=cp")) {
-                return new CompositeStreamTask(path, _ossClient, _lssService);
+                return new CompositeStreamTask(path, _ossClient);
             } else if (path.contains("type=tts")) {
                 return new TTSStreamTask(path, selectTTSAgent());
             } else if (path.contains("type=cosy")) {
