@@ -12,11 +12,8 @@ import com.aliyun.oss.model.OSSObject;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yulore.medhub.nls.CosyAgent;
-import com.yulore.medhub.stream.BuildStreamTask;
+import com.yulore.medhub.stream.*;
 import com.yulore.medhub.cache.StreamCacheService;
-import com.yulore.medhub.stream.CosyStreamTask;
-import com.yulore.medhub.stream.OSSStreamTask;
-import com.yulore.medhub.stream.TTSStreamTask;
 import com.yulore.medhub.nls.ASRAgent;
 import com.yulore.medhub.nls.TTSAgent;
 import com.yulore.medhub.nls.TTSTask;
@@ -376,7 +373,9 @@ public class HubMain {
 
     private BuildStreamTask getTaskOf(final String path) {
         try {
-            if (path.contains("type=tts")) {
+            if (path.contains("type=cp")) {
+                return new CompositeStreamTask(path, _ossClient, _lssService);
+            } else if (path.contains("type=tts")) {
                 return new TTSStreamTask(path, selectTTSAgent());
             } else if (path.contains("type=cosy")) {
                 return new CosyStreamTask(path, selectCosyAgent());
@@ -393,6 +392,8 @@ public class HubMain {
         log.info("get file len:");
         final StreamSession ss = webSocket.getAttachment();
         if (ss == null) {
+            log.warn("handleGetFileLenCommand: ss is null, just return 0");
+            HubEventVO.sendEvent(webSocket, "GetFileLenResult", new PayloadGetFileLenResult(0));
             return;
         }
         HubEventVO.sendEvent(webSocket, "GetFileLenResult", new PayloadGetFileLenResult(ss.length()));
@@ -404,6 +405,8 @@ public class HubMain {
         log.info("file seek => offset: {}, whence: {}", offset, whence);
         final StreamSession ss = webSocket.getAttachment();
         if (ss == null) {
+            log.warn("handleFileSeekCommand: ss is null, just return 0");
+            HubEventVO.sendEvent(webSocket, "FileSeekResult", new PayloadFileSeekResult(0));
             return;
         }
         int seek_from_start = -1;
@@ -431,7 +434,8 @@ public class HubMain {
         final int count = Integer.parseInt(cmd.getPayload().get("count"));
         final StreamSession ss = webSocket.getAttachment();
         if (ss == null) {
-            log.warn("file read => count: {}, and ss is null", count);
+            log.warn("handleFileReadCommand: file read => count: {}, and ss is null, send 0 bytes to rms client", count);
+            webSocket.send(new byte[0]);
             return;
         }
         log.info("file read => count: {}/ss.length:{}/ss.tell:{}", count, ss.length(), ss.tell());
@@ -509,6 +513,8 @@ public class HubMain {
     private void handleFileTellCommand(final HubCommandVO cmd, final WebSocket webSocket) {
         final StreamSession ss = webSocket.getAttachment();
         if (ss == null) {
+            log.warn("handleFileTellCommand: ss is null, just return 0");
+            HubEventVO.sendEvent(webSocket, "FileTellResult", new PayloadFileSeekResult(0));
             return;
         }
         log.info("file tell: current pos: {}", ss.tell());
