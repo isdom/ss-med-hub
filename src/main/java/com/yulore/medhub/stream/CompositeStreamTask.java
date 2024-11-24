@@ -40,7 +40,7 @@ public class CompositeStreamTask implements BuildStreamTask {
             log.warn("{} missing vars, ignore", path);
             throw new RuntimeException(path + "missing vars, ignore");
         }
-        final int rightBracePos = path.indexOf('}');
+        final int rightBracePos = path.indexOf(leftBracePos, ']');
         if (rightBracePos == -1) {
             log.warn("{} missing vars, ignore", path);
             throw new RuntimeException(path + "missing vars, ignore");
