@@ -117,6 +117,7 @@ public class CompositeStreamTask implements BuildStreamTask {
             } else if (current.t != null && current.t.equals("cosy")) {
                 log.info("support CVO => Cosy Stream: {}", current);
                 new CosyStreamTask(cvo2cosy(current), _selectCosy.get(), (synthesizer)->{
+                    synthesizer.setVolume(50);
                     //设置返回音频的编码格式
                     synthesizer.setFormat(OutputFormatEnum.PCM);
                     //设置返回音频的采样率。
