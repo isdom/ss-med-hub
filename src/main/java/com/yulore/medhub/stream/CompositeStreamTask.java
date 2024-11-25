@@ -4,21 +4,15 @@ package com.yulore.medhub.stream;
 import com.alibaba.nls.client.protocol.OutputFormatEnum;
 import com.alibaba.nls.client.protocol.SampleRateEnum;
 import com.aliyun.oss.OSS;
-import com.aliyun.oss.model.OSSObject;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mgnt.utils.StringUnicodeEncoderDecoder;
-import com.yulore.medhub.cache.StreamCacheService;
 import com.yulore.medhub.nls.CosyAgent;
 import com.yulore.medhub.nls.TTSAgent;
-import com.yulore.medhub.vo.HubCommandVO;
-import com.yulore.medhub.vo.HubEventVO;
 import lombok.Data;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 
-import javax.sound.sampled.AudioFormat;
-import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.UnsupportedAudioFileException;
 import java.io.*;
@@ -41,10 +35,13 @@ public class CompositeStreamTask implements BuildStreamTask {
         String x;
     }
 
-    public CompositeStreamTask(final String path, final OSS ossClient, final Supplier<TTSAgent> selectTTS, final Supplier<CosyAgent> selectCosy) {
+    public CompositeStreamTask(final String path,
+                               final OSS ossClient,
+                               final Supplier<TTSAgent> getTTSAgent,
+                               final Supplier<CosyAgent> getCosyAgent) {
         _ossClient = ossClient;
-        _selectTTS = selectTTS;
-        _selectCosy = selectCosy;
+        _getTTSAgent = getTTSAgent;
+        _getCosyAgent = getCosyAgent;
 
         // eg: rms://{type=cp,url=ws://172.18.86.131:6789/cp,[{"b":"ylhz-aicall","p":"aispeech/wxrecoding/100007/f32a59ff70394bf7b1c2fe8455f5b3b1.wav"},
         //     {"t":"tts","v":"voice-8874311","x":"我这边是美易借钱的,就是之前的国美易卡."},
@@ -104,7 +101,7 @@ public class CompositeStreamTask implements BuildStreamTask {
                 return;
             } else if (current.t != null && current.t.equals("tts")) {
                 log.info("support CVO => TTS Stream: {}", current);
-                new TTSStreamTask(cvo2tts(current), _selectTTS.get(), (synthesizer) -> {
+                new TTSStreamTask(cvo2tts(current), _getTTSAgent.get(), (synthesizer) -> {
                     //设置返回音频的编码格式
                     synthesizer.setFormat(OutputFormatEnum.PCM);
                     //设置返回音频的采样率
@@ -116,7 +113,7 @@ public class CompositeStreamTask implements BuildStreamTask {
                 return;
             } else if (current.t != null && current.t.equals("cosy")) {
                 log.info("support CVO => Cosy Stream: {}", current);
-                new CosyStreamTask(cvo2cosy(current), _selectCosy.get(), (synthesizer)->{
+                new CosyStreamTask(cvo2cosy(current), _getCosyAgent.get(), (synthesizer)->{
                     synthesizer.setVolume(50);
                     //设置返回音频的编码格式
                     synthesizer.setFormat(OutputFormatEnum.PCM);
@@ -259,6 +256,6 @@ public class CompositeStreamTask implements BuildStreamTask {
 
     private final List<CVO> _cvos = new ArrayList<>();
     private final OSS _ossClient;
-    private final Supplier<TTSAgent> _selectTTS;
-    private final Supplier<CosyAgent> _selectCosy;
+    private final Supplier<TTSAgent> _getTTSAgent;
+    private final Supplier<CosyAgent> _getCosyAgent;
 }
