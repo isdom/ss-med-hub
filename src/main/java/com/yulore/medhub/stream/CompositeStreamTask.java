@@ -3,7 +3,6 @@ package com.yulore.medhub.stream;
 
 import com.alibaba.nls.client.protocol.OutputFormatEnum;
 import com.alibaba.nls.client.protocol.SampleRateEnum;
-import com.aliyun.oss.OSS;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mgnt.utils.StringUnicodeEncoderDecoder;
@@ -20,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 @Slf4j
@@ -36,10 +36,10 @@ public class CompositeStreamTask implements BuildStreamTask {
     }
 
     public CompositeStreamTask(final String path,
-                               final OSS ossClient,
+                               final Function<String, BuildStreamTask> buildOST,
                                final Supplier<TTSAgent> getTTSAgent,
                                final Supplier<CosyAgent> getCosyAgent) {
-        _ossClient = ossClient;
+        _buildOST = buildOST;
         _getTTSAgent = getTTSAgent;
         _getCosyAgent = getCosyAgent;
 
@@ -83,8 +83,8 @@ public class CompositeStreamTask implements BuildStreamTask {
             final CVO current = _cvos.remove(0);
             if (current.b != null) {
                 log.info("support CVO => OSS Stream: {}", current);
-                new OSSStreamTask("{bucket=" + current.b + "}" + current.p, _ossClient)
-                        .buildStream((bytes) -> {
+                _buildOST.apply("{bucket=" + current.b + "}" + current.p).buildStream(
+                        (bytes) -> {
                             try {
                                 // extract pcm part
                                 final ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -255,7 +255,7 @@ public class CompositeStreamTask implements BuildStreamTask {
     }
 
     private final List<CVO> _cvos = new ArrayList<>();
-    private final OSS _ossClient;
+    private final Function<String, BuildStreamTask> _buildOST;
     private final Supplier<TTSAgent> _getTTSAgent;
     private final Supplier<CosyAgent> _getCosyAgent;
 }

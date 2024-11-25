@@ -13,7 +13,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yulore.medhub.nls.CosyAgent;
 import com.yulore.medhub.stream.*;
-import com.yulore.medhub.cache.StreamCacheService;
+import com.yulore.medhub.stream.StreamCacheService;
 import com.yulore.medhub.nls.ASRAgent;
 import com.yulore.medhub.nls.TTSAgent;
 import com.yulore.medhub.nls.TTSTask;
@@ -127,7 +127,7 @@ public class HubMain {
     private final AtomicInteger _currentWSConnection = new AtomicInteger(0);
 
     @Autowired
-    private StreamCacheService _lssService;
+    private StreamCacheService _scsService;
 
     @PostConstruct
     public void start() {
@@ -351,36 +351,30 @@ public class HubMain {
             log.warn("OpenStream failed for {}", path);
             return;
         }
-        if (bst.key() != null) {
-            // cached
-            _lssService.asLocal(bst, (ss) -> {
-                webSocket.setAttachment(ss);
-                HubEventVO.sendEvent(webSocket, "StreamOpened", null);
-            });
-        } else {
-            // not cached
-            final StreamSession _ss = new StreamSession();
-            webSocket.setAttachment(_ss);
+        final StreamSession _ss = new StreamSession();
+        webSocket.setAttachment(_ss);
 
-            _ss.onDataChange((ss) -> {
-                HubEventVO.sendEvent(webSocket, "StreamOpened", null);
-                return true;
-            });
-            bst.buildStream(_ss::appendData,
-                    (isOK) -> _ss.appendCompleted());
-        }
+        _ss.onDataChange((ss) -> {
+            HubEventVO.sendEvent(webSocket, "StreamOpened", null);
+            return true;
+        });
+        bst.buildStream(_ss::appendData,
+                (isOK) -> _ss.appendCompleted());
     }
 
     private BuildStreamTask getTaskOf(final String path) {
         try {
             if (path.contains("type=cp")) {
-                return new CompositeStreamTask(path, _ossClient, this::selectTTSAgent, this::selectCosyAgent);
+                return new CompositeStreamTask(path,
+                        (pp) -> _scsService.asCache(new OSSStreamTask(path, _ossClient)),
+                        this::selectTTSAgent,
+                        this::selectCosyAgent);
             } else if (path.contains("type=tts")) {
                 return new TTSStreamTask(path, selectTTSAgent(), null);
             } else if (path.contains("type=cosy")) {
                 return new CosyStreamTask(path, selectCosyAgent(), null);
             } else {
-                return new OSSStreamTask(path, _ossClient);
+                return _scsService.asCache(new OSSStreamTask(path, _ossClient));
             }
         } catch (Exception ex) {
             log.warn("getTaskOf failed: {}", ex.toString());
