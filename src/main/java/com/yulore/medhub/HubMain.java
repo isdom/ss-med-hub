@@ -366,7 +366,7 @@ public class HubMain {
         try {
             if (path.contains("type=cp")) {
                 return new CompositeStreamTask(path,
-                        (pp) -> _scsService.asCache(new OSSStreamTask(path, _ossClient)),
+                        (pp) -> _scsService.asCache(new OSSStreamTask(pp, _ossClient)),
                         this::selectTTSAgent,
                         this::selectCosyAgent);
             } else if (path.contains("type=tts")) {
