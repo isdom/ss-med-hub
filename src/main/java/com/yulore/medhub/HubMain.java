@@ -47,6 +47,8 @@ import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 @Slf4j
 @Component
@@ -341,21 +343,42 @@ public class HubMain {
     }
 
     private void handleOpenStreamCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        final long startInMs = System.currentTimeMillis();
         final String path = cmd.getPayload().get("path");
-        log.info("open stream => path: {}", path);
+        final String sessionId = cmd.getPayload().get("session_id");
+        final String contentId = cmd.getPayload().get("content_id");
+        final String playIdx = cmd.getPayload().get("playback_idx");
+
+        log.info("open stream => path: {}/sessionId: {}/contentId: {}/playIdx: {}", path, sessionId, contentId, playIdx);
 
         final BuildStreamTask bst = getTaskOf(path);
         if (bst == null) {
             // TODO: define StreamOpened failed event
             HubEventVO.sendEvent(webSocket, "StreamOpened", null);
-            log.warn("OpenStream failed for {}", path);
+            log.warn("OpenStream failed for path: {}/sessionId: {}/contentId: {}/playIdx: {}", path, sessionId, contentId, playIdx);
             return;
         }
-        final StreamSession _ss = new StreamSession();
+
+        Consumer<StreamSession.EventContext> sendEvent = (ctx) -> {
+            HubEventVO.sendEvent(webSocket, ctx.name, ctx.payload);
+            log.info("sendEvent: {} send => {}, {}, cost {} ms",
+                    ctx.session, ctx.name, ctx.payload, System.currentTimeMillis() - ctx.start);
+        };
+        final int delayInMs = VarsUtil.extractValueAsInteger(path, "test_delay", 0);
+        if (delayInMs > 0) {
+            sendEvent = (ctx) -> {
+                _scheduledExecutor.schedule(()->{
+                    HubEventVO.sendEvent(webSocket, ctx.name, ctx.payload);
+                    log.info("sendEvent: {} send => {}, {}, cost {} ms",
+                            ctx.session, ctx.name, ctx.payload, System.currentTimeMillis() - ctx.start);
+                }, delayInMs, TimeUnit.MILLISECONDS);
+            };
+        }
+        final StreamSession _ss = new StreamSession(sendEvent, path, sessionId, contentId, playIdx);
         webSocket.setAttachment(_ss);
 
         _ss.onDataChange((ss) -> {
-            HubEventVO.sendEvent(webSocket, "StreamOpened", null);
+            ss.sendEvent(startInMs, "StreamOpened", null);
             return true;
         });
         bst.buildStream(_ss::appendData,
@@ -383,6 +406,7 @@ public class HubMain {
     }
 
     private void handleGetFileLenCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        final long startInMs = System.currentTimeMillis();
         log.info("get file len:");
         final StreamSession ss = webSocket.getAttachment();
         if (ss == null) {
@@ -390,10 +414,11 @@ public class HubMain {
             HubEventVO.sendEvent(webSocket, "GetFileLenResult", new PayloadGetFileLenResult(0));
             return;
         }
-        HubEventVO.sendEvent(webSocket, "GetFileLenResult", new PayloadGetFileLenResult(ss.length()));
+        ss.sendEvent(startInMs, "GetFileLenResult", new PayloadGetFileLenResult(ss.length()));
     }
 
     private void handleFileSeekCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        final long startInMs = System.currentTimeMillis();
         final int offset = Integer.parseInt(cmd.getPayload().get("offset"));
         final int whence = Integer.parseInt(cmd.getPayload().get("whence"));
         log.info("file seek => offset: {}, whence: {}", offset, whence);
@@ -421,7 +446,7 @@ public class HubMain {
         if (seek_from_start >= 0) {
             pos = ss.seekFromStart(seek_from_start);
         }
-        HubEventVO.sendEvent(webSocket, "FileSeekResult", new PayloadFileSeekResult(pos));
+        ss.sendEvent(startInMs,"FileSeekResult", new PayloadFileSeekResult(pos));
     }
 
     private void handleFileReadCommand(final HubCommandVO cmd, final WebSocket webSocket) {
@@ -505,6 +530,7 @@ public class HubMain {
     }
 
     private void handleFileTellCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        final long startInMs = System.currentTimeMillis();
         final StreamSession ss = webSocket.getAttachment();
         if (ss == null) {
             log.warn("handleFileTellCommand: ss is null, just return 0");
@@ -512,7 +538,7 @@ public class HubMain {
             return;
         }
         log.info("file tell: current pos: {}", ss.tell());
-        HubEventVO.sendEvent(webSocket, "FileTellResult", new PayloadFileSeekResult(ss.tell()));
+        ss.sendEvent(startInMs, "FileTellResult", new PayloadFileSeekResult(ss.tell()));
     }
 
     private void handleStopPlaybackCommand(final HubCommandVO cmd, final WebSocket webSocket) {

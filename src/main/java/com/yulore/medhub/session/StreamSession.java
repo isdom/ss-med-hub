@@ -1,6 +1,7 @@
 package com.yulore.medhub.session;
 
 import com.yulore.util.ByteArrayListInputStream;
+import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
@@ -14,13 +15,32 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-@ToString
 @Slf4j
+@ToString(of={"_path", "_sessionId", "_contentId", "_playIdx"})
 public class StreamSession {
+    @AllArgsConstructor
+    static public class EventContext {
+        public String name;
+        public Object payload;
+        public long start;
+        public StreamSession session;
+    }
+
+    public StreamSession(final Consumer<EventContext> doSendEvent, final String path, final String sessionId, final String contentId, final String playIdx) {
+        _doSendEvent = doSendEvent;
+        _path = path;
+        _sessionId = sessionId;
+        _contentId = contentId;
+        _playIdx = playIdx;
+    }
 //    public StreamSession(final InputStream is, final int length) {
 //        _is = is;
 //        _length = length;
 //    }
+
+    public void sendEvent(final long startInMs, final String eventName, final Object payload) {
+        _doSendEvent.accept(new EventContext(eventName, payload, startInMs, this));
+    }
 
     public void lock() {
         _lock.lock();
@@ -119,6 +139,12 @@ public class StreamSession {
             }
         }
     }
+
+    final private String _path;
+    final private String _sessionId;
+    final private String _contentId;
+    final private String _playIdx;
+    final private Consumer<EventContext> _doSendEvent;
 
     private int _length = 0;
     private int _pos = 0;
