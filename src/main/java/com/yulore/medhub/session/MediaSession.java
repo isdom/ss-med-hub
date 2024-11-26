@@ -122,9 +122,9 @@ public class MediaSession {
         _isTranscriptionFailed.compareAndSet(false, true);
     }
 
-    public void transmit(final ByteBuffer bytes) {
+    public boolean transmit(final ByteBuffer bytes) {
         if ( !_isTranscriptionStarted.get() || _isTranscriptionFailed.get()) {
-            return;
+            return false;
         }
 
         if (speechTranscriber != null) {
@@ -133,7 +133,15 @@ public class MediaSession {
             } else {
                 _delayExecutor.schedule(()->speechTranscriber.send(bytes.array()), _testDelayMs, TimeUnit.MILLISECONDS);
             }
+            _transmitCount.incrementAndGet();
+            return true;
+        } else {
+            return false;
         }
+    }
+
+    public int transmitCount() {
+        return _transmitCount.get();
     }
 
     public void close() {
@@ -193,6 +201,7 @@ public class MediaSession {
     final AtomicBoolean _isStartTranscription = new AtomicBoolean(false);
     final AtomicBoolean _isTranscriptionStarted = new AtomicBoolean(false);
     final AtomicBoolean _isTranscriptionFailed = new AtomicBoolean(false);
+    final AtomicInteger _transmitCount = new AtomicInteger(0);
     ScheduledExecutorService _delayExecutor = null;
     long _testDelayMs = 0;
     long _testDisconnectTimeout = -1;

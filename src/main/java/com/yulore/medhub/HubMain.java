@@ -313,7 +313,12 @@ public class HubMain {
             log.error("handleASRData: {} without Session, abort", webSocket.getRemoteSocketAddress());
             return;
         }
-        session.transmit(bytes);
+        if (session.transmit(bytes)) {
+            // transmit success
+            if ((session.transmitCount() % 50) == 0) {
+                log.info("{}: transmit 50 times.", session.get_sessionId());
+            }
+        }
     }
 
     private void handleHubCommand(final HubCommandVO cmd, final WebSocket webSocket) {
