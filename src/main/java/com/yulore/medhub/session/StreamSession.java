@@ -32,6 +32,7 @@ public class StreamSession {
 
     public void sendEvent(final String eventName, final Object payload) {
         _sendEvent.accept(eventName, payload);
+        log.info("sendEvent: sessionId: {}/contentId: {}/playbackIdx: {} => {}, {}", _sessionId, _contentId, _playIdx, eventName, payload);
     }
 
     public void lock() {
