@@ -1,6 +1,7 @@
 package com.yulore.medhub.session;
 
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriber;
+import com.alibaba.nls.client.protocol.asr.SpeechTranscriberResponse;
 import com.yulore.medhub.nls.ASRAgent;
 import com.yulore.medhub.task.PlayPCMTask;
 import io.netty.util.concurrent.DefaultThreadFactory;
@@ -117,7 +118,15 @@ public class MediaSession {
         }
     }
 
+    public void notifySpeechTranscriberFail(final SpeechTranscriberResponse response) {
+        _isTranscriptionFailed.compareAndSet(false, true);
+    }
+
     public void transmit(final ByteBuffer bytes) {
+        if ( !_isTranscriptionStarted.get() || _isTranscriptionFailed.get()) {
+            return;
+        }
+
         if (speechTranscriber != null) {
             if (_delayExecutor == null) {
                 speechTranscriber.send(bytes.array());
@@ -183,6 +192,7 @@ public class MediaSession {
 
     final AtomicBoolean _isStartTranscription = new AtomicBoolean(false);
     final AtomicBoolean _isTranscriptionStarted = new AtomicBoolean(false);
+    final AtomicBoolean _isTranscriptionFailed = new AtomicBoolean(false);
     ScheduledExecutorService _delayExecutor = null;
     long _testDelayMs = 0;
     long _testDisconnectTimeout = -1;
