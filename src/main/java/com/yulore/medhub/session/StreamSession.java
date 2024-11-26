@@ -30,9 +30,9 @@ public class StreamSession {
 //        _length = length;
 //    }
 
-    public void sendEvent(final String eventName, final Object payload) {
+    public void sendEvent(final long costInMs, final String eventName, final Object payload) {
         _sendEvent.accept(eventName, payload);
-        log.info("sendEvent: sessionId: {}/contentId: {}/playbackIdx: {} => {}, {}", _sessionId, _contentId, _playIdx, eventName, payload);
+        log.info("sendEvent: sessionId: {}/contentId: {}/playbackIdx: {} => {}, {}, cost {} ms", _sessionId, _contentId, _playIdx, eventName, payload, costInMs);
     }
 
     public void lock() {
