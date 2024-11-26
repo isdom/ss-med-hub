@@ -47,6 +47,7 @@ import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 
 @Slf4j
 @Component
@@ -355,11 +356,19 @@ public class HubMain {
             log.warn("OpenStream failed for path: {}/sessionId: {}/contentId: {}/playIdx: {}", path, sessionId, contentId, playIdx);
             return;
         }
-        final StreamSession _ss = new StreamSession(path, sessionId, contentId, playIdx);
+
+        BiConsumer<String, Object> sendEvent = (evt, obj) -> HubEventVO.sendEvent(webSocket, evt, obj);
+        final int delayInMs = VarsUtil.extractValueAsInteger(path, "test_delay", 0);
+        if (delayInMs > 0) {
+            sendEvent = (evt, obj) -> {
+                _scheduledExecutor.schedule(()->HubEventVO.sendEvent(webSocket, evt, obj), delayInMs, TimeUnit.MILLISECONDS);
+            };
+        }
+        final StreamSession _ss = new StreamSession(sendEvent, path, sessionId, contentId, playIdx);
         webSocket.setAttachment(_ss);
 
         _ss.onDataChange((ss) -> {
-            HubEventVO.sendEvent(webSocket, "StreamOpened", null);
+            ss.sendEvent("StreamOpened", null);
             return true;
         });
         bst.buildStream(_ss::appendData,
@@ -394,7 +403,7 @@ public class HubMain {
             HubEventVO.sendEvent(webSocket, "GetFileLenResult", new PayloadGetFileLenResult(0));
             return;
         }
-        HubEventVO.sendEvent(webSocket, "GetFileLenResult", new PayloadGetFileLenResult(ss.length()));
+        ss.sendEvent("GetFileLenResult", new PayloadGetFileLenResult(ss.length()));
     }
 
     private void handleFileSeekCommand(final HubCommandVO cmd, final WebSocket webSocket) {
@@ -425,7 +434,7 @@ public class HubMain {
         if (seek_from_start >= 0) {
             pos = ss.seekFromStart(seek_from_start);
         }
-        HubEventVO.sendEvent(webSocket, "FileSeekResult", new PayloadFileSeekResult(pos));
+        ss.sendEvent("FileSeekResult", new PayloadFileSeekResult(pos));
     }
 
     private void handleFileReadCommand(final HubCommandVO cmd, final WebSocket webSocket) {
@@ -516,7 +525,7 @@ public class HubMain {
             return;
         }
         log.info("file tell: current pos: {}", ss.tell());
-        HubEventVO.sendEvent(webSocket, "FileTellResult", new PayloadFileSeekResult(ss.tell()));
+        ss.sendEvent("FileTellResult", new PayloadFileSeekResult(ss.tell()));
     }
 
     private void handleStopPlaybackCommand(final HubCommandVO cmd, final WebSocket webSocket) {

@@ -11,13 +11,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
 @ToString
 @Slf4j
 public class StreamSession {
-    public StreamSession(final String path, final String sessionId, final String contentId, final String playIdx) {
+    public StreamSession(final BiConsumer<String, Object> sendEvent, final String path, final String sessionId, final String contentId, final String playIdx) {
+        _sendEvent = sendEvent;
         _path = path;
         _sessionId = sessionId;
         _contentId = contentId;
@@ -27,6 +29,10 @@ public class StreamSession {
 //        _is = is;
 //        _length = length;
 //    }
+
+    public void sendEvent(final String eventName, final Object payload) {
+        _sendEvent.accept(eventName, payload);
+    }
 
     public void lock() {
         _lock.lock();
@@ -130,6 +136,7 @@ public class StreamSession {
     final private String _sessionId;
     final private String _contentId;
     final private String _playIdx;
+    final private BiConsumer<String, Object> _sendEvent;
 
     private int _length = 0;
     private int _pos = 0;
