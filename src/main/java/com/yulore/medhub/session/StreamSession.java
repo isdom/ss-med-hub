@@ -12,12 +12,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-@ToString
 @Slf4j
+@ToString(of={"_path", "_sessionId", "_contentId", "_playIdx"})
 public class StreamSession {
     @AllArgsConstructor
     static public class EventContext {
