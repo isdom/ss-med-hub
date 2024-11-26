@@ -346,7 +346,7 @@ public class HubMain {
         final String contentId = cmd.getPayload().get("content_id");
         final String playIdx = cmd.getPayload().get("playback_idx");
 
-        log.info("open stream => path: {}", path);
+        log.info("open stream => path: {}/sessionId: {}/contentId: {}/playIdx: {}", path, sessionId, contentId, playIdx);
 
         final BuildStreamTask bst = getTaskOf(path);
         if (bst == null) {
