@@ -342,16 +342,20 @@ public class HubMain {
 
     private void handleOpenStreamCommand(final HubCommandVO cmd, final WebSocket webSocket) {
         final String path = cmd.getPayload().get("path");
+        final String sessionId = cmd.getPayload().get("session_id");
+        final String contentId = cmd.getPayload().get("content_id");
+        final String playIdx = cmd.getPayload().get("playback_idx");
+
         log.info("open stream => path: {}", path);
 
         final BuildStreamTask bst = getTaskOf(path);
         if (bst == null) {
             // TODO: define StreamOpened failed event
             HubEventVO.sendEvent(webSocket, "StreamOpened", null);
-            log.warn("OpenStream failed for {}", path);
+            log.warn("OpenStream failed for path: {}/sessionId: {}/contentId: {}/playIdx: {}", path, sessionId, contentId, playIdx);
             return;
         }
-        final StreamSession _ss = new StreamSession();
+        final StreamSession _ss = new StreamSession(path, sessionId, contentId, playIdx);
         webSocket.setAttachment(_ss);
 
         _ss.onDataChange((ss) -> {

@@ -17,6 +17,12 @@ import java.util.function.Function;
 @ToString
 @Slf4j
 public class StreamSession {
+    public StreamSession(final String path, final String sessionId, final String contentId, final String playIdx) {
+        _path = path;
+        _sessionId = sessionId;
+        _contentId = contentId;
+        _playIdx = playIdx;
+    }
 //    public StreamSession(final InputStream is, final int length) {
 //        _is = is;
 //        _length = length;
@@ -119,6 +125,11 @@ public class StreamSession {
             }
         }
     }
+
+    final private String _path;
+    final private String _sessionId;
+    final private String _contentId;
+    final private String _playIdx;
 
     private int _length = 0;
     private int _pos = 0;
