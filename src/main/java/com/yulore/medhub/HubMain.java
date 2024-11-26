@@ -48,6 +48,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 @Slf4j
 @Component
@@ -358,11 +359,19 @@ public class HubMain {
             return;
         }
 
-        BiConsumer<String, Object> sendEvent = (evt, obj) -> HubEventVO.sendEvent(webSocket, evt, obj);
+        Consumer<StreamSession.EventContext> sendEvent = (ctx) -> {
+            HubEventVO.sendEvent(webSocket, ctx.name, ctx.payload);
+            log.info("sendEvent: {} send => {}, {}, cost {} ms",
+                    ctx.session, ctx.name, ctx.payload, System.currentTimeMillis() - ctx.start);
+        };
         final int delayInMs = VarsUtil.extractValueAsInteger(path, "test_delay", 0);
         if (delayInMs > 0) {
-            sendEvent = (evt, obj) -> {
-                _scheduledExecutor.schedule(()->HubEventVO.sendEvent(webSocket, evt, obj), delayInMs, TimeUnit.MILLISECONDS);
+            sendEvent = (ctx) -> {
+                _scheduledExecutor.schedule(()->{
+                    HubEventVO.sendEvent(webSocket, ctx.name, ctx.payload);
+                    log.info("sendEvent: {} send => {}, {}, cost {} ms",
+                            ctx.session, ctx.name, ctx.payload, System.currentTimeMillis() - ctx.start);
+                }, delayInMs, TimeUnit.MILLISECONDS);
             };
         }
         final StreamSession _ss = new StreamSession(sendEvent, path, sessionId, contentId, playIdx);

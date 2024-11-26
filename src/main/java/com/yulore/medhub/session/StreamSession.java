@@ -1,6 +1,7 @@
 package com.yulore.medhub.session;
 
 import com.yulore.util.ByteArrayListInputStream;
+import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
@@ -18,8 +19,16 @@ import java.util.function.Function;
 @ToString
 @Slf4j
 public class StreamSession {
-    public StreamSession(final BiConsumer<String, Object> sendEvent, final String path, final String sessionId, final String contentId, final String playIdx) {
-        _sendEvent = sendEvent;
+    @AllArgsConstructor
+    static public class EventContext {
+        public String name;
+        public Object payload;
+        public long start;
+        public StreamSession session;
+    }
+
+    public StreamSession(final Consumer<EventContext> doSendEvent, final String path, final String sessionId, final String contentId, final String playIdx) {
+        _doSendEvent = doSendEvent;
         _path = path;
         _sessionId = sessionId;
         _contentId = contentId;
@@ -31,9 +40,7 @@ public class StreamSession {
 //    }
 
     public void sendEvent(final long startInMs, final String eventName, final Object payload) {
-        _sendEvent.accept(eventName, payload);
-        log.info("sendEvent: sessionId: {}/contentId: {}/playbackIdx: {} => {}, {}, cost {} ms",
-                _sessionId, _contentId, _playIdx, eventName, payload, System.currentTimeMillis() - startInMs);
+        _doSendEvent.accept(new EventContext(eventName, payload, startInMs, this));
     }
 
     public void lock() {
@@ -138,7 +145,7 @@ public class StreamSession {
     final private String _sessionId;
     final private String _contentId;
     final private String _playIdx;
-    final private BiConsumer<String, Object> _sendEvent;
+    final private Consumer<EventContext> _doSendEvent;
 
     private int _length = 0;
     private int _pos = 0;
