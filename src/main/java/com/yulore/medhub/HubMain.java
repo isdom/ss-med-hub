@@ -369,7 +369,7 @@ public class HubMain {
         webSocket.setAttachment(_ss);
 
         _ss.onDataChange((ss) -> {
-            ss.sendEvent(System.currentTimeMillis() - startInMs, "StreamOpened", null);
+            ss.sendEvent(startInMs, "StreamOpened", null);
             return true;
         });
         bst.buildStream(_ss::appendData,
@@ -405,7 +405,7 @@ public class HubMain {
             HubEventVO.sendEvent(webSocket, "GetFileLenResult", new PayloadGetFileLenResult(0));
             return;
         }
-        ss.sendEvent(System.currentTimeMillis() - startInMs, "GetFileLenResult", new PayloadGetFileLenResult(ss.length()));
+        ss.sendEvent(startInMs, "GetFileLenResult", new PayloadGetFileLenResult(ss.length()));
     }
 
     private void handleFileSeekCommand(final HubCommandVO cmd, final WebSocket webSocket) {
@@ -437,7 +437,7 @@ public class HubMain {
         if (seek_from_start >= 0) {
             pos = ss.seekFromStart(seek_from_start);
         }
-        ss.sendEvent(System.currentTimeMillis() - startInMs,"FileSeekResult", new PayloadFileSeekResult(pos));
+        ss.sendEvent(startInMs,"FileSeekResult", new PayloadFileSeekResult(pos));
     }
 
     private void handleFileReadCommand(final HubCommandVO cmd, final WebSocket webSocket) {
@@ -529,7 +529,7 @@ public class HubMain {
             return;
         }
         log.info("file tell: current pos: {}", ss.tell());
-        ss.sendEvent(System.currentTimeMillis() - startInMs, "FileTellResult", new PayloadFileSeekResult(ss.tell()));
+        ss.sendEvent(startInMs, "FileTellResult", new PayloadFileSeekResult(ss.tell()));
     }
 
     private void handleStopPlaybackCommand(final HubCommandVO cmd, final WebSocket webSocket) {
