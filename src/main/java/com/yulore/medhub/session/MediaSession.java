@@ -1,6 +1,7 @@
 package com.yulore.medhub.session;
 
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriber;
+import com.alibaba.nls.client.protocol.asr.SpeechTranscriberResponse;
 import com.yulore.medhub.nls.ASRAgent;
 import com.yulore.medhub.task.PlayPCMTask;
 import io.netty.util.concurrent.DefaultThreadFactory;
@@ -117,14 +118,30 @@ public class MediaSession {
         }
     }
 
-    public void transmit(final ByteBuffer bytes) {
+    public void notifySpeechTranscriberFail(final SpeechTranscriberResponse response) {
+        _isTranscriptionFailed.compareAndSet(false, true);
+    }
+
+    public boolean transmit(final ByteBuffer bytes) {
+        if ( !_isTranscriptionStarted.get() || _isTranscriptionFailed.get()) {
+            return false;
+        }
+
         if (speechTranscriber != null) {
             if (_delayExecutor == null) {
                 speechTranscriber.send(bytes.array());
             } else {
                 _delayExecutor.schedule(()->speechTranscriber.send(bytes.array()), _testDelayMs, TimeUnit.MILLISECONDS);
             }
+            _transmitCount.incrementAndGet();
+            return true;
+        } else {
+            return false;
         }
+    }
+
+    public int transmitCount() {
+        return _transmitCount.get();
     }
 
     public void close() {
@@ -183,6 +200,8 @@ public class MediaSession {
 
     final AtomicBoolean _isStartTranscription = new AtomicBoolean(false);
     final AtomicBoolean _isTranscriptionStarted = new AtomicBoolean(false);
+    final AtomicBoolean _isTranscriptionFailed = new AtomicBoolean(false);
+    final AtomicInteger _transmitCount = new AtomicInteger(0);
     ScheduledExecutorService _delayExecutor = null;
     long _testDelayMs = 0;
     long _testDisconnectTimeout = -1;

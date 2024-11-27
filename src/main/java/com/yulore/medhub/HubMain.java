@@ -313,7 +313,12 @@ public class HubMain {
             log.error("handleASRData: {} without Session, abort", webSocket.getRemoteSocketAddress());
             return;
         }
-        session.transmit(bytes);
+        if (session.transmit(bytes)) {
+            // transmit success
+            if ((session.transmitCount() % 50) == 0) {
+                log.info("{}: transmit 50 times.", session.get_sessionId());
+            }
+        }
     }
 
     private void handleHubCommand(final HubCommandVO cmd, final WebSocket webSocket) {
@@ -705,7 +710,7 @@ public class HubMain {
             final ASRAgent agent = selectASRAgent();
             session.setAsrAgent(agent);
 
-            speechTranscriber = buildSpeechTranscriber(agent, buildTranscriberListener(webSocket, agent, session.get_sessionId(), startConnectingInMs));
+            speechTranscriber = buildSpeechTranscriber(agent, buildTranscriberListener(session, webSocket, agent, session.get_sessionId(), startConnectingInMs));
             session.setSpeechTranscriber(speechTranscriber);
         } catch (Exception ex) {
             // TODO: close websocket?
@@ -759,7 +764,11 @@ public class HubMain {
     }
 
     @NotNull
-    private SpeechTranscriberListener buildTranscriberListener(final WebSocket webSocket, final ASRAgent account, final String sessionId, final long startConnectingInMs) {
+    private SpeechTranscriberListener buildTranscriberListener(final MediaSession session,
+                                                               final WebSocket webSocket,
+                                                               final ASRAgent account,
+                                                               final String sessionId,
+                                                               final long startConnectingInMs) {
         return new SpeechTranscriberListener() {
             @Override
             public void onTranscriberStart(final SpeechTranscriberResponse response) {
@@ -822,6 +831,7 @@ public class HubMain {
                         response.getTaskId(),
                         response.getStatus(),
                         response.getStatusText());
+                session.notifySpeechTranscriberFail(response);
             }
         };
     }
