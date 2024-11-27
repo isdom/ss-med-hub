@@ -58,7 +58,7 @@ public class CompositeStreamTask implements BuildStreamTask {
         }
         final String vars = path.substring(leftBracePos, rightBracePos + 1);
         try {
-            final CVO[] cvos = new ObjectMapper().readValue(vars, CVO[].class);
+            final CompositeVO[] cvos = new ObjectMapper().readValue(vars, CompositeVO[].class);
             log.info("got cvos: {}", Arrays.toString(cvos));
             _cvos.addAll(Arrays.asList(cvos));
         } catch (JsonProcessingException e) {
@@ -80,10 +80,10 @@ public class CompositeStreamTask implements BuildStreamTask {
 
     public void doBuildStream(final Consumer<byte[]> onPart, final Consumer<Boolean> onCompleted) {
         while (!_cvos.isEmpty()) {
-            final CVO current = _cvos.remove(0);
-            if (current.b != null) {
+            final CompositeVO current = _cvos.remove(0);
+            if (current.bucket != null) {
                 log.info("support CVO => OSS Stream: {}", current);
-                _buildOST.apply("{bucket=" + current.b + "}" + current.p).buildStream(
+                _buildOST.apply("{bucket=" + current.bucket + "}" + current.object).buildStream(
                         (bytes) -> {
                             try {
                                 // extract pcm part
@@ -99,7 +99,7 @@ public class CompositeStreamTask implements BuildStreamTask {
                             doBuildStream(onPart, onCompleted);
                         });
                 return;
-            } else if (current.t != null && current.t.equals("tts")) {
+            } else if (current.type != null && current.type.equals("tts")) {
                 log.info("support CVO => TTS Stream: {}", current);
                 new TTSStreamTask(cvo2tts(current), _getTTSAgent.get(), (synthesizer) -> {
                     //设置返回音频的编码格式
@@ -111,7 +111,7 @@ public class CompositeStreamTask implements BuildStreamTask {
                             doBuildStream(onPart, onCompleted);
                         });
                 return;
-            } else if (current.t != null && current.t.equals("cosy")) {
+            } else if (current.type != null && current.type.equals("cosy")) {
                 log.info("support CVO => Cosy Stream: {}", current);
                 new CosyStreamTask(cvo2cosy(current), _getCosyAgent.get(), (synthesizer)->{
                     synthesizer.setVolume(50);
@@ -133,16 +133,16 @@ public class CompositeStreamTask implements BuildStreamTask {
         onCompleted.accept(true);
     }
 
-    static private String cvo2tts(final CVO cvo) {
+    static private String cvo2tts(final CompositeVO cvo) {
         // {type=tts,voice=xxx,url=ws://172.18.86.131:6789/playback,vars_playback_id=<uuid>,content_id=2088788,vars_start_timestamp=1732028219711854}
             //          'StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(content)'.wav
-        return String.format("{type=tts,voice=%s}%s.wav", cvo.v, StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(cvo.x));
+        return String.format("{type=tts,voice=%s}%s.wav", cvo.voice, StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(cvo.text));
     }
 
-    static private String cvo2cosy(final CVO cvo) {
+    static private String cvo2cosy(final CompositeVO cvo) {
         // eg: {type=cosy,voice=xxx,url=ws://172.18.86.131:6789/cosy,vars_playback_id=<uuid>,content_id=2088788,vars_start_timestamp=1732028219711854}
         //          'StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(content)'.wav
-        return String.format("{type=cosy,voice=%s}%s.wav", cvo.v, StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(cvo.x));
+        return String.format("{type=cosy,voice=%s}%s.wav", cvo.voice, StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(cvo.text));
     }
 
     static private byte[] genWaveHeader() {
@@ -254,7 +254,7 @@ public class CompositeStreamTask implements BuildStreamTask {
         dos.writeByte(i1);
     }
 
-    private final List<CVO> _cvos = new ArrayList<>();
+    private final List<CompositeVO> _cvos = new ArrayList<>();
     private final Function<String, BuildStreamTask> _buildOST;
     private final Supplier<TTSAgent> _getTTSAgent;
     private final Supplier<CosyAgent> _getCosyAgent;
