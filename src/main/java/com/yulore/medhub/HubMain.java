@@ -322,7 +322,7 @@ public class HubMain {
         if (session.transmit(bytes)) {
             // transmit success
             if ((session.transmitCount() % 50) == 0) {
-                log.info("{}: transmit 50 times.", session.get_sessionId());
+                log.debug("{}: transmit 50 times.", session.get_sessionId());
             }
         }
     }
@@ -360,7 +360,7 @@ public class HubMain {
         final String contentId = cmd.getPayload().get("content_id");
         final String playIdx = cmd.getPayload().get("playback_idx");
 
-        log.info("open stream => path: {}/sessionId: {}/contentId: {}/playIdx: {}", path, sessionId, contentId, playIdx);
+        log.debug("open stream => path: {}/sessionId: {}/contentId: {}/playIdx: {}", path, sessionId, contentId, playIdx);
 
         final BuildStreamTask bst = getTaskOf(path);
         if (bst == null) {
@@ -399,8 +399,7 @@ public class HubMain {
             ss.sendEvent(startInMs, "StreamOpened", null);
             return true;
         });
-        bst.buildStream(_ss::appendData,
-                (isOK) -> _ss.appendCompleted());
+        bst.buildStream(_ss::appendData, (isOK) -> _ss.appendCompleted());
     }
 
     private BuildStreamTask getTaskOf(final String path) {

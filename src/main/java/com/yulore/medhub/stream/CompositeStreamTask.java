@@ -98,28 +98,21 @@ public class CompositeStreamTask implements BuildStreamTask {
                                 throw new RuntimeException(ex);
                             }
                         },
-                        (isOK) -> {
-                            doBuildStream(onPart, onCompleted);
-                        });
+                        (isOK) -> doBuildStream(onPart, onCompleted));
                 return;
             } else if (current.type != null && current.type.equals("tts")) {
                 log.info("support CVO => TTS Stream: {}", current);
                 genTtsStreamTask(current).buildStream(onPart,
-                        (isOK) -> {
-                            doBuildStream(onPart, onCompleted);
-                        });
+                        (isOK) -> doBuildStream(onPart, onCompleted));
                 return;
             } else if (current.type != null && current.type.equals("cosy")) {
                 log.info("support CVO => Cosy Stream: {}", current);
                 genCosyStreamTask(current).buildStream(onPart,
-                        (isOK) -> {
-                            doBuildStream(onPart, onCompleted);
-                        });
+                        (isOK) -> doBuildStream(onPart, onCompleted));
                 return;
             } else {
                 // unknown cvo type, skip
                 log.info("not support cvo: {}, skip", current);
-                continue;
             }
         }
         onCompleted.accept(true);
