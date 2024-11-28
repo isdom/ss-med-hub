@@ -402,12 +402,15 @@ public class HubMain {
             if (path.contains("type=cp")) {
                 return new CompositeStreamTask(path,
                         (pp) -> _scsService.asCache(new OSSStreamTask(pp, _ossClient)),
+                        (bst) -> _scsService.asCache(bst),
                         this::selectTTSAgent,
                         this::selectCosyAgent);
             } else if (path.contains("type=tts")) {
-                return new TTSStreamTask(path, selectTTSAgent(), null);
+                final BuildStreamTask bst = new TTSStreamTask(path, this::selectTTSAgent, null);
+                return bst.key() != null ? _scsService.asCache(bst) : bst;
             } else if (path.contains("type=cosy")) {
-                return new CosyStreamTask(path, selectCosyAgent(), null);
+                final BuildStreamTask bst = new CosyStreamTask(path, this::selectCosyAgent, null);
+                return bst.key() != null ? _scsService.asCache(bst) : bst;
             } else {
                 return _scsService.asCache(new OSSStreamTask(path, _ossClient));
             }

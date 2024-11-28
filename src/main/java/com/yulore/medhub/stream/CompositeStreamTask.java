@@ -11,6 +11,7 @@ import com.yulore.medhub.nls.TTSAgent;
 import lombok.Data;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
+import org.jetbrains.annotations.NotNull;
 
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.UnsupportedAudioFileException;
@@ -37,9 +38,11 @@ public class CompositeStreamTask implements BuildStreamTask {
 
     public CompositeStreamTask(final String path,
                                final Function<String, BuildStreamTask> buildOST,
+                               final Function<BuildStreamTask, BuildStreamTask> cacheBST,
                                final Supplier<TTSAgent> getTTSAgent,
                                final Supplier<CosyAgent> getCosyAgent) {
         _buildOST = buildOST;
+        _cacheBST = cacheBST;
         _getTTSAgent = getTTSAgent;
         _getCosyAgent = getCosyAgent;
 
@@ -101,25 +104,14 @@ public class CompositeStreamTask implements BuildStreamTask {
                 return;
             } else if (current.type != null && current.type.equals("tts")) {
                 log.info("support CVO => TTS Stream: {}", current);
-                new TTSStreamTask(cvo2tts(current), _getTTSAgent.get(), (synthesizer) -> {
-                    //设置返回音频的编码格式
-                    synthesizer.setFormat(OutputFormatEnum.PCM);
-                    //设置返回音频的采样率
-                    synthesizer.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
-                }).buildStream(onPart,
+                genTtsStreamTask(current).buildStream(onPart,
                         (isOK) -> {
                             doBuildStream(onPart, onCompleted);
                         });
                 return;
             } else if (current.type != null && current.type.equals("cosy")) {
                 log.info("support CVO => Cosy Stream: {}", current);
-                new CosyStreamTask(cvo2cosy(current), _getCosyAgent.get(), (synthesizer)->{
-                    synthesizer.setVolume(50);
-                    //设置返回音频的编码格式
-                    synthesizer.setFormat(OutputFormatEnum.PCM);
-                    //设置返回音频的采样率。
-                    synthesizer.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
-                }).buildStream(onPart,
+                genCosyStreamTask(current).buildStream(onPart,
                         (isOK) -> {
                             doBuildStream(onPart, onCompleted);
                         });
@@ -133,16 +125,41 @@ public class CompositeStreamTask implements BuildStreamTask {
         onCompleted.accept(true);
     }
 
+    @NotNull
+    private BuildStreamTask genCosyStreamTask(CompositeVO current) {
+        final BuildStreamTask bst = new CosyStreamTask(cvo2cosy(current), _getCosyAgent, (synthesizer) -> {
+            synthesizer.setVolume(50);
+            //设置返回音频的编码格式
+            synthesizer.setFormat(OutputFormatEnum.PCM);
+            //设置返回音频的采样率。
+            synthesizer.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
+        });
+        return bst.key() != null ? _cacheBST.apply(bst) : bst;
+    }
+
+    @NotNull
+    private BuildStreamTask genTtsStreamTask(final CompositeVO current) {
+        final BuildStreamTask bst = new TTSStreamTask(cvo2tts(current), _getTTSAgent, (synthesizer) -> {
+            //设置返回音频的编码格式
+            synthesizer.setFormat(OutputFormatEnum.PCM);
+            //设置返回音频的采样率
+            synthesizer.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
+        });
+        return bst.key() != null ? _cacheBST.apply(bst) : bst;
+    }
+
     static private String cvo2tts(final CompositeVO cvo) {
         // {type=tts,voice=xxx,url=ws://172.18.86.131:6789/playback,vars_playback_id=<uuid>,content_id=2088788,vars_start_timestamp=1732028219711854,text='StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(content)'}
             //          unused.wav
-        return String.format("{type=tts,voice=%s,text=%s}tts.wav", cvo.voice, StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(cvo.text));
+        return String.format("{type=tts,cache=%s,voice=%s,text=%s}tts.wav", cvo.cache, cvo.voice,
+                StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(cvo.text));
     }
 
     static private String cvo2cosy(final CompositeVO cvo) {
         // eg: {type=cosy,voice=xxx,url=ws://172.18.86.131:6789/cosy,vars_playback_id=<uuid>,content_id=2088788,vars_start_timestamp=1732028219711854,text='StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(content)'}
         //          unused.wav
-        return String.format("{type=cosy,voice=%s,text=%s}cosy.wav", cvo.voice, StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(cvo.text));
+        return String.format("{type=cosy,cache=%s,voice=%s,text=%s}cosy.wav", cvo.cache, cvo.voice,
+                StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(cvo.text));
     }
 
     static private byte[] genWaveHeader() {
@@ -256,6 +273,7 @@ public class CompositeStreamTask implements BuildStreamTask {
 
     private final List<CompositeVO> _cvos = new ArrayList<>();
     private final Function<String, BuildStreamTask> _buildOST;
+    private final Function<BuildStreamTask, BuildStreamTask> _cacheBST;
     private final Supplier<TTSAgent> _getTTSAgent;
     private final Supplier<CosyAgent> _getCosyAgent;
 }

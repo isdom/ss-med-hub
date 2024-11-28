@@ -6,18 +6,25 @@ import com.alibaba.nls.client.protocol.tts.SpeechSynthesizer;
 import com.alibaba.nls.client.protocol.tts.StreamInputTts;
 import com.alibaba.nls.client.protocol.tts.StreamInputTtsListener;
 import com.alibaba.nls.client.protocol.tts.StreamInputTtsResponse;
+import com.google.common.base.Charsets;
+import com.google.common.hash.HashFunction;
+import com.google.common.hash.Hashing;
 import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.medhub.nls.CosyAgent;
+import com.yulore.medhub.nls.TTSAgent;
 import lombok.extern.slf4j.Slf4j;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 @Slf4j
 public class CosyStreamTask implements BuildStreamTask {
-    public CosyStreamTask(final String path, final CosyAgent agent,final Consumer<StreamInputTts> onSynthesizer) {
-        _agent = agent;
+    final HashFunction _MD5 = Hashing.md5();
+
+    public CosyStreamTask(final String path, final Supplier<CosyAgent> getCosyAgent,final Consumer<StreamInputTts> onSynthesizer) {
+        _getCosyAgent = getCosyAgent;
         _onSynthesizer = onSynthesizer;
         // eg: {type=cosy,voice=xxx,url=ws://172.18.86.131:6789/cosy,vars_playback_id=<uuid>,content_id=2088788,vars_start_timestamp=1732028219711854}
         //          'StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(content)'.wav
@@ -42,16 +49,31 @@ public class CosyStreamTask implements BuildStreamTask {
         _voice = VarsUtil.extractValue(vars, "voice");
         _pitchRate = VarsUtil.extractValue(vars, "pitch_rate");
         _speechRate = VarsUtil.extractValue(vars, "speech_rate");
-        // final String key = path.substring(rightBracePos + 1, path.lastIndexOf(".wav"));
+        _cache = VarsUtil.extractValueAsBoolean(vars, "cache", false);
+        _key = _cache ? buildKey() : null;
+    }
+
+    private String buildKey() {
+        final StringBuilder sb = new StringBuilder();
+        sb.append(_voice);
+        sb.append(":");
+        sb.append(_pitchRate);
+        sb.append(":");
+        sb.append(_speechRate);
+        sb.append(":");
+        sb.append(_text);
+
+        return "tts-" + _MD5.hashString(sb.toString(), Charsets.UTF_8);
     }
 
     @Override
     public String key() {
-        return null;
+        return _key;
     }
 
     @Override
     public void buildStream(final Consumer<byte[]> onPart, final Consumer<Boolean> onCompleted) {
+        final CosyAgent agent = _getCosyAgent.get();
         log.info("start gen cosyvoice: {}", _text);
         final AtomicInteger idx = new AtomicInteger(0);
         final long startInMs = System.currentTimeMillis();
@@ -111,7 +133,7 @@ public class CosyStreamTask implements BuildStreamTask {
 
         StreamInputTts synthesizer = null;
         try {
-            synthesizer = _agent.buildCosyvoiceSynthesizer(listener);
+            synthesizer = agent.buildCosyvoiceSynthesizer(listener);
             if (null != _voice && !_voice.isEmpty()) {
                 synthesizer.setVoice(_voice);
             }
@@ -134,7 +156,7 @@ public class CosyStreamTask implements BuildStreamTask {
             }
 
             synthesizer.startStreamInputTts();
-            _agent.incConnected();
+            agent.incConnected();
             synthesizer.setMinSendIntervalMS(100);
             synthesizer.sendStreamInputTts(_text);
             //通知服务端流入文本数据发送完毕，阻塞等待服务端处理完成。
@@ -146,16 +168,17 @@ public class CosyStreamTask implements BuildStreamTask {
             if (null != synthesizer) {
                 synthesizer.close();
             }
-            _agent.decConnected();
-            _agent.decConnection();
+            agent.decConnected();
+            agent.decConnection();
         }
     }
 
-    private final CosyAgent _agent;
+    private final Supplier<CosyAgent> _getCosyAgent;
     private final Consumer<StreamInputTts> _onSynthesizer;
-    // private String _key;
+    private String _key;
     private String _text;
     private String _voice;
     private String _pitchRate;
     private String _speechRate;
+    private boolean _cache;
 }

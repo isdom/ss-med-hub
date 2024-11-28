@@ -28,4 +28,12 @@ public class VarsUtil {
             return defaultValue;
         }
     }
+
+    static public boolean extractValueAsBoolean(final String vars, final String name, boolean defaultValue) {
+        final String value = extractValue(vars, name);
+        if (value == null) {
+            return defaultValue;
+        }
+        return Boolean.parseBoolean(value);
+    }
 }
