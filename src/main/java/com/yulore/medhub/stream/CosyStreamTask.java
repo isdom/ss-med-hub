@@ -24,20 +24,25 @@ public class CosyStreamTask implements BuildStreamTask {
         final int leftBracePos = path.indexOf('{');
         if (leftBracePos == -1) {
             log.warn("{} missing vars, ignore", path);
-            return;
+            throw new RuntimeException(path + " missing vars.");
         }
         final int rightBracePos = path.indexOf('}');
         if (rightBracePos == -1) {
             log.warn("{} missing vars, ignore", path);
-            return;
+            throw new RuntimeException(path + " missing vars.");
         }
         final String vars = path.substring(leftBracePos + 1, rightBracePos);
 
+        _text = VarsUtil.extractValue(vars, "text");
+        if (_text == null) {
+            log.warn("{} missing text, ignore", path);
+            throw new RuntimeException(path + " missing text.");
+        }
+        _text = StringUnicodeEncoderDecoder.decodeUnicodeSequenceToString(_text);
         _voice = VarsUtil.extractValue(vars, "voice");
         _pitchRate = VarsUtil.extractValue(vars, "pitch_rate");
         _speechRate = VarsUtil.extractValue(vars, "speech_rate");
-        final String key = path.substring(rightBracePos + 1, path.lastIndexOf(".wav"));
-        _text = StringUnicodeEncoderDecoder.decodeUnicodeSequenceToString(key);
+        // final String key = path.substring(rightBracePos + 1, path.lastIndexOf(".wav"));
     }
 
     @Override

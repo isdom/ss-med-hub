@@ -134,15 +134,15 @@ public class CompositeStreamTask implements BuildStreamTask {
     }
 
     static private String cvo2tts(final CompositeVO cvo) {
-        // {type=tts,voice=xxx,url=ws://172.18.86.131:6789/playback,vars_playback_id=<uuid>,content_id=2088788,vars_start_timestamp=1732028219711854}
-            //          'StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(content)'.wav
-        return String.format("{type=tts,voice=%s}%s.wav", cvo.voice, StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(cvo.text));
+        // {type=tts,voice=xxx,url=ws://172.18.86.131:6789/playback,vars_playback_id=<uuid>,content_id=2088788,vars_start_timestamp=1732028219711854,text='StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(content)'}
+            //          unused.wav
+        return String.format("{type=tts,voice=%s,text=%s}tts.wav", cvo.voice, StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(cvo.text));
     }
 
     static private String cvo2cosy(final CompositeVO cvo) {
-        // eg: {type=cosy,voice=xxx,url=ws://172.18.86.131:6789/cosy,vars_playback_id=<uuid>,content_id=2088788,vars_start_timestamp=1732028219711854}
-        //          'StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(content)'.wav
-        return String.format("{type=cosy,voice=%s}%s.wav", cvo.voice, StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(cvo.text));
+        // eg: {type=cosy,voice=xxx,url=ws://172.18.86.131:6789/cosy,vars_playback_id=<uuid>,content_id=2088788,vars_start_timestamp=1732028219711854,text='StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(content)'}
+        //          unused.wav
+        return String.format("{type=cosy,voice=%s,text=%s}cosy.wav", cvo.voice, StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(cvo.text));
     }
 
     static private byte[] genWaveHeader() {
