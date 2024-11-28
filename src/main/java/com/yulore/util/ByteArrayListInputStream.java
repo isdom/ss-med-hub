@@ -151,26 +151,40 @@ public class ByteArrayListInputStream extends InputStream {
      * <code>len</code> is negative, or <code>len</code> is greater than 
      * <code>b.length - off</code>
      */
-    //	TODO, impl later
-//    public synchronized int read(byte b[], int off, int len) {
-//	if (b == null) {
-//	    throw new NullPointerException();
-//	} else if (off < 0 || len < 0 || len > b.length - off) {
-//	    throw new IndexOutOfBoundsException();
-//	}
-//	if (pos >= count) {
-//	    return -1;
-//	}
-//	if (pos + len > count) {
-//	    len = count - pos;
-//	}
-//	if (len <= 0) {
-//	    return 0;
-//	}
-//	System.arraycopy(buf, pos, b, off, len);
-//	pos += len;
-//	return len;
-//    }
+    public synchronized int read(final byte b[], int off, final int len) {
+        if (b == null) {
+            throw new NullPointerException();
+        } else if (off < 0 || len < 0 || len > b.length - off) {
+            throw new IndexOutOfBoundsException();
+        }
+        int leftLen = len;
+        while (this.idxOfBuf < bufs.size()) {
+            final byte[] buf = currentBuf();
+
+            if (this.posInBuf < buf.length) {
+                if (this.posInBuf + leftLen > buf.length) {
+                    leftLen = buf.length - this.posInBuf;
+                }
+
+                System.arraycopy(buf, this.posInBuf, b, off, leftLen);
+                off += leftLen;
+                this.posInBuf += leftLen;
+                this.totalPos += leftLen;
+                leftLen = len - leftLen;
+                if (leftLen == 0) {
+                    // buffer for read has been full-filled
+                    return len;
+                }
+            }
+            else {
+                this.idxOfBuf++;
+                this.posInBuf = 0;
+            }
+        }
+        int readed = len - leftLen;
+
+        return readed == 0 ? -1 : readed;
+    }
 
     /**
      * Skips <code>n</code> bytes of input from this input stream. Fewer 
@@ -184,17 +198,31 @@ public class ByteArrayListInputStream extends InputStream {
      * @param   n   the number of bytes to be skipped.
      * @return  the actual number of bytes skipped.
      */
-    //	TODO, impl later
-//    public synchronized long skip(long n) {
-//	if (pos + n > count) {
-//	    n = count - pos;
-//	}
-//	if (n < 0) {
-//	    return 0;
-//	}
-//	pos += n;
-//	return n;
-//    }
+    public synchronized long skip(final long n) {
+        long leftLen = n;
+        while (this.idxOfBuf < bufs.size()) {
+            final byte[] buf = currentBuf();
+
+            if (this.posInBuf < buf.length) {
+                if (this.posInBuf + leftLen > buf.length) {
+                    leftLen = buf.length - this.posInBuf;
+                }
+
+                this.posInBuf += leftLen;
+                this.totalPos += leftLen;
+                leftLen = n - leftLen;
+                if (leftLen == 0) {
+                    // buffer for read has been full-filled
+                    return n;
+                }
+            }
+            else {
+                this.idxOfBuf++;
+                this.posInBuf = 0;
+            }
+        }
+        return n - leftLen;
+    }
 
     /**
      * Returns the number of remaining bytes that can be read (or skipped over)
