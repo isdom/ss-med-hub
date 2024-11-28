@@ -3,6 +3,8 @@
  */
 package com.yulore.util;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
@@ -11,6 +13,7 @@ import java.util.List;
  * @author isdom
  *
  */
+@Slf4j
 public class ByteArrayListInputStream extends InputStream {
 
     /**
@@ -152,11 +155,13 @@ public class ByteArrayListInputStream extends InputStream {
      * <code>b.length - off</code>
      */
     public synchronized int read(final byte b[], int off, final int len) {
+        log.info("ByteArrayListInputStream: read: off:{}/len:{}", off, len);
         if (b == null) {
             throw new NullPointerException();
         } else if (off < 0 || len < 0 || len > b.length - off) {
             throw new IndexOutOfBoundsException();
         }
+        log.info("ByteArrayListInputStream: step1");
         int leftLen = len;
         while (this.idxOfBuf < bufs.size()) {
             final byte[] buf = currentBuf();
@@ -171,17 +176,21 @@ public class ByteArrayListInputStream extends InputStream {
                 this.posInBuf += leftLen;
                 this.totalPos += leftLen;
                 leftLen = len - leftLen;
+                log.info("ByteArrayListInputStream: step2: posInBuf:{}/off:{}/totalPos:{}/leftLen:{}", this.posInBuf, off, this.totalPos,leftLen);
                 if (leftLen == 0) {
                     // buffer for read has been full-filled
+                    log.info("ByteArrayListInputStream: step4");
                     return len;
                 }
             }
             else {
+                log.info("ByteArrayListInputStream: step3");
                 this.idxOfBuf++;
                 this.posInBuf = 0;
             }
         }
         int readed = len - leftLen;
+        log.info("ByteArrayListInputStream: step5: readed:{}", readed);
 
         return readed == 0 ? -1 : readed;
     }
