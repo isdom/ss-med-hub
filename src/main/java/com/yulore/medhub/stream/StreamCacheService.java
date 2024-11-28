@@ -83,7 +83,7 @@ public class StreamCacheService {
     static class LoadAndCahceTask {
         static final byte[] EMPTY_BYTES = new byte[0];
         private final Lock _lock = new ReentrantLock();
-        private byte[] _bytes = null;
+        private List<byte[]> _bytesList = null;
         private final List<Pair<Consumer<byte[]>, Consumer<Boolean>>> _consumers = new ArrayList<>();
         private final BuildStreamTask _souceTask;
 
@@ -110,7 +110,7 @@ public class StreamCacheService {
 
         public void onCached(final Consumer<byte[]> onPart, final Consumer<Boolean> onCompleted) {
             _lock.lock();
-            if (_bytes != null) {
+            if (_bytesList != null) {
                 _lock.unlock();
                 processConsumer(onPart, onCompleted);
             } else {
@@ -121,7 +121,10 @@ public class StreamCacheService {
 
         private void processConsumer(final Consumer<byte[]> onPart, final Consumer<Boolean> onCompleted) {
             try {
-                onPart.accept(_bytes);
+                for (byte[] bytes : _bytesList) {
+                    onPart.accept(_bytes);
+                }
+                // TODO: fix later for stream
                 onCompleted.accept(true);
             } catch (Exception ex) {
                 log.warn("exception when process consumer.accept: {}", ex.toString());
