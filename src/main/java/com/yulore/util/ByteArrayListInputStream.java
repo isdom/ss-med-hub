@@ -171,6 +171,7 @@ public class ByteArrayListInputStream extends InputStream {
                 this.posInBuf += readSize;
                 this.totalPos += readSize;
                 leftLen -= readSize;
+                readSize = leftLen;
                 if (leftLen == 0) {
                     // buffer for read has been full-filled
                     return len;
@@ -199,18 +200,19 @@ public class ByteArrayListInputStream extends InputStream {
      * @return  the actual number of bytes skipped.
      */
     public synchronized long skip(final long n) {
-        long leftLen = n, readSize = leftLen;
+        long leftLen = n, skipSize = leftLen;
         while (this.idxOfBuf < bufs.size()) {
             final byte[] buf = currentBuf();
 
             if (this.posInBuf < buf.length) {
-                if (this.posInBuf + readSize > buf.length) {
-                    readSize = buf.length - this.posInBuf;
+                if (this.posInBuf + skipSize > buf.length) {
+                    skipSize = buf.length - this.posInBuf;
                 }
 
-                this.posInBuf += (int)readSize;
-                this.totalPos += (int)readSize;
-                leftLen -= readSize;
+                this.posInBuf += (int)skipSize;
+                this.totalPos += (int)skipSize;
+                leftLen -= skipSize;
+                skipSize = leftLen;
                 if (leftLen == 0) {
                     return n;
                 }
