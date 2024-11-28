@@ -1,6 +1,5 @@
 package com.yulore.medhub.stream;
 
-import com.google.common.primitives.Bytes;
 import io.netty.util.NettyRuntime;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.extern.slf4j.Slf4j;
@@ -15,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
@@ -81,40 +80,67 @@ public class StreamCacheService {
     }
 
     static class LoadAndCahceTask {
-        static final byte[] EMPTY_BYTES = new byte[0];
         private final Lock _lock = new ReentrantLock();
-        private List<byte[]> _bytesList = null;
+        private final List<byte[]> _bytesList = new ArrayList<>();
+        final private AtomicBoolean _completed = new AtomicBoolean(false);
         private final List<Pair<Consumer<byte[]>, Consumer<Boolean>>> _consumers = new ArrayList<>();
-        private final BuildStreamTask _souceTask;
+        private final BuildStreamTask _sourceTask;
 
         public LoadAndCahceTask(final BuildStreamTask sourceTask) {
-            _souceTask = sourceTask;
+            _sourceTask = sourceTask;
         }
 
         public void start() {
-            final AtomicReference<byte[]> bytesRef = new AtomicReference<>(EMPTY_BYTES);
-            _souceTask.buildStream(
-                    (bytes) -> bytesRef.set(Bytes.concat(bytesRef.get(), bytes)),
+            _sourceTask.buildStream(
+                    (bytes) -> {
+                        try {
+                            _lock.lock();
+                            _bytesList.add(bytes);
+                            for (Pair<Consumer<byte[]>, Consumer<Boolean>> consumer : _consumers) {
+                                // feed new received bytes to all consumers
+                                try {
+                                    consumer.getLeft().accept(bytes);
+                                } catch (Exception ignored) {
+                                }
+                            }
+                        } finally {
+                            _lock.unlock();
+                        }
+                    },
                     (isOK) -> {
-                        List<Pair<Consumer<byte[]>, Consumer<Boolean>>> todo;
-                        _lock.lock();
-                        _bytes = bytesRef.get();
-                        todo = new ArrayList<>(_consumers);
-                        _consumers.clear();
-                        _lock.unlock();
-                        for (Pair<Consumer<byte[]>, Consumer<Boolean>> consumer : todo) {
-                            processConsumer(consumer.getLeft(), consumer.getRight());
+                        if (_completed.compareAndSet(false, true)) {
+                            List<Pair<Consumer<byte[]>, Consumer<Boolean>>> todo;
+                            _lock.lock();
+                            todo = new ArrayList<>(_consumers);
+                            _consumers.clear();
+                            _lock.unlock();
+                            for (Pair<Consumer<byte[]>, Consumer<Boolean>> consumer : todo) {
+                                try {
+                                    consumer.getRight().accept(true);
+                                } catch (Exception ignored) {
+                                }
+                            }
                         }
                     });
         }
 
         public void onCached(final Consumer<byte[]> onPart, final Consumer<Boolean> onCompleted) {
-            _lock.lock();
-            if (_bytesList != null) {
-                _lock.unlock();
+            if (_completed.get()) {
+                // has completed, lock free and feed all bytes list via onPart and call onCompleted
                 processConsumer(onPart, onCompleted);
-            } else {
-                _consumers.add(Pair.of(onPart, onCompleted));
+                return;
+            }
+
+            // not completed
+            try {
+                _lock.lock();
+                // inside lock
+                processConsumer(onPart, onCompleted);
+                if (!_completed.get()) {
+                    // check again isComplete, if not, register consumers for later call
+                    _consumers.add(Pair.of(onPart, onCompleted));
+                }
+            } finally {
                 _lock.unlock();
             }
         }
@@ -122,10 +148,11 @@ public class StreamCacheService {
         private void processConsumer(final Consumer<byte[]> onPart, final Consumer<Boolean> onCompleted) {
             try {
                 for (byte[] bytes : _bytesList) {
-                    onPart.accept(_bytes);
+                    onPart.accept(bytes);
                 }
-                // TODO: fix later for stream
-                onCompleted.accept(true);
+                if (_completed.get()) {
+                    onCompleted.accept(true);
+                }
             } catch (Exception ex) {
                 log.warn("exception when process consumer.accept: {}", ex.toString());
             }
