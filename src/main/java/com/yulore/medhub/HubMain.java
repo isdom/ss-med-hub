@@ -2,6 +2,7 @@ package com.yulore.medhub;
 
 import com.alibaba.nls.client.protocol.InputFormatEnum;
 import com.alibaba.nls.client.protocol.NlsClient;
+import com.alibaba.nls.client.protocol.OutputFormatEnum;
 import com.alibaba.nls.client.protocol.SampleRateEnum;
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriber;
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriberListener;
@@ -11,6 +12,7 @@ import com.aliyun.oss.OSSClientBuilder;
 import com.aliyun.oss.model.OSSObject;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.medhub.nls.CosyAgent;
 import com.yulore.medhub.stream.*;
 import com.yulore.medhub.stream.StreamCacheService;
@@ -405,11 +407,13 @@ public class HubMain {
     private BuildStreamTask getTaskOf(final String path) {
         try {
             if (path.contains("type=cp")) {
-                return new CompositeStreamTask(path,
-                        (pp) -> _scsService.asCache(new OSSStreamTask(pp, _ossClient)),
-                        (bst) -> _scsService.asCache(bst),
-                        this::selectTTSAgent,
-                        this::selectCosyAgent);
+                return new CompositeStreamTask(path, (cvo) -> {
+                    final BuildStreamTask bst = cvo2bst(cvo);
+                    if (bst != null) {
+                        return bst.key() != null ? _scsService.asCache(bst) : bst;
+                    }
+                    return null;
+                });
             } else if (path.contains("type=tts")) {
                 final BuildStreamTask bst = new TTSStreamTask(path, this::selectTTSAgent, null);
                 return bst.key() != null ? _scsService.asCache(bst) : bst;
@@ -417,12 +421,61 @@ public class HubMain {
                 final BuildStreamTask bst = new CosyStreamTask(path, this::selectCosyAgent, null);
                 return bst.key() != null ? _scsService.asCache(bst) : bst;
             } else {
-                return _scsService.asCache(new OSSStreamTask(path, _ossClient));
+                return _scsService.asCache(new OSSStreamTask(path, _ossClient, false));
             }
         } catch (Exception ex) {
             log.warn("getTaskOf failed: {}", ex.toString());
             return null;
         }
+    }
+
+    private BuildStreamTask cvo2bst(final CompositeVO cvo) {
+        if (cvo.getBucket() != null) {
+            log.info("support CVO => OSS Stream: {}", cvo);
+            return new OSSStreamTask("{bucket=" + cvo.getBucket() + "}" + cvo.getObject(), _ossClient, true);
+        } else if (cvo.getType() != null && cvo.getType().equals("tts")) {
+            log.info("support CVO => TTS Stream: {}", cvo);
+            return genTtsStreamTask(cvo);
+        } else if (cvo.getType() != null && cvo.getType().equals("cosy")) {
+            log.info("support CVO => Cosy Stream: {}", cvo);
+            return genCosyStreamTask(cvo);
+        } else {
+            log.info("not support cvo: {}, skip", cvo);
+            return null;
+        }
+    }
+
+    private BuildStreamTask genCosyStreamTask(final CompositeVO cvo) {
+        return new CosyStreamTask(cvo2cosy(cvo), this::selectCosyAgent, (synthesizer) -> {
+            synthesizer.setVolume(50);
+            //设置返回音频的编码格式
+            synthesizer.setFormat(OutputFormatEnum.PCM);
+            //设置返回音频的采样率。
+            synthesizer.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
+        });
+    }
+
+    private BuildStreamTask genTtsStreamTask(final CompositeVO cvo) {
+        return new TTSStreamTask(cvo2tts(cvo), this::selectTTSAgent, (synthesizer) -> {
+            //设置返回音频的编码格式
+            synthesizer.setFormat(OutputFormatEnum.PCM);
+            //设置返回音频的采样率
+            synthesizer.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
+        });
+    }
+
+    static private String cvo2tts(final CompositeVO cvo) {
+        // {type=tts,voice=xxx,url=ws://172.18.86.131:6789/playback,vars_playback_id=<uuid>,content_id=2088788,vars_start_timestamp=1732028219711854,text='StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(content)'}
+        //          unused.wav
+        return String.format("{type=tts,cache=%s,voice=%s,text=%s}tts.wav", cvo.getCache(), cvo.getVoice(),
+                StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(cvo.getText()));
+    }
+
+    static private String cvo2cosy(final CompositeVO cvo) {
+        // eg: {type=cosy,voice=xxx,url=ws://172.18.86.131:6789/cosy,vars_playback_id=<uuid>,content_id=2088788,vars_start_timestamp=1732028219711854,text='StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(content)'}
+        //          unused.wav
+        return String.format("{type=cosy,cache=%s,voice=%s,text=%s}cosy.wav", cvo.getCache(), cvo.getVoice(),
+                StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(cvo.getText()));
     }
 
     private void handleGetFileLenCommand(final HubCommandVO cmd, final WebSocket webSocket) {

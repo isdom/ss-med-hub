@@ -5,14 +5,18 @@ import com.aliyun.oss.OSS;
 import com.aliyun.oss.model.OSSObject;
 import lombok.extern.slf4j.Slf4j;
 
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.UnsupportedAudioFileException;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.function.Consumer;
 
 @Slf4j
 public class OSSStreamTask implements BuildStreamTask {
-    public OSSStreamTask(final String path, final OSS ossClient) {
+    public OSSStreamTask(final String path, final OSS ossClient, final boolean removeWavHdr) {
         _ossClient = ossClient;
+        _removeWavHdr = removeWavHdr;
         // eg: {bucket=ylhz-aicall,url=ws://172.18.86.131:6789/playback,vars_playback_id=<uuid>,content_id=2088788,vars_start_timestamp=1732028219711854}
         //          aispeech/dd_app_sb_3_0/c264515130674055869c16fcc2458109.wav
         final int leftBracePos = path.indexOf('{');
@@ -48,9 +52,17 @@ public class OSSStreamTask implements BuildStreamTask {
         byte[] bytes;
         final long startInMs = System.currentTimeMillis();
         try (final OSSObject ossObject = _ossClient.getObject(_bucketName, _objectName);
-             final ByteArrayOutputStream os = new ByteArrayOutputStream()) {
-            ossObject.getObjectContent().transferTo(os);
-            bytes = os.toByteArray();
+             final ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
+            if (_removeWavHdr) {
+                try {
+                    AudioSystem.getAudioInputStream(ossObject.getObjectContent()).transferTo(bos);
+                } catch (UnsupportedAudioFileException ex) {
+                    log.warn("failed to extract pcm from wav: {}", ex.toString());
+                }
+            } else {
+                ossObject.getObjectContent().transferTo(bos);
+            }
+            bytes = bos.toByteArray();
             log.info("and save content size {}, total cost: {} ms", bytes.length, System.currentTimeMillis() - startInMs);
             onPart.accept(bytes);
             onCompleted.accept(true);
@@ -65,4 +77,5 @@ public class OSSStreamTask implements BuildStreamTask {
     private String _bucketName;
     private String _objectName;
     private String _key;
+    private boolean _removeWavHdr;
 }
