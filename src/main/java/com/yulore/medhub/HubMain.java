@@ -216,44 +216,50 @@ public class HubMain {
 
     private void initNlsAgents(final NlsClient client) {
         _asrAgents.clear();
-        for (Map.Entry<String, String> entry : _all_asr.entrySet()) {
-            log.info("asr: {} / {}", entry.getKey(), entry.getValue());
-            final String[] values = entry.getValue().split(" ");
-            log.info("asr values detail: {}", Arrays.toString(values));
-            final ASRAgent agent = ASRAgent.parse(entry.getKey(), entry.getValue());
-            if (null == agent) {
-                log.warn("asr init failed by: {}/{}", entry.getKey(), entry.getValue());
-            } else {
-                agent.setClient(client);
-                _asrAgents.add(agent);
+        if (_all_asr != null) {
+            for (Map.Entry<String, String> entry : _all_asr.entrySet()) {
+                log.info("asr: {} / {}", entry.getKey(), entry.getValue());
+                final String[] values = entry.getValue().split(" ");
+                log.info("asr values detail: {}", Arrays.toString(values));
+                final ASRAgent agent = ASRAgent.parse(entry.getKey(), entry.getValue());
+                if (null == agent) {
+                    log.warn("asr init failed by: {}/{}", entry.getKey(), entry.getValue());
+                } else {
+                    agent.setClient(client);
+                    _asrAgents.add(agent);
+                }
             }
         }
         log.info("asr agent init, count:{}", _asrAgents.size());
 
-        for (Map.Entry<String, String> entry : _all_tts.entrySet()) {
-            log.info("tts: {} / {}", entry.getKey(), entry.getValue());
-            final String[] values = entry.getValue().split(" ");
-            log.info("tts values detail: {}", Arrays.toString(values));
-            final TTSAgent agent = TTSAgent.parse(entry.getKey(), entry.getValue());
-            if (null == agent) {
-                log.warn("tts init failed by: {}/{}", entry.getKey(), entry.getValue());
-            } else {
-                agent.setClient(client);
-                _ttsAgents.add(agent);
+        if (_all_tts != null) {
+            for (Map.Entry<String, String> entry : _all_tts.entrySet()) {
+                log.info("tts: {} / {}", entry.getKey(), entry.getValue());
+                final String[] values = entry.getValue().split(" ");
+                log.info("tts values detail: {}", Arrays.toString(values));
+                final TTSAgent agent = TTSAgent.parse(entry.getKey(), entry.getValue());
+                if (null == agent) {
+                    log.warn("tts init failed by: {}/{}", entry.getKey(), entry.getValue());
+                } else {
+                    agent.setClient(client);
+                    _ttsAgents.add(agent);
+                }
             }
         }
         log.info("tts agent init, count:{}", _ttsAgents.size());
 
-        for (Map.Entry<String, String> entry : _all_cosy.entrySet()) {
-            log.info("cosy: {} / {}", entry.getKey(), entry.getValue());
-            final String[] values = entry.getValue().split(" ");
-            log.info("cosy values detail: {}", Arrays.toString(values));
-            final CosyAgent agent = CosyAgent.parse(entry.getKey(), entry.getValue());
-            if (null == agent) {
-                log.warn("cosy init failed by: {}/{}", entry.getKey(), entry.getValue());
-            } else {
-                agent.setClient(client);
-                _cosyAgents.add(agent);
+        if (_all_cosy != null) {
+            for (Map.Entry<String, String> entry : _all_cosy.entrySet()) {
+                log.info("cosy: {} / {}", entry.getKey(), entry.getValue());
+                final String[] values = entry.getValue().split(" ");
+                log.info("cosy values detail: {}", Arrays.toString(values));
+                final CosyAgent agent = CosyAgent.parse(entry.getKey(), entry.getValue());
+                if (null == agent) {
+                    log.warn("cosy init failed by: {}/{}", entry.getKey(), entry.getValue());
+                } else {
+                    agent.setClient(client);
+                    _cosyAgents.add(agent);
+                }
             }
         }
         log.info("cosy agent init, count:{}", _cosyAgents.size());
