@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.locks.Lock;
@@ -16,7 +17,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 @Slf4j
-@ToString(of={"_path", "_sessionId", "_contentId", "_playIdx"})
+@ToString(of={"_sessionId", "_contentId", "_playIdx"})
 public class StreamSession {
     @AllArgsConstructor
     static public class EventContext {
@@ -26,29 +27,38 @@ public class StreamSession {
         public StreamSession session;
     }
 
-    public StreamSession(final Consumer<EventContext> doSendEvent, final String path, final String sessionId, final String contentId, final String playIdx) {
+    @AllArgsConstructor
+    static public class DataContext {
+        public ByteBuffer data;
+        public long start;
+        public StreamSession session;
+    }
+
+    public StreamSession(final Consumer<EventContext> doSendEvent, final Consumer<DataContext> doSendData,
+                         final String path, final String sessionId, final String contentId, final String playIdx) {
         _doSendEvent = doSendEvent;
+        _doSendData = doSendData;
         _path = path;
         _sessionId = sessionId;
         _contentId = contentId;
         _playIdx = playIdx;
     }
-//    public StreamSession(final InputStream is, final int length) {
-//        _is = is;
-//        _length = length;
-//    }
 
     public void sendEvent(final long startInMs, final String eventName, final Object payload) {
         _doSendEvent.accept(new EventContext(eventName, payload, startInMs, this));
     }
 
+    public void sendData(final long startInMs, final ByteBuffer data) {
+        _doSendData.accept(new DataContext(data, startInMs, this));
+    }
+
     public void lock() {
         _lock.lock();
-        log.info("lock session: {}", _lock);
+        // log.info("lock session: {}", _lock);
     }
 
     public void unlock() {
-        log.info("unlock session: {}", _lock);
+        // log.info("unlock session: {}", _lock);
         _lock.unlock();
     }
 
@@ -145,6 +155,7 @@ public class StreamSession {
     final private String _contentId;
     final private String _playIdx;
     final private Consumer<EventContext> _doSendEvent;
+    final private Consumer<DataContext> _doSendData;
 
     private int _length = 0;
     private int _pos = 0;

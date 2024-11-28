@@ -52,6 +52,7 @@ import java.util.function.Consumer;
 @Slf4j
 @Component
 public class HubMain {
+    public static final byte[] EMPTY_BYTES = new byte[0];
     @Value("${ws_server.host}")
     private String _ws_host;
 
@@ -368,17 +369,24 @@ public class HubMain {
             log.info("sendEvent: {} send => {}, {}, cost {} ms",
                     ctx.session, ctx.name, ctx.payload, System.currentTimeMillis() - ctx.start);
         };
+        Consumer<StreamSession.DataContext> sendData = (ctx) -> {
+            final int size = ctx.data.remaining();
+            webSocket.send(ctx.data);
+            log.info("sendData: {} send => {} bytes, cost {} ms",
+                    ctx.session, size, System.currentTimeMillis() - ctx.start);
+        };
         final int delayInMs = VarsUtil.extractValueAsInteger(path, "test_delay", 0);
         if (delayInMs > 0) {
+            final Consumer<StreamSession.EventContext> performSendEvent = sendEvent;
             sendEvent = (ctx) -> {
-                _scheduledExecutor.schedule(()->{
-                    HubEventVO.sendEvent(webSocket, ctx.name, ctx.payload);
-                    log.info("sendEvent: {} send => {}, {}, cost {} ms",
-                            ctx.session, ctx.name, ctx.payload, System.currentTimeMillis() - ctx.start);
-                }, delayInMs, TimeUnit.MILLISECONDS);
+                _scheduledExecutor.schedule(()->performSendEvent.accept(ctx), delayInMs, TimeUnit.MILLISECONDS);
+            };
+            final Consumer<StreamSession.DataContext> performSendData = sendData;
+            sendData = (ctx) -> {
+                _scheduledExecutor.schedule(()->performSendData.accept(ctx), delayInMs, TimeUnit.MILLISECONDS);
             };
         }
-        final StreamSession _ss = new StreamSession(sendEvent, path, sessionId, contentId, playIdx);
+        final StreamSession _ss = new StreamSession(sendEvent, sendData, path, sessionId, contentId, playIdx);
         webSocket.setAttachment(_ss);
 
         _ss.onDataChange((ss) -> {
@@ -454,11 +462,12 @@ public class HubMain {
     }
 
     private void handleFileReadCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        final long startInMs = System.currentTimeMillis();
         final int count = Integer.parseInt(cmd.getPayload().get("count"));
         final StreamSession ss = webSocket.getAttachment();
         if (ss == null) {
             log.warn("handleFileReadCommand: file read => count: {}, and ss is null, send 0 bytes to rms client", count);
-            webSocket.send(new byte[0]);
+            webSocket.send(EMPTY_BYTES);
             return;
         }
         log.info("file read => count: {}/ss.length:{}/ss.tell:{}", count, ss.length(), ss.tell());
@@ -487,19 +496,19 @@ public class HubMain {
          */
         if (ss.streaming() && count <= 12 && ss.tell() >= 1024 ) {
             // streaming, and sndfile lib try to jump to eof
-            webSocket.send(new byte[0]);
+            ss.sendData(startInMs, ByteBuffer.wrap(EMPTY_BYTES));
             log.info("try to read: {} bytes from: {} pos when length: {}, send 0 bytes to rms client", count, ss.tell(), ss.length());
             return;
         }
 
-        readLaterOrNow(ss, count, webSocket);
+        readLaterOrNow(startInMs, ss, count);
     }
 
-    private static boolean readLaterOrNow(final StreamSession ss, final int count4read, final WebSocket webSocket) {
+    private static boolean readLaterOrNow(final long startInMs, final StreamSession ss, final int count4read) {
         try {
             ss.lock();
             if (ss.needMoreData(count4read)) {
-                ss.onDataChange((ignore) -> readLaterOrNow(ss, count4read, webSocket));
+                ss.onDataChange((ignore) -> readLaterOrNow(startInMs, ss, count4read));
                 log.info("need more data for read: {} bytes, read on append data.", count4read);
                 return false;
             }
@@ -513,15 +522,15 @@ public class HubMain {
             final int readed = ss.genInputStream().read(bytes4read);
             if (readed <= 0) {
                 log.info("file read => request read count: {}, no_more_data read", count4read);
-                webSocket.send(new byte[0]);
+                ss.sendData(startInMs, ByteBuffer.wrap(EMPTY_BYTES));
                 return true;
             }
             // readed > 0
             ss.seekFromStart(ss.tell() + readed);
             if (readed == bytes4read.length) {
-                webSocket.send(bytes4read);
+                ss.sendData(startInMs, ByteBuffer.wrap(bytes4read));
             } else {
-                webSocket.send(ByteBuffer.wrap(bytes4read, 0, readed));
+                ss.sendData(startInMs, ByteBuffer.wrap(bytes4read, 0, readed));
             }
             log.info("file read => request read count: {}, actual read bytes: {}", count4read, readed);
         } catch (IOException ex) {

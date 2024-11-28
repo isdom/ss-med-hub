@@ -39,11 +39,11 @@ public class MediaSession {
 
     public void lock() {
         _lock.lock();
-        log.info("lock session: {}", _lock);
+        // log.info("lock session: {}", _lock);
     }
 
     public void unlock() {
-        log.info("unlock session: {}", _lock);
+        // log.info("unlock session: {}", _lock);
         _lock.unlock();
     }
 
