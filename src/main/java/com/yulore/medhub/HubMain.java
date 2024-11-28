@@ -626,6 +626,7 @@ public class HubMain {
     }
 
     private void playbackByFile(final String file, final HubCommandVO cmd, final MediaSession session, final WebSocket webSocket) {
+        final String str_interval = cmd.getPayload().get("interval");
         final int prefixBegin = file.indexOf(_oss_match_prefix);
         if (-1 == prefixBegin) {
             log.warn("handlePlaybackCommand: can't match prefix for {}, ignore playback command!", file);
@@ -642,7 +643,7 @@ public class HubMain {
                 final AudioFormat format = audioInputStream.getFormat();
 
                 // interval = 20 ms
-                int interval = 20;
+                int interval = str_interval != null ? Integer.parseInt(str_interval) : 20;
 
                 log.info("playbackByFile: sample rate: {}/interval: {}/channels: {}", format.getSampleRate(), interval, format.getChannels());
                 session.stopCurrentAndStartPlay(new PlayPCMTask(id, 0,

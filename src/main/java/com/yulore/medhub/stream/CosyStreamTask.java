@@ -63,7 +63,7 @@ public class CosyStreamTask implements BuildStreamTask {
         sb.append(":");
         sb.append(_text);
 
-        return "tts-" + _MD5.hashString(sb.toString(), Charsets.UTF_8);
+        return "cosy-" + _MD5.hashString(sb.toString(), Charsets.UTF_8);
     }
 
     @Override
