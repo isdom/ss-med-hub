@@ -53,14 +53,15 @@ public class OSSStreamTask implements BuildStreamTask {
         final long startInMs = System.currentTimeMillis();
         try (final OSSObject ossObject = _ossClient.getObject(_bucketName, _objectName);
              final ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
+            ossObject.getObjectContent().transferTo(bos);
             if (_removeWavHdr) {
                 try {
-                    AudioSystem.getAudioInputStream(ossObject.getObjectContent()).transferTo(bos);
+                    final ByteArrayInputStream bis = new ByteArrayInputStream(bos.toByteArray());
+                    bos.reset();
+                    AudioSystem.getAudioInputStream(bis).transferTo(bos);
                 } catch (UnsupportedAudioFileException ex) {
                     log.warn("failed to extract pcm from wav: {}", ex.toString());
                 }
-            } else {
-                ossObject.getObjectContent().transferTo(bos);
             }
             bytes = bos.toByteArray();
             log.info("and save content size {}, total cost: {} ms", bytes.length, System.currentTimeMillis() - startInMs);
@@ -77,5 +78,5 @@ public class OSSStreamTask implements BuildStreamTask {
     private String _bucketName;
     private String _objectName;
     private String _key;
-    private boolean _removeWavHdr;
+    private final boolean _removeWavHdr;
 }
