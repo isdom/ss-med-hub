@@ -153,7 +153,7 @@ public class HubMain {
                                 webSocket.getRemoteSocketAddress(),
                                 webSocket.getLocalSocketAddress(),
                                 clientHandshake.getResourceDescriptor());
-                        if (_match_resource.equals(clientHandshake.getResourceDescriptor())) {
+                        if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_resource)) {
                             // init session attach with webSocket
                             final String sessionId = clientHandshake.getFieldValue("x-sessionid");
                             final MediaSession session = new MediaSession(sessionId, _test_enable_delay, _test_delay_ms,
