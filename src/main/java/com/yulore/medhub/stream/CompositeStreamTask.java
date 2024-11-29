@@ -60,15 +60,16 @@ public class CompositeStreamTask implements BuildStreamTask {
     public void buildStream(final Consumer<byte[]> onPart, final Consumer<Boolean> onCompleted) {
         // first: feed wav header
         onPart.accept(genWaveHeader());
+        // then: feed stream generate by bst one-by-one, previous 's onCompleted then start next generate
         doBuildStream(onPart, onCompleted);
     }
 
     public void doBuildStream(final Consumer<byte[]> onPart, final Consumer<Boolean> onCompleted) {
         while (!_cvos.isEmpty()) {
-            final CompositeVO current = _cvos.remove(0);
-            final BuildStreamTask bst = _cvo2bst.apply(current);
+            final BuildStreamTask bst = _cvo2bst.apply(_cvos.remove(0));
             if (bst != null) {
                 bst.buildStream(onPart, (isOK) -> doBuildStream(onPart, onCompleted));
+                return;
             }
         }
         onCompleted.accept(true);
