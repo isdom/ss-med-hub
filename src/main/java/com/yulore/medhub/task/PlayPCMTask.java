@@ -33,6 +33,9 @@ public class PlayPCMTask {
 
     int _lenInBytes;
     final AtomicReference<ScheduledFuture<?>> _currentFuture = new AtomicReference<>(null);
+    final AtomicInteger _currentIdx = new AtomicInteger(0);
+    private long _startTimestamp;
+    private long _pauseTimestamp;
 
     final AtomicBoolean _started = new AtomicBoolean(false);
     final AtomicBoolean _stopped = new AtomicBoolean(false);
@@ -47,28 +50,30 @@ public class PlayPCMTask {
         }
         if (_started.compareAndSet(false, true)) {
             HubEventVO.sendEvent(_webSocket, "PlaybackStart", new PayloadPlaybackStart(_id,"pcm", _sampleInfo.sampleRate, _sampleInfo.interval, _sampleInfo.channels));
-            schedule(1, System.currentTimeMillis());
+            _startTimestamp = System.currentTimeMillis();
+            schedule(1 );
         } else {
             log.warn("pcm task started, ignore multi-call start()");
         }
     }
 
-    private void schedule(final int idx, final long startTimestamp) {
+    private void schedule(final int idx) {
         if (_stopped.get()) {
             // ignore if stopped flag set
             return;
         }
         try {
+            _currentIdx.set(idx);
             ScheduledFuture<?> current = null;
             final byte[] bytes = new byte[_lenInBytes];
             final int readSize = _is.read(bytes);
             // log.info("PlayPCMTask {}: schedule read {} bytes", idx, readSize);
-            final long delay = startTimestamp + (long) _sampleInfo.interval * idx - System.currentTimeMillis();
+            final long delay = _startTimestamp + (long) _sampleInfo.interval * idx - System.currentTimeMillis();
             if (readSize == _lenInBytes) {
                 current = _executor.schedule(() -> {
                     _webSocket.send(bytes);
                     _samples.addAndGet(_sampleInfo.sampleRate / (1000 / _sampleInfo.interval));
-                    schedule(idx+1, startTimestamp);
+                    schedule(idx+1);
                 },  delay, TimeUnit.MILLISECONDS);
             } else {
                 // _is.close();
@@ -88,6 +93,27 @@ public class PlayPCMTask {
         } catch (IOException ex) {
             log.warn("schedule: {}", ex.toString());
         }
+    }
+
+    public void pause() {
+        if (_stopped.get()) {
+            // ignore if stopped flag set
+            return;
+        }
+        final ScheduledFuture<?> current = _currentFuture.getAndSet(null);
+        if (null != current) {
+            current.cancel(true);
+        }
+        _pauseTimestamp = System.currentTimeMillis();
+    }
+
+    public void resume() {
+        if (_stopped.get()) {
+            // ignore if stopped flag set
+            return;
+        }
+        _startTimestamp += System.currentTimeMillis() - _pauseTimestamp;
+        schedule(_currentIdx.get());
     }
 
     public void stop() {

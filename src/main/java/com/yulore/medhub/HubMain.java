@@ -340,6 +340,10 @@ public class HubMain {
             _sessionExecutor.submit(()-> handlePlayTTSCommand(cmd, webSocket));
         } else if ("StopPlayback".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handleStopPlaybackCommand(cmd, webSocket));
+        } else if ("PausePlayback".equals(cmd.getHeader().get("name"))) {
+            _sessionExecutor.submit(()-> handlePausePlaybackCommand(cmd, webSocket));
+        } else if ("ResumePlayback".equals(cmd.getHeader().get("name"))) {
+            _sessionExecutor.submit(()-> handleResumePlaybackCommand(cmd, webSocket));
         } else if ("OpenStream".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handleOpenStreamCommand(cmd, webSocket));
         } else if ("GetFileLen".equals(cmd.getHeader().get("name"))) {
@@ -615,15 +619,6 @@ public class HubMain {
         ss.sendEvent(startInMs, "FileTellResult", new PayloadFileSeekResult(ss.tell()));
     }
 
-    private void handleStopPlaybackCommand(final HubCommandVO cmd, final WebSocket webSocket) {
-        final MediaSession session = webSocket.getAttachment();
-        if (session == null) {
-            log.error("StopPlayback: {} without Session, abort", webSocket.getRemoteSocketAddress());
-            return;
-        }
-        session.stopCurrentAnyway();
-    }
-
     private void handlePlayTTSCommand(final HubCommandVO cmd, final WebSocket webSocket) {
         final String text = cmd.getPayload().get("text");
         if (text == null ) {
@@ -681,6 +676,33 @@ public class HubMain {
         } else {
             playbackById(Integer.parseInt(playbackId), cmd, session, webSocket);
         }
+    }
+
+    private void handleStopPlaybackCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        final MediaSession session = webSocket.getAttachment();
+        if (session == null) {
+            log.error("StopPlayback: {} without Session, abort", webSocket.getRemoteSocketAddress());
+            return;
+        }
+        session.stopCurrentAnyway();
+    }
+
+    private void handlePausePlaybackCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        final MediaSession session = webSocket.getAttachment();
+        if (session == null) {
+            log.error("PausePlayback: {} without Session, abort", webSocket.getRemoteSocketAddress());
+            return;
+        }
+        session.pauseCurrentAnyway();
+    }
+
+    private void handleResumePlaybackCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        final MediaSession session = webSocket.getAttachment();
+        if (session == null) {
+            log.error("ResumePlayback: {} without Session, abort", webSocket.getRemoteSocketAddress());
+            return;
+        }
+        session.resumeCurrentAnyway();
     }
 
     private void playbackByFile(final String file, final HubCommandVO cmd, final MediaSession session, final WebSocket webSocket) {

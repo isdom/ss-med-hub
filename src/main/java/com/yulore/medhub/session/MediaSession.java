@@ -182,6 +182,20 @@ public class MediaSession {
         }
     }
 
+    public void pauseCurrentAnyway() {
+        final PlayPCMTask current = _playingTask.get();
+        if (current != null) {
+            current.pause();
+        }
+    }
+
+    public void resumeCurrentAnyway() {
+        final PlayPCMTask current = _playingTask.get();
+        if (current != null) {
+            current.resume();
+        }
+    }
+
     public int addPlaybackStream(final byte[] bytes) {
         final int id = _playbackId.incrementAndGet();
         _id2stream.put(id, bytes);
