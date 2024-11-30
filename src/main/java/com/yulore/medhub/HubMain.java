@@ -740,6 +740,7 @@ public class HubMain {
     }
 
     private void playbackById(final int id, final HubCommandVO cmd, final MediaSession session, final WebSocket webSocket) {
+        final String str_interval = cmd.getPayload().get("interval");
         final int samples = getIntValueByName(cmd.getPayload(), "samples", 0);
         try {
             final byte[] bytes = session.getPlaybackStream(id);
@@ -752,7 +753,7 @@ public class HubMain {
             final AudioFormat format = audioInputStream.getFormat();
 
             // interval = 20 ms
-            int interval = 20;
+            int interval = str_interval != null ? Integer.parseInt(str_interval) : 20;
 
             log.info("playbackById: sample rate: {}/interval: {}/channels: {}/samples: {}", format.getSampleRate(), interval, format.getChannels(), samples);
             final SampleInfo sampleInfo = new SampleInfo((int) format.getSampleRate(), interval, format.getSampleSizeInBits(), format.getChannels());
