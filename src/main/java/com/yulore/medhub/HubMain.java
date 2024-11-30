@@ -39,6 +39,7 @@ import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
+import javax.print.attribute.standard.Media;
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
@@ -50,6 +51,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 @Slf4j
 @Component
@@ -197,8 +199,15 @@ public class HubMain {
 
                     @Override
                     public void onMessage(final WebSocket webSocket, final ByteBuffer bytes) {
-                        // log.info("received binary message from {}: isDirect: {}", webSocket.getRemoteSocketAddress(), bytes.isDirect());
-                        handleASRData(bytes, webSocket);
+                        final Object attachment = webSocket.getAttachment();
+                        if (attachment instanceof MediaSession session) {
+                            handleASRData(bytes, session);
+                            return;
+                        } else if (attachment instanceof StreamSession session) {
+                            _sessionExecutor.submit(()-> handleFileWriteCommand(bytes, session, webSocket));
+                        }
+                        log.error("onMessage(Binary): {} without any Session, ignore", webSocket.getRemoteSocketAddress());
+
                     }
 
                     @Override
@@ -315,12 +324,7 @@ public class HubMain {
         }
     }
 
-    private void handleASRData(final ByteBuffer bytes, final WebSocket webSocket) {
-        final MediaSession session = webSocket.getAttachment();
-        if (session == null) {
-            log.error("handleASRData: {} without Session, abort", webSocket.getRemoteSocketAddress());
-            return;
-        }
+    private void handleASRData(final ByteBuffer bytes, final MediaSession session) {
         if (session.transmit(bytes)) {
             // transmit success
             if ((session.transmitCount() % 50) == 0) {
@@ -605,6 +609,11 @@ public class HubMain {
             ss.unlock();
         }
         return true;
+    }
+
+    private void handleFileWriteCommand(final ByteBuffer bytes, final StreamSession ss, final WebSocket webSocket) {
+        final long startInMs = System.currentTimeMillis();
+        ss.sendEvent(startInMs, "FileWriteResult", new PayloadFileWriteResult(0));
     }
 
     private void handleFileTellCommand(final HubCommandVO cmd, final WebSocket webSocket) {
