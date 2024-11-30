@@ -2,7 +2,6 @@ package com.yulore.medhub.session;
 
 import com.yulore.util.ByteArrayListInputStream;
 import lombok.AllArgsConstructor;
-import lombok.Data;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 
@@ -34,8 +33,14 @@ public class StreamSession {
         public StreamSession session;
     }
 
-    public StreamSession(final Consumer<EventContext> doSendEvent, final Consumer<DataContext> doSendData,
-                         final String path, final String sessionId, final String contentId, final String playIdx) {
+    public StreamSession(final boolean isWrite,
+                         final Consumer<EventContext> doSendEvent,
+                         final Consumer<DataContext> doSendData,
+                         final String path,
+                         final String sessionId,
+                         final String contentId,
+                         final String playIdx) {
+        _isWrite = isWrite;
         _doSendEvent = doSendEvent;
         _doSendData = doSendData;
         _path = path;
@@ -150,6 +155,7 @@ public class StreamSession {
         }
     }
 
+    final private boolean _isWrite;
     final private String _path;
     final private String _sessionId;
     final private String _contentId;

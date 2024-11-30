@@ -361,53 +361,66 @@ public class HubMain {
         }
     }
 
-    private void handleOpenStreamCommand(final HubCommandVO cmd, final WebSocket webSocket) {
-        final long startInMs = System.currentTimeMillis();
-        final String path = cmd.getPayload().get("path");
-        final String sessionId = cmd.getPayload().get("session_id");
-        final String contentId = cmd.getPayload().get("content_id");
-        final String playIdx = cmd.getPayload().get("playback_idx");
-
-        log.debug("open stream => path: {}/sessionId: {}/contentId: {}/playIdx: {}", path, sessionId, contentId, playIdx);
-
-        final BuildStreamTask bst = getTaskOf(path);
-        if (bst == null) {
-            // TODO: define StreamOpened failed event
-            HubEventVO.sendEvent(webSocket, "StreamOpened", null);
-            log.warn("OpenStream failed for path: {}/sessionId: {}/contentId: {}/playIdx: {}", path, sessionId, contentId, playIdx);
-            return;
-        }
-
-        Consumer<StreamSession.EventContext> sendEvent = (ctx) -> {
+    Consumer<StreamSession.EventContext> buildSendEvent(final WebSocket webSocket, final int delayInMs) {
+        final Consumer<StreamSession.EventContext> performSendEvent = (ctx) -> {
             HubEventVO.sendEvent(webSocket, ctx.name, ctx.payload);
             log.info("sendEvent: {} send => {}, {}, cost {} ms",
                     ctx.session, ctx.name, ctx.payload, System.currentTimeMillis() - ctx.start);
         };
-        Consumer<StreamSession.DataContext> sendData = (ctx) -> {
+        return delayInMs == 0 ? performSendEvent : (ctx) -> {
+            _scheduledExecutor.schedule(() -> performSendEvent.accept(ctx), delayInMs, TimeUnit.MILLISECONDS);
+        };
+    }
+
+    Consumer<StreamSession.DataContext> buildSendData(final WebSocket webSocket, final int delayInMs) {
+        Consumer<StreamSession.DataContext> performSendData = (ctx) -> {
             final int size = ctx.data.remaining();
             webSocket.send(ctx.data);
             log.info("sendData: {} send => {} bytes, cost {} ms",
                     ctx.session, size, System.currentTimeMillis() - ctx.start);
         };
+        return delayInMs == 0 ? performSendData : (ctx) -> {
+            _scheduledExecutor.schedule(() -> performSendData.accept(ctx), delayInMs, TimeUnit.MILLISECONDS);
+        };
+    }
+
+    private void handleOpenStreamCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        final long startInMs = System.currentTimeMillis();
+        final String path = cmd.getPayload().get("path");
+        final boolean isWrite = Boolean.parseBoolean(cmd.getPayload().get("is_write"));
+        final String sessionId = cmd.getPayload().get("session_id");
+        final String contentId = cmd.getPayload().get("content_id");
+        final String playIdx = cmd.getPayload().get("playback_idx");
+
+        log.debug("open stream => path: {}/is_write: {}/sessionId: {}/contentId: {}/playIdx: {}",
+                path, isWrite, sessionId, contentId, playIdx);
+
         final int delayInMs = VarsUtil.extractValueAsInteger(path, "test_delay", 0);
-        if (delayInMs > 0) {
-            final Consumer<StreamSession.EventContext> performSendEvent = sendEvent;
-            sendEvent = (ctx) -> {
-                _scheduledExecutor.schedule(()->performSendEvent.accept(ctx), delayInMs, TimeUnit.MILLISECONDS);
-            };
-            final Consumer<StreamSession.DataContext> performSendData = sendData;
-            sendData = (ctx) -> {
-                _scheduledExecutor.schedule(()->performSendData.accept(ctx), delayInMs, TimeUnit.MILLISECONDS);
-            };
-        }
-        final StreamSession _ss = new StreamSession(sendEvent, sendData, path, sessionId, contentId, playIdx);
+        final Consumer<StreamSession.EventContext> sendEvent = buildSendEvent(webSocket, delayInMs);
+        final Consumer<StreamSession.DataContext> sendData = buildSendData(webSocket, delayInMs);
+
+        final StreamSession _ss = new StreamSession(isWrite, sendEvent, sendData, path, sessionId, contentId, playIdx);
         webSocket.setAttachment(_ss);
 
-        _ss.onDataChange((ss) -> {
-            ss.sendEvent(startInMs, "StreamOpened", null);
-            return true;
-        });
-        bst.buildStream(_ss::appendData, (isOK) -> _ss.appendCompleted());
+        if (!isWrite) {
+            final BuildStreamTask bst = getTaskOf(path);
+            if (bst == null) {
+                webSocket.setAttachment(null); // remove Attached ss
+                // TODO: define StreamOpened failed event
+                HubEventVO.sendEvent(webSocket, "StreamOpened", null);
+                log.warn("OpenStream failed for path: {}/sessionId: {}/contentId: {}/playIdx: {}", path, sessionId, contentId, playIdx);
+                return;
+            }
+
+            _ss.onDataChange((ss) -> {
+                ss.sendEvent(startInMs, "StreamOpened", null);
+                return true;
+            });
+            bst.buildStream(_ss::appendData, (isOK) -> _ss.appendCompleted());
+        } else {
+            // write mode return StreamOpened event directly
+            _ss.sendEvent(startInMs, "StreamOpened", null);
+        }
     }
 
     private BuildStreamTask getTaskOf(final String path) {
