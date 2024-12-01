@@ -54,11 +54,13 @@ public class StreamSession {
 
     public void close() {
         if (_isWrite) {
-            log.info("{}: close write mode ss, save stream for test: {}", _sessionId, _path);
-            try (final OutputStream fos = new FileOutputStream(_path);
+            final int lastBracePos = _path.lastIndexOf('}');
+            final String filename = lastBracePos != -1 ? _path.substring(lastBracePos+1) : _path;
+            log.info("{}: close write mode ss, save stream for test: {}", _sessionId, filename);
+            try (final OutputStream fos = new FileOutputStream(filename);
                 final InputStream bis = new ByteArrayListInputStream(_bufs)) {
                 bis.transferTo(fos);
-                log.info("{}: save stream for test: {} success", _sessionId, _path);
+                log.info("{}: save stream for test: {} success", _sessionId, filename);
             } catch (final IOException ex) {
                 log.warn("{}: exception for save stream, detail: {}", _sessionId, ex.toString());
                 throw new RuntimeException(ex);
