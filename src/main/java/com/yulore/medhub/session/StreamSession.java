@@ -47,6 +47,9 @@ public class StreamSession {
         _sessionId = sessionId;
         _contentId = contentId;
         _playIdx = playIdx;
+        if (_isWrite) {
+            _streaming = false;
+        }
     }
 
     public void sendEvent(final long startInMs, final String eventName, final Object payload) {
@@ -112,10 +115,13 @@ public class StreamSession {
         }
     }
 
-    public int seekFromStart(int pos) {
+    public int seekFromStart(final int pos) {
         try {
             _lock.lock();
             _pos = pos;
+            if (_isWrite && _pos > _length) {
+                _pos = _length;
+            }
             return _pos;
         } finally {
             _lock.unlock();
@@ -153,6 +159,81 @@ public class StreamSession {
                 _onDataChanged = null;
             }
         }
+    }
+
+    public int writeToStream(final ByteBuffer bytes) {
+        final byte[] srcBytes = new byte[bytes.remaining()];
+        bytes.get(srcBytes, 0, srcBytes.length);
+
+        try {
+            _lock.lock();
+            if (_pos >= _length) {
+                // append data on the end
+                doAppendBytes(srcBytes);
+                return srcBytes.length;
+            }
+
+            // copy some data to exist bytesList
+            int posInBuf = 0, idxOfBuf = 0, off = 0;
+            byte[] curBuf;
+            for (; idxOfBuf < _bufs.size(); idxOfBuf++) {
+                curBuf = _bufs.get(idxOfBuf);
+                if (off + curBuf.length > _pos) {
+                    posInBuf = _pos - off;
+                    break;
+                }
+                off += curBuf.length;
+            }
+
+            final int leftLen = writeToExistBufs(srcBytes, idxOfBuf, posInBuf);
+
+            // write to end of stream
+            if (leftLen > 0) {
+                // and has data to write, so append at the end of stream
+                final byte[] leftBytes = new byte[leftLen];
+                System.arraycopy(srcBytes, srcBytes.length - leftLen, leftBytes, 0, leftLen);
+                doAppendBytes(leftBytes);
+                return srcBytes.length;
+            }
+        } finally {
+            _lock.unlock();
+        }
+        return srcBytes.length;
+    }
+
+    private void doAppendBytes(final byte[] bytes) {
+        _bufs.add(bytes);
+        _pos += bytes.length;
+        _length += bytes.length;
+    }
+
+    private int writeToExistBufs(final byte[] bytesArray, int idxOfBuf, int posInBuf) {
+        int leftLen = bytesArray.length, writeSize = leftLen;
+        while (idxOfBuf < _bufs.size()) {
+            final byte[] curBuf = _bufs.get(idxOfBuf);
+
+            if (posInBuf < curBuf.length) {
+                if (posInBuf + writeSize > curBuf.length) {
+                    writeSize = curBuf.length - posInBuf;
+                }
+
+                System.arraycopy(bytesArray, bytesArray.length - leftLen, curBuf, posInBuf, writeSize);
+                // off += readSize;
+                posInBuf += writeSize;
+                _pos += writeSize;
+                leftLen -= writeSize;
+                writeSize = leftLen;
+                if (leftLen == 0) {
+                    // data for write has been full-written
+                    break;
+                }
+            }
+            else {
+                idxOfBuf++;
+                posInBuf = 0;
+            }
+        }
+        return leftLen;
     }
 
     final private boolean _isWrite;

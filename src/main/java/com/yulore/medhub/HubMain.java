@@ -624,7 +624,8 @@ public class HubMain {
 
     private void handleFileWriteCommand(final ByteBuffer bytes, final StreamSession ss, final WebSocket webSocket) {
         final long startInMs = System.currentTimeMillis();
-        ss.sendEvent(startInMs, "FileWriteResult", new PayloadFileWriteResult(0));
+        final int written = ss.writeToStream(bytes);
+        ss.sendEvent(startInMs, "FileWriteResult", new PayloadFileWriteResult(written));
     }
 
     private void handleFileTellCommand(final HubCommandVO cmd, final WebSocket webSocket) {
