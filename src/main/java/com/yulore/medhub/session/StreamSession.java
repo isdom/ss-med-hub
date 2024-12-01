@@ -188,11 +188,16 @@ public class StreamSession {
         try {
             _lock.lock();
             if (_pos >= _length) {
+                log.info("[{}]: writeToStream for pos: {} >= length: {}, append data {} bytes directly",
+                        _sessionId, _pos, _length, srcBytes.length);
                 // append data on the end
                 doAppendBytes(srcBytes);
+                log.info("[{}]: writeToStream => doAppendBytes: pos: {}/length: {}", _sessionId, _pos, _length);
                 return srcBytes.length;
             }
 
+            log.info("[{}]: writeToStream for pos: {} < length: {}, need rewrite exist bufs {} bytes",
+                    _sessionId, _pos, _length, srcBytes.length);
             // copy some data to exist bytesList
             int posInBuf = 0, idxOfBuf = 0, off = 0;
             byte[] curBuf;
@@ -204,15 +209,19 @@ public class StreamSession {
                 }
                 off += curBuf.length;
             }
+            log.info("[{}]: writeToStream re-write: idxOfBuf:{}/posInBuf:{}", _sessionId, idxOfBuf, posInBuf);
 
-            final int leftLen = writeToExistBufs(srcBytes, idxOfBuf, posInBuf);
+            final int leftToWrite = writeToExistBufs(srcBytes, idxOfBuf, posInBuf);
+
+            log.info("[{}]: writeToStream => writeToExistBufs: leftToWrite: {}", _sessionId, leftToWrite);
 
             // write to end of stream
-            if (leftLen > 0) {
+            if (leftToWrite > 0) {
                 // and has data to write, so append at the end of stream
-                final byte[] leftBytes = new byte[leftLen];
-                System.arraycopy(srcBytes, srcBytes.length - leftLen, leftBytes, 0, leftLen);
+                final byte[] leftBytes = new byte[leftToWrite];
+                System.arraycopy(srcBytes, srcBytes.length - leftToWrite, leftBytes, 0, leftToWrite);
                 doAppendBytes(leftBytes);
+                log.info("[{}]: writeToStream => doAppendBytes: pos: {}/length: {}", _sessionId, _pos, _length);
                 return srcBytes.length;
             }
         } finally {

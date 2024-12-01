@@ -208,6 +208,7 @@ public class HubMain {
                             return;
                         } else if (attachment instanceof StreamSession session) {
                             _sessionExecutor.submit(()-> handleFileWriteCommand(bytes, session, webSocket));
+                            return;
                         }
                         log.error("onMessage(Binary): {} without any Session, ignore", webSocket.getRemoteSocketAddress());
 
