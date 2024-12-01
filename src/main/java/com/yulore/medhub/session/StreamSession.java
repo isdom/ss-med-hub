@@ -5,11 +5,11 @@ import lombok.AllArgsConstructor;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
@@ -50,6 +50,24 @@ public class StreamSession {
         if (_isWrite) {
             _streaming = false;
         }
+    }
+
+    public void close() {
+        if (_isWrite) {
+            log.info("{}: close write mode ss, save stream for test: {}", _sessionId, _path);
+            try (final OutputStream fos = new FileOutputStream(_path);
+                final InputStream bis = new ByteArrayListInputStream(_bufs)) {
+                bis.transferTo(fos);
+                log.info("{}: save stream for test: {} success", _sessionId, _path);
+            } catch (final IOException ex) {
+                log.warn("{}: exception for save stream, detail: {}", _sessionId, ex.toString());
+                throw new RuntimeException(ex);
+            }
+        }
+    }
+
+    public String sessionId () {
+        return _sessionId;
     }
 
     public void sendEvent(final long startInMs, final String eventName, final Object payload) {

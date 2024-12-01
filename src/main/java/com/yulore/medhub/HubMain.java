@@ -172,11 +172,16 @@ public class HubMain {
                     public void onClose(final WebSocket webSocket, final int code, final String reason, final boolean remote) {
                         final Object attachment = webSocket.getAttachment();
                         if (attachment instanceof MediaSession session) {
-                            log.info("wscount/{}: closed {} with exit code {} additional info: {}, session: {}",
-                                    _currentWSConnection.decrementAndGet(),
-                                    webSocket.getRemoteSocketAddress(), code, reason, session.get_sessionId());
                             stopAndCloseTranscriber(webSocket);
                             session.close();
+                            log.info("wscount/{}: closed {} with exit code {} additional info: {}, MediaSession-id {}",
+                                    _currentWSConnection.decrementAndGet(),
+                                    webSocket.getRemoteSocketAddress(), code, reason, session.get_sessionId());
+                        } else if (attachment instanceof StreamSession session) {
+                            session.close();
+                            log.info("wscount/{}: closed {} with exit code {} additional info: {}, StreamSession-id: {}",
+                                    _currentWSConnection.decrementAndGet(),
+                                    webSocket.getRemoteSocketAddress(), code, reason, session.sessionId());
                         } else {
                             log.info("wscount/{}: closed {} with exit code {} additional info: {}",
                                     _currentWSConnection.decrementAndGet(),
