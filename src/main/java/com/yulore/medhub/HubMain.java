@@ -406,7 +406,14 @@ public class HubMain {
         final Consumer<StreamSession.DataContext> sendData = buildSendData(webSocket, delayInMs);
 
         final StreamSession _ss = new StreamSession(isWrite, sendEvent, sendData,
-                (ctx) -> _ossAccessExecutor.submit(()->_ossClient.putObject(ctx.bucketName, ctx.objectName, ctx.content)),
+                (ctx) -> {
+                    final long startUploadInMs = System.currentTimeMillis();
+                    _ossAccessExecutor.submit(()->{
+                        _ossClient.putObject(ctx.bucketName, ctx.objectName, ctx.content);
+                        log.info("[{}]: upload content to oss => bucket:{}/object:{}, cost {} ms",
+                                sessionId, ctx.bucketName, ctx.objectName, System.currentTimeMillis() - startUploadInMs);
+                    });
+                },
                 path, sessionId, contentId, playIdx);
         webSocket.setAttachment(_ss);
 
