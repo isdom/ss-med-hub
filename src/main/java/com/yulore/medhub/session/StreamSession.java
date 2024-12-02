@@ -1,5 +1,6 @@
 package com.yulore.medhub.session;
 
+import com.yulore.medhub.stream.VarsUtil;
 import com.yulore.util.ByteArrayListInputStream;
 import lombok.AllArgsConstructor;
 import lombok.ToString;
@@ -33,9 +34,17 @@ public class StreamSession {
         public StreamSession session;
     }
 
+    @AllArgsConstructor
+    static public class UploadToOSSContext {
+        public String bucketName;
+        public String objectName;
+        public InputStream content;
+    }
+
     public StreamSession(final boolean isWrite,
                          final Consumer<EventContext> doSendEvent,
                          final Consumer<DataContext> doSendData,
+                         final Consumer<UploadToOSSContext> doUpload,
                          final String path,
                          final String sessionId,
                          final String contentId,
@@ -43,6 +52,7 @@ public class StreamSession {
         _isWrite = isWrite;
         _doSendEvent = doSendEvent;
         _doSendData = doSendData;
+        _doUpload = doUpload;
         _path = path;
         _sessionId = sessionId;
         _contentId = contentId;
@@ -54,17 +64,27 @@ public class StreamSession {
 
     public void close() {
         if (_isWrite) {
-            final int lastBracePos = _path.lastIndexOf('}');
-            final String filename = lastBracePos != -1 ? _path.substring(lastBracePos+1) : _path;
-            log.info("{}: close write mode ss, save stream for test: {}", _sessionId, filename);
-            try (final OutputStream fos = new FileOutputStream(filename);
-                final InputStream bis = new ByteArrayListInputStream(_bufs)) {
-                bis.transferTo(fos);
-                log.info("{}: save stream for test: {} success", _sessionId, filename);
-            } catch (final IOException ex) {
-                log.warn("{}: exception for save stream, detail: {}", _sessionId, ex.toString());
-                throw new RuntimeException(ex);
+            // eg: rms://{uuid={uuid},bucket=ylhz-aicall,url=ws://172.18.86.131:6789/record}<objectName>
+            final int braceBegin = _path.indexOf('{');
+            if (braceBegin == -1) {
+                log.warn("{} missing vars, ignore", _path);
+                return;
             }
+            final int braceEnd = _path.indexOf('}');
+            if (braceEnd == -1) {
+                log.warn("{} missing vars, ignore", _path);
+                return;
+            }
+            final String vars = _path.substring(braceBegin + 1, braceEnd);
+
+            final String bucketName = VarsUtil.extractValue(vars, "bucket");
+            if (null == bucketName) {
+                log.warn("{} missing bucket field, ignore", _path);
+                return;
+            }
+
+            final String objectName = _path.substring(braceEnd + 1);
+            _doUpload.accept(new UploadToOSSContext(bucketName, objectName, new ByteArrayListInputStream(_bufs)));
         }
     }
 
@@ -272,6 +292,7 @@ public class StreamSession {
     final private String _playIdx;
     final private Consumer<EventContext> _doSendEvent;
     final private Consumer<DataContext> _doSendData;
+    final private Consumer<UploadToOSSContext> _doUpload;
 
     private int _length = 0;
     private int _pos = 0;

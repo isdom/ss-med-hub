@@ -126,7 +126,7 @@ public class HubMain {
 
     private OSS _ossClient;
 
-    private ExecutorService _ossDownloader;
+    private ExecutorService _ossAccessExecutor;
 
     private final AtomicInteger _currentWSConnection = new AtomicInteger(0);
 
@@ -141,7 +141,7 @@ public class HubMain {
 
         initNlsAgents(_nlsClient);
 
-        _ossDownloader = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2, new DefaultThreadFactory("ossDownloader"));
+        _ossAccessExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2, new DefaultThreadFactory("ossAccessExecutor"));
         _sessionExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2, new DefaultThreadFactory("sessionExecutor"));
         _scheduledExecutor = Executors.newScheduledThreadPool(NettyRuntime.availableProcessors() * 2, new DefaultThreadFactory("scheduledExecutor"));
 
@@ -405,7 +405,9 @@ public class HubMain {
         final Consumer<StreamSession.EventContext> sendEvent = buildSendEvent(webSocket, delayInMs);
         final Consumer<StreamSession.DataContext> sendData = buildSendData(webSocket, delayInMs);
 
-        final StreamSession _ss = new StreamSession(isWrite, sendEvent, sendData, path, sessionId, contentId, playIdx);
+        final StreamSession _ss = new StreamSession(isWrite, sendEvent, sendData,
+                (ctx) -> _ossAccessExecutor.submit(()->_ossClient.putObject(ctx.bucketName, ctx.objectName, ctx.content)),
+                path, sessionId, contentId, playIdx);
         webSocket.setAttachment(_ss);
 
         if (!isWrite) {
@@ -740,7 +742,7 @@ public class HubMain {
             return;
         }
         final String objectName = file.substring(prefixBegin + _oss_match_prefix.length());
-        _ossDownloader.submit(() -> {
+        _ossAccessExecutor.submit(() -> {
             try (final OSSObject ossObject = _ossClient.getObject(_oss_bucket, objectName)) {
                 final ByteArrayOutputStream os = new ByteArrayOutputStream((int) ossObject.getObjectMetadata().getContentLength());
                 ossObject.getObjectContent().transferTo(os);
@@ -1033,7 +1035,7 @@ public class HubMain {
         _nlsAuthExecutor.shutdownNow();
         _sessionExecutor.shutdownNow();
         _scheduledExecutor.shutdownNow();
-        _ossDownloader.shutdownNow();
+        _ossAccessExecutor.shutdownNow();
 
         log.info("ASR-Hub: shutdown");
     }
