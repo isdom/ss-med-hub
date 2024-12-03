@@ -706,7 +706,7 @@ public class HubMain {
             log.warn("Playback: {} 's file & id is null, abort", webSocket.getRemoteSocketAddress());
             return;
         }
-        log.info("handlePlaybackCommand: command payload ==> file:{}, id:{}", file, playbackId);
+        log.info("[{}]: handlePlaybackCommand: command payload ==> file:{}, id:{}", session.get_sessionId(), file, playbackId);
         if (file != null) {
             playbackByFile(file, cmd, session, webSocket);
         } else {
@@ -720,6 +720,7 @@ public class HubMain {
             log.error("StopPlayback: {} without Session, abort", webSocket.getRemoteSocketAddress());
             return;
         }
+        log.info("[{}]: handleStopPlaybackCommand", session.get_sessionId());
         session.stopCurrentAnyway();
     }
 
@@ -729,6 +730,7 @@ public class HubMain {
             log.error("PausePlayback: {} without Session, abort", webSocket.getRemoteSocketAddress());
             return;
         }
+        log.info("[{}]: handlePausePlaybackCommand", session.get_sessionId());
         session.pauseCurrentAnyway();
     }
 
@@ -738,6 +740,7 @@ public class HubMain {
             log.error("ResumePlayback: {} without Session, abort", webSocket.getRemoteSocketAddress());
             return;
         }
+        log.info("[{}]: handleResumePlaybackCommand", session.get_sessionId());
         session.resumeCurrentAnyway();
     }
 
