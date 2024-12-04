@@ -1,11 +1,7 @@
 package com.yulore.medhub.session;
 
-import com.alibaba.nls.client.protocol.asr.SpeechTranscriber;
-import com.alibaba.nls.client.protocol.asr.SpeechTranscriberResponse;
-import com.yulore.medhub.nls.ASRAgent;
 import com.yulore.medhub.task.PlayPCMTask;
 import io.netty.util.concurrent.DefaultThreadFactory;
-import lombok.Data;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
@@ -18,8 +14,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Consumer;
 
-@Data
 @ToString
 @Slf4j
 public class MediaSession {
@@ -37,13 +33,15 @@ public class MediaSession {
         _sessionBeginInMs = System.currentTimeMillis();
     }
 
+    public String sessionId() {
+        return _sessionId;
+    }
+
     public void lock() {
         _lock.lock();
-        // log.info("lock session: {}", _lock);
     }
 
     public void unlock() {
-        // log.info("unlock session: {}", _lock);
         _lock.unlock();
     }
 
@@ -80,46 +78,51 @@ public class MediaSession {
     }
 
     public void stopAndCloseTranscriber(final WebSocket webSocket) {
-        ASRAgent agent = null;
-        try {
-            lock();
+        // ASRAgent agent = null;
+        final Runnable stopASR = _stopASR.getAndSet(null);
+        if (stopASR != null) {
+            try {
+                lock();
+                stopASR.run();
 
-            if (asrAgent == null) {
-                log.info("stopAndCloseTranscriber: {} has already stopAndCloseTranscriber, ignore", webSocket.getRemoteSocketAddress());
-                return;
-            }
-            agent = asrAgent;
-            asrAgent = null;
-
-            agent.decConnection();
-
-            if (speechTranscriber != null) {
-                try {
-                    //通知服务端语音数据发送完毕，等待服务端处理完成。
-                    long now = System.currentTimeMillis();
-                    log.info("transcriber wait for complete");
-                    speechTranscriber.stop();
-                    log.info("transcriber stop() latency : {} ms", System.currentTimeMillis() - now);
-                } catch (final Exception ex) {
-                    log.warn("handleStopAsrCommand error: {}", ex.toString());
-                }
-
-                speechTranscriber.close();
-            }
-            if (isTranscriptionStarted()) {
-                // 对于已经标记了 TranscriptionStarted 的会话, 将其使用的 ASR Account 已连接通道减少一
-                agent.decConnected();
-            }
-        } finally {
-            unlock();
-            if (agent != null) {
-                log.info("release asr({}): {}/{}", agent.getName(), agent.get_connectingOrConnectedCount().get(), agent.getLimit());
+//                if (asrAgent == null) {
+//                    log.info("stopAndCloseTranscriber: {} has already stopAndCloseTranscriber, ignore", webSocket.getRemoteSocketAddress());
+//                    return;
+//                }
+//                agent = asrAgent;
+//                asrAgent = null;
+//
+//                agent.decConnection();
+//
+//                if (speechTranscriber != null) {
+//                    try {
+//                        //通知服务端语音数据发送完毕，等待服务端处理完成。
+//                        long now = System.currentTimeMillis();
+//                        log.info("transcriber wait for complete");
+//                        speechTranscriber.stop();
+//                        log.info("transcriber stop() latency : {} ms", System.currentTimeMillis() - now);
+//                    } catch (final Exception ex) {
+//                        log.warn("handleStopAsrCommand error: {}", ex.toString());
+//                    }
+//
+//                    speechTranscriber.close();
+//                }
+//                if (isTranscriptionStarted()) {
+//                    // 对于已经标记了 TranscriptionStarted 的会话, 将其使用的 ASR Account 已连接通道减少一
+//                    agent.decConnected();
+//                }
+            } finally {
+                unlock();
+//                if (agent != null) {
+//                    log.info("release asr({}): {}/{}", agent.getName(), agent.get_connectingOrConnectedCount().get(), agent.getLimit());
+//                }
             }
         }
     }
 
-    public void notifySpeechTranscriberFail(final SpeechTranscriberResponse response) {
+    public void notifySpeechTranscriberFail() {
         _isTranscriptionFailed.compareAndSet(false, true);
+        _transmitData.set(null);
     }
 
     public boolean transmit(final ByteBuffer bytes) {
@@ -127,11 +130,13 @@ public class MediaSession {
             return false;
         }
 
-        if (speechTranscriber != null) {
+        final Consumer<ByteBuffer> transmitter = _transmitData.get();
+
+        if (transmitter != null) {
             if (_delayExecutor == null) {
-                speechTranscriber.send(bytes.array());
+                transmitter.accept(bytes);
             } else {
-                _delayExecutor.schedule(()->speechTranscriber.send(bytes.array()), _testDelayMs, TimeUnit.MILLISECONDS);
+                _delayExecutor.schedule(()->transmitter.accept(bytes), _testDelayMs, TimeUnit.MILLISECONDS);
             }
             _transmitCount.incrementAndGet();
             return true;
@@ -206,11 +211,18 @@ public class MediaSession {
         return _id2stream.get(id);
     }
 
+    public void setASR(final Runnable stopASR, final Consumer<ByteBuffer> transmitData) {
+        _stopASR.set(stopASR);
+        _transmitData.set(transmitData);
+    }
+
     private final String _sessionId;
     private final Lock _lock = new ReentrantLock();
 
-    SpeechTranscriber speechTranscriber;
-    ASRAgent asrAgent;
+    // SpeechTranscriber speechTranscriber;
+    // ASRAgent asrAgent;
+    private AtomicReference<Runnable> _stopASR = new AtomicReference<>(null);
+    private AtomicReference<Consumer<ByteBuffer>> _transmitData = new AtomicReference<>(null);
 
     final AtomicBoolean _isStartTranscription = new AtomicBoolean(false);
     final AtomicBoolean _isTranscriptionStarted = new AtomicBoolean(false);
