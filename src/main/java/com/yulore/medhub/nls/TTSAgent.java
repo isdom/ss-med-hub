@@ -67,7 +67,7 @@ public class TTSAgent {
         return _currentToken.get();
     }
 
-    public TTSAgent checkAndSelectIfhasIdle() {
+    public TTSAgent checkAndSelectIfHasIdle() {
         while (true) {
             int currentCount = _connectingOrConnectedCount.get();
             if (currentCount >= limit) {

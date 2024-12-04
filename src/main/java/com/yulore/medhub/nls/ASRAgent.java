@@ -67,7 +67,7 @@ public class ASRAgent {
         return _currentToken.get();
     }
 
-    public ASRAgent checkAndSelectIfhasIdle() {
+    public ASRAgent checkAndSelectIfHasIdle() {
         while (true) {
             int currentCount = _connectingOrConnectedCount.get();
             if (currentCount >= limit) {

@@ -285,7 +285,7 @@ public class HubMain {
 
     private ASRAgent selectASRAgent() {
         for (ASRAgent agent : _asrAgents) {
-            final ASRAgent selected = agent.checkAndSelectIfhasIdle();
+            final ASRAgent selected = agent.checkAndSelectIfHasIdle();
             if (null != selected) {
                 log.info("select asr({}): {}/{}", agent.getName(), agent.get_connectingOrConnectedCount().get(), agent.getLimit());
                 return selected;
@@ -296,7 +296,7 @@ public class HubMain {
 
     private TTSAgent selectTTSAgent() {
         for (TTSAgent agent : _ttsAgents) {
-            final TTSAgent selected = agent.checkAndSelectIfhasIdle();
+            final TTSAgent selected = agent.checkAndSelectIfHasIdle();
             if (null != selected) {
                 log.info("select tts({}): {}/{}", agent.getName(), agent.get_connectingOrConnectedCount().get(), agent.getLimit());
                 return selected;
@@ -307,7 +307,7 @@ public class HubMain {
 
     private CosyAgent selectCosyAgent() {
         for (CosyAgent agent : _cosyAgents) {
-            final CosyAgent selected = agent.checkAndSelectIfhasIdle();
+            final CosyAgent selected = agent.checkAndSelectIfHasIdle();
             if (null != selected) {
                 log.info("select cosy({}): {}/{}", agent.getName(), agent.get_connectingOrConnectedCount().get(), agent.getLimit());
                 return selected;

@@ -2,8 +2,6 @@ package com.yulore.medhub.nls;
 
 import com.alibaba.nls.client.AccessToken;
 import com.alibaba.nls.client.protocol.NlsClient;
-import com.alibaba.nls.client.protocol.tts.SpeechSynthesizer;
-import com.alibaba.nls.client.protocol.tts.SpeechSynthesizerListener;
 import com.alibaba.nls.client.protocol.tts.StreamInputTts;
 import com.alibaba.nls.client.protocol.tts.StreamInputTtsListener;
 import lombok.Data;
@@ -62,7 +60,7 @@ public class CosyAgent {
         return _currentToken.get();
     }
 
-    public CosyAgent checkAndSelectIfhasIdle() {
+    public CosyAgent checkAndSelectIfHasIdle() {
         while (true) {
             int currentCount = _connectingOrConnectedCount.get();
             if (currentCount >= limit) {
