@@ -58,6 +58,8 @@ public class TxASRAgent {
         final SpeechRecognizerRequest request = SpeechRecognizerRequest.init();
         request.setEngineModelType("8k_zh");
         request.setVoiceFormat(1);
+        request.setNeedVad(1);
+
         //voice_id为请求标识，需要保持全局唯一（推荐使用 uuid），遇到问题需要提供该值方便服务端排查
         request.setVoiceId(UUID.randomUUID().toString());
 
