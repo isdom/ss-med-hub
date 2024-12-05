@@ -861,7 +861,7 @@ public class HubMain {
     }
 
     private void handleStartTranscriptionCommand(final HubCommandVO cmd, final WebSocket webSocket) {
-        final String provider = cmd.getPayload().get("provider");
+        final String provider = cmd.getPayload() != null ? cmd.getPayload().get("provider") : null;
         final MediaSession session = webSocket.getAttachment();
         if (session == null) {
             log.error("StartTranscription: {} without Session, abort", webSocket.getRemoteSocketAddress());
