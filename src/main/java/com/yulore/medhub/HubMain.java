@@ -20,6 +20,8 @@ import com.tencent.asrv2.SpeechRecognizerListener;
 import com.tencent.asrv2.SpeechRecognizerResponse;
 import com.tencent.core.ws.SpeechClient;
 import com.yulore.medhub.nls.*;
+import com.yulore.medhub.session.ASRSession;
+import com.yulore.medhub.session.CallSession;
 import com.yulore.medhub.stream.*;
 import com.yulore.medhub.stream.StreamCacheService;
 import com.yulore.medhub.session.MediaSession;
@@ -35,7 +37,6 @@ import org.java_websocket.WebSocket;
 import org.java_websocket.exceptions.WebsocketNotConnectedException;
 import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.server.WebSocketServer;
-import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -98,8 +99,11 @@ public class HubMain {
     @Value("${session.check_idle_interval_ms}")
     private long _check_idle_interval_ms;
 
-    @Value("${session.match_resource}")
-    private String _match_resource;
+    @Value("${session.match_media}")
+    private String _match_media;
+
+    @Value("${session.match_call}")
+    private String _match_call;
 
     final List<ASRAgent> _asrAgents = new ArrayList<>();
     final List<TTSAgent> _ttsAgents = new ArrayList<>();
@@ -164,18 +168,25 @@ public class HubMain {
                                 webSocket.getRemoteSocketAddress(),
                                 webSocket.getLocalSocketAddress(),
                                 clientHandshake.getResourceDescriptor());
-                        if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_resource)) {
+                        if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_media)) {
                             // init session attach with webSocket
                             final String sessionId = clientHandshake.getFieldValue("x-sessionid");
                             final MediaSession session = new MediaSession(sessionId, _test_enable_delay, _test_delay_ms,
                                     _test_enable_disconnect, _test_disconnect_probability, ()->webSocket.close(1006, "test_disconnect"));
                             webSocket.setAttachment(session);
                             session.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms,
-                                    ()->HubEventVO.<Void>sendEvent(webSocket, "CheckIdle", null)); // 5 seconds
-                            log.info("ws path match: {}, using ws as MediaSession {}", _match_resource, sessionId);
+                                    ()->HubEventVO.<Void>sendEvent(webSocket, "CheckIdle", null));
+                            log.info("ws path match: {}, using ws as MediaSession {}", _match_media, sessionId);
+                        } if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_call)) {
+                            // init session attach with webSocket
+                            final CallSession session = new CallSession();
+                            webSocket.setAttachment(session);
+                            session.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms,
+                                    ()->HubEventVO.<Void>sendEvent(webSocket, "CheckIdle", null));
+                            log.info("ws path match: {}, using ws as CallSession", _match_media);
                         } else {
                             log.info("ws path {} !NOT! match: {}, NOT MediaSession: {}",
-                                    clientHandshake.getResourceDescriptor(), _match_resource, webSocket.getRemoteSocketAddress());
+                                    clientHandshake.getResourceDescriptor(), _match_media, webSocket.getRemoteSocketAddress());
                         }
                     }
 
@@ -186,6 +197,12 @@ public class HubMain {
                             stopAndCloseTranscriber(webSocket);
                             session.close();
                             log.info("wscount/{}: closed {} with exit code {} additional info: {}, MediaSession-id {}",
+                                    _currentWSConnection.decrementAndGet(),
+                                    webSocket.getRemoteSocketAddress(), code, reason, session.sessionId());
+                        } else if (attachment instanceof CallSession session) {
+                            stopAndCloseTranscriber(webSocket);
+                            session.close();
+                            log.info("wscount/{}: closed {} with exit code {} additional info: {}, CallSession-id: {}",
                                     _currentWSConnection.decrementAndGet(),
                                     webSocket.getRemoteSocketAddress(), code, reason, session.sessionId());
                         } else if (attachment instanceof StreamSession session) {
@@ -216,6 +233,9 @@ public class HubMain {
                         final Object attachment = webSocket.getAttachment();
                         if (attachment instanceof MediaSession session) {
                             handleASRData(bytes, session);
+                            return;
+                        } else if (attachment instanceof CallSession session) {
+                            handleCallASRData(bytes, session);
                             return;
                         } else if (attachment instanceof StreamSession session) {
                             _sessionExecutor.submit(()-> handleFileWriteCommand(bytes, session, webSocket));
@@ -372,6 +392,15 @@ public class HubMain {
             // transmit success
             if ((session.transmitCount() % 50) == 0) {
                 log.debug("{}: transmit 50 times.", session.sessionId());
+            }
+        }
+    }
+
+    private void handleCallASRData(final ByteBuffer bytes, final CallSession session) {
+        if (session.transmit(bytes)) {
+            // transmit success
+            if ((session.transmitCount() % 50) == 0) {
+                log.debug("CallSession[{}]: transmit 50 times.", session.sessionId());
             }
         }
     }
@@ -862,9 +891,9 @@ public class HubMain {
 
     private void handleStartTranscriptionCommand(final HubCommandVO cmd, final WebSocket webSocket) {
         final String provider = cmd.getPayload() != null ? cmd.getPayload().get("provider") : null;
-        final MediaSession session = webSocket.getAttachment();
+        final ASRSession session = webSocket.getAttachment();
         if (session == null) {
-            log.error("StartTranscription: {} without Session, abort", webSocket.getRemoteSocketAddress());
+            log.error("StartTranscription: {} without ASRSession, abort", webSocket.getRemoteSocketAddress());
             return;
         }
 
@@ -890,7 +919,7 @@ public class HubMain {
         }
     }
 
-    private void startWithTxasr(final WebSocket webSocket, final MediaSession session) throws Exception {
+    private void startWithTxasr(final WebSocket webSocket, final ASRSession session) throws Exception {
         final long startConnectingInMs = System.currentTimeMillis();
         final TxASRAgent agent = selectTxASRAgent();
 
@@ -968,7 +997,7 @@ public class HubMain {
         return recognizer;
     }
 
-    private SpeechRecognizerListener buildRecognizerListener(final MediaSession session,
+    private SpeechRecognizerListener buildRecognizerListener(final ASRSession session,
                                                              final WebSocket webSocket,
                                                              final TxASRAgent account,
                                                              final String sessionId,
@@ -1053,7 +1082,7 @@ public class HubMain {
         };
     }
 
-    private void startWithAliasr(final WebSocket webSocket, final MediaSession session) throws Exception {
+    private void startWithAliasr(final WebSocket webSocket, final ASRSession session) throws Exception {
         final long startConnectingInMs = System.currentTimeMillis();
         final ASRAgent agent = selectASRAgent();
 
@@ -1128,7 +1157,7 @@ public class HubMain {
         return transcriber;
     }
 
-    private SpeechTranscriberListener buildTranscriberListener(final MediaSession session,
+    private SpeechTranscriberListener buildTranscriberListener(final ASRSession session,
                                                                final WebSocket webSocket,
                                                                final ASRAgent account,
                                                                final String sessionId,
@@ -1262,13 +1291,13 @@ public class HubMain {
     }
 
     private static void stopAndCloseTranscriber(final WebSocket webSocket) {
-        final MediaSession session = webSocket.getAttachment();
+        final ASRSession session = webSocket.getAttachment();
         if (session == null) {
-            log.error("stopAndCloseTranscriber: {} without Session, abort", webSocket.getRemoteSocketAddress());
+            log.error("stopAndCloseTranscriber: {} without ASRSession, abort", webSocket.getRemoteSocketAddress());
             return;
         }
 
-        session.stopAndCloseTranscriber(webSocket);
+        session.stopAndCloseTranscriber();
     }
 
     @PreDestroy
