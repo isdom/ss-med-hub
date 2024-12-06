@@ -177,7 +177,7 @@ public class HubMain {
                             session.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms,
                                     ()->HubEventVO.<Void>sendEvent(webSocket, "CheckIdle", null));
                             log.info("ws path match: {}, using ws as MediaSession {}", _match_media, sessionId);
-                        } if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_call)) {
+                        } else if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_call)) {
                             // init session attach with webSocket
                             final CallSession session = new CallSession();
                             webSocket.setAttachment(session);
