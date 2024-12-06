@@ -231,11 +231,8 @@ public class HubMain {
                     @Override
                     public void onMessage(final WebSocket webSocket, final ByteBuffer bytes) {
                         final Object attachment = webSocket.getAttachment();
-                        if (attachment instanceof MediaSession session) {
+                        if (attachment instanceof ASRSession session) {
                             handleASRData(bytes, session);
-                            return;
-                        } else if (attachment instanceof CallSession session) {
-                            handleCallASRData(bytes, session);
                             return;
                         } else if (attachment instanceof StreamSession session) {
                             _sessionExecutor.submit(()-> handleFileWriteCommand(bytes, session, webSocket));
@@ -387,20 +384,11 @@ public class HubMain {
         }
     }
 
-    private void handleASRData(final ByteBuffer bytes, final MediaSession session) {
+    private void handleASRData(final ByteBuffer bytes, final ASRSession session) {
         if (session.transmit(bytes)) {
             // transmit success
             if ((session.transmitCount() % 50) == 0) {
                 log.debug("{}: transmit 50 times.", session.sessionId());
-            }
-        }
-    }
-
-    private void handleCallASRData(final ByteBuffer bytes, final CallSession session) {
-        if (session.transmit(bytes)) {
-            // transmit success
-            if ((session.transmitCount() % 50) == 0) {
-                log.debug("CallSession[{}]: transmit 50 times.", session.sessionId());
             }
         }
     }
