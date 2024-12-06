@@ -1241,7 +1241,7 @@ public class HubMain {
     }
 
     private void notifyTranscriptionStarted(final WebSocket webSocket, final ASRAgent account, final SpeechTranscriberResponse response) {
-        final MediaSession session = webSocket.getAttachment();
+        final ASRSession session = webSocket.getAttachment();
         session.transcriptionStarted();
         account.incConnected();
         try {
