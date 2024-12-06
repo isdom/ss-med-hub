@@ -7,6 +7,6 @@ import lombok.ToString;
 @AllArgsConstructor
 @Data
 @ToString
-public class PayloadCallStart {
+public class PayloadCallStarted {
     String sessionId;
 }

@@ -431,7 +431,7 @@ public class HubMain {
             log.error("UserAnswer: {} without CallSession, abort", webSocket.getRemoteSocketAddress());
             return;
         }
-        HubEventVO.sendEvent(webSocket, "CallStart", new PayloadCallStart(UUID.randomUUID().toString()));
+        HubEventVO.sendEvent(webSocket, "CallStarted", new PayloadCallStarted(UUID.randomUUID().toString()));
     }
 
     Consumer<StreamSession.EventContext> buildSendEvent(final WebSocket webSocket, final int delayInMs) {
