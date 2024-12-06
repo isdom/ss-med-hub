@@ -187,8 +187,8 @@ public class HubMain {
                         } else if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_playback)) {
                             // init session attach with webSocket
                             final String path = clientHandshake.getResourceDescriptor();
-                            final int paramBegin = path.indexOf('?');
-                            final String sessionId = paramBegin > 0 ? path.substring(paramBegin + 1) : "unknown";
+                            final int varsBegin = path.indexOf('?');
+                            final String sessionId = varsBegin > 0 ? VarsUtil.extractValue(path.substring(varsBegin + 1), "sessionId") : "unknown";
                             final PlaybackSession session = new PlaybackSession(sessionId);
                             webSocket.setAttachment(session);
                             log.info("ws path match: {}, using ws as PlaybackSession: [{}]", _match_playback, session.sessionId());
