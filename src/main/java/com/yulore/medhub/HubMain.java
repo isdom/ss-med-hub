@@ -105,6 +105,10 @@ public class HubMain {
     @Value("${session.match_playback}")
     private String _match_playback;
 
+    @Value("${session.playback_demo}")
+    private String _playback_demo;
+
+
     final List<ASRAgent> _asrAgents = new ArrayList<>();
     final List<TTSAgent> _ttsAgents = new ArrayList<>();
     final List<CosyAgent> _cosyAgents = new ArrayList<>();
@@ -192,6 +196,7 @@ public class HubMain {
                             final PlaybackSession session = new PlaybackSession(sessionId);
                             webSocket.setAttachment(session);
                             log.info("ws path match: {}, using ws as PlaybackSession: [{}]", _match_playback, session.sessionId());
+                            playbackOn(_playback_demo, session, webSocket);
                         } else {
                             log.info("ws path {} !NOT! match: {}, NOT MediaSession: {}",
                                     clientHandshake.getResourceDescriptor(), _match_media, webSocket.getRemoteSocketAddress());
@@ -263,6 +268,35 @@ public class HubMain {
                 };
         // _wsServer.setConnectionLostTimeout(_ws_heartbeat);
         _wsServer.start();
+    }
+
+    private void playbackOn(final String objectName, final PlaybackSession session, final WebSocket webSocket) {
+        _ossAccessExecutor.submit(() -> {
+            try (final OSSObject ossObject = _ossClient.getObject(_oss_bucket, objectName)) {
+                final ByteArrayOutputStream os = new ByteArrayOutputStream((int) ossObject.getObjectMetadata().getContentLength());
+                ossObject.getObjectContent().transferTo(os);
+                final int id = session.addPlaybackStream(os.toByteArray());
+                final InputStream is = new ByteArrayInputStream(session.getPlaybackStream(id));
+                final AudioInputStream audioInputStream = AudioSystem.getAudioInputStream(is);
+                final AudioFormat format = audioInputStream.getFormat();
+
+                // interval = 20 ms
+                int interval = 20;
+
+                log.info("playbackOn: sample rate: {}/interval: {}/channels: {}", format.getSampleRate(), interval, format.getChannels());
+                session.stopCurrentAndStartPlay(new PlayPCMTask(id, 0,
+                        _scheduledExecutor,
+                        audioInputStream,
+                        new SampleInfo((int) format.getSampleRate(), interval, format.getSampleSizeInBits(), format.getChannels()),
+                        webSocket,
+                        // session::stopCurrentIfMatch
+                        (ignored) -> playbackOn(objectName, session, webSocket)
+                        ));
+            } catch (IOException | UnsupportedAudioFileException ex) {
+                log.warn("playbackOn: failed to load pcm: {}", ex.toString());
+                throw new RuntimeException(ex);
+            }
+        });
     }
 
     private void initNlsAgents(final NlsClient client) {
