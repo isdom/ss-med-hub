@@ -20,12 +20,9 @@ import com.tencent.asrv2.SpeechRecognizerListener;
 import com.tencent.asrv2.SpeechRecognizerResponse;
 import com.tencent.core.ws.SpeechClient;
 import com.yulore.medhub.nls.*;
-import com.yulore.medhub.session.ASRSession;
-import com.yulore.medhub.session.CallSession;
+import com.yulore.medhub.session.*;
 import com.yulore.medhub.stream.*;
 import com.yulore.medhub.stream.StreamCacheService;
-import com.yulore.medhub.session.MediaSession;
-import com.yulore.medhub.session.StreamSession;
 import com.yulore.medhub.task.PlayPCMTask;
 import com.yulore.medhub.task.SampleInfo;
 import com.yulore.medhub.vo.*;
@@ -105,6 +102,9 @@ public class HubMain {
     @Value("${session.match_call}")
     private String _match_call;
 
+    @Value("${session.match_playback}")
+    private String _match_playback;
+
     final List<ASRAgent> _asrAgents = new ArrayList<>();
     final List<TTSAgent> _ttsAgents = new ArrayList<>();
     final List<CosyAgent> _cosyAgents = new ArrayList<>();
@@ -183,7 +183,15 @@ public class HubMain {
                             webSocket.setAttachment(session);
                             session.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms,
                                     ()->HubEventVO.<Void>sendEvent(webSocket, "CheckIdle", null));
-                            log.info("ws path match: {}, using ws as CallSession", _match_media);
+                            log.info("ws path match: {}, using ws as CallSession", _match_call);
+                        } else if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_playback)) {
+                            // init session attach with webSocket
+                            final String path = clientHandshake.getResourceDescriptor();
+                            final int paramBegin = path.indexOf('?');
+                            final String sessionId = paramBegin > 0 ? path.substring(paramBegin + 1) : "unknown";
+                            final PlaybackSession session = new PlaybackSession(sessionId);
+                            webSocket.setAttachment(session);
+                            log.info("ws path match: {}, using ws as PlaybackSession: [{}]", _match_playback, session.sessionId());
                         } else {
                             log.info("ws path {} !NOT! match: {}, NOT MediaSession: {}",
                                     clientHandshake.getResourceDescriptor(), _match_media, webSocket.getRemoteSocketAddress());
