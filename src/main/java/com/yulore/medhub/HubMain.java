@@ -418,9 +418,20 @@ public class HubMain {
             _sessionExecutor.submit(()-> handleFileReadCommand(cmd, webSocket));
         } else if ("FileTell".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handleFileTellCommand(cmd, webSocket));
+        } else if ("UserAnswer".equals(cmd.getHeader().get("name"))) {
+            _sessionExecutor.submit(()-> handleUserAnswerCommand(cmd, webSocket));
         } else {
             log.warn("handleHubCommand: Unknown Command: {}", cmd);
         }
+    }
+
+    private void handleUserAnswerCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        final CallSession session = webSocket.getAttachment();
+        if (session == null) {
+            log.error("UserAnswer: {} without CallSession, abort", webSocket.getRemoteSocketAddress());
+            return;
+        }
+        HubEventVO.sendEvent(webSocket, "CallStart", new PayloadCallStart(UUID.randomUUID().toString()));
     }
 
     Consumer<StreamSession.EventContext> buildSendEvent(final WebSocket webSocket, final int delayInMs) {
