@@ -24,6 +24,7 @@ import com.yulore.medhub.session.*;
 import com.yulore.medhub.stream.*;
 import com.yulore.medhub.stream.StreamCacheService;
 import com.yulore.medhub.task.PlayPCMTask;
+import com.yulore.medhub.task.PlayStreamPCMTask;
 import com.yulore.medhub.task.SampleInfo;
 import com.yulore.medhub.vo.*;
 import com.yulore.util.ByteArrayListInputStream;
@@ -270,33 +271,23 @@ public class HubMain {
         _wsServer.start();
     }
 
-    private void playbackOn(final String objectName, final PlaybackSession session, final WebSocket webSocket) {
-        _ossAccessExecutor.submit(() -> {
-            try (final OSSObject ossObject = _ossClient.getObject(_oss_bucket, objectName)) {
-                final ByteArrayOutputStream os = new ByteArrayOutputStream((int) ossObject.getObjectMetadata().getContentLength());
-                ossObject.getObjectContent().transferTo(os);
-                final int id = session.addPlaybackStream(os.toByteArray());
-                final InputStream is = new ByteArrayInputStream(session.getPlaybackStream(id));
-                final AudioInputStream audioInputStream = AudioSystem.getAudioInputStream(is);
-                final AudioFormat format = audioInputStream.getFormat();
+    private void playbackOn(final String path, final PlaybackSession session, final WebSocket webSocket) {
+        // interval = 20 ms
+        int interval = 20;
+        log.info("playbackOn: sample rate: {}/interval: {}/channels: {}", 16000, interval, 1);
+        final PlayStreamPCMTask task = new PlayStreamPCMTask(
+                _scheduledExecutor,
+                new SampleInfo(16000, interval, 16, 1),
+                webSocket,
+                // session::stopCurrentIfMatch
+                (ignored) -> playbackOn(path, session, webSocket)
+        );
+        final BuildStreamTask bst = getTaskOf(path, true);
+        if (bst != null) {
+            bst.buildStream(task::appendData, (ignore)->task.appendCompleted());
+        }
 
-                // interval = 20 ms
-                int interval = 20;
-
-                log.info("playbackOn: sample rate: {}/interval: {}/channels: {}", format.getSampleRate(), interval, format.getChannels());
-                session.stopCurrentAndStartPlay(new PlayPCMTask(id, 0,
-                        _scheduledExecutor,
-                        audioInputStream,
-                        new SampleInfo((int) format.getSampleRate(), interval, format.getSampleSizeInBits(), format.getChannels()),
-                        webSocket,
-                        // session::stopCurrentIfMatch
-                        (ignored) -> playbackOn(objectName, session, webSocket)
-                        ));
-            } catch (IOException | UnsupportedAudioFileException ex) {
-                log.warn("playbackOn: failed to load pcm: {}", ex.toString());
-                throw new RuntimeException(ex);
-            }
-        });
+        //session.stopCurrentAndStartPlay();
     }
 
     private void initNlsAgents(final NlsClient client) {
@@ -527,7 +518,7 @@ public class HubMain {
         webSocket.setAttachment(_ss);
 
         if (!isWrite) {
-            final BuildStreamTask bst = getTaskOf(path);
+            final BuildStreamTask bst = getTaskOf(path, false);
             if (bst == null) {
                 webSocket.setAttachment(null); // remove Attached ss
                 // TODO: define StreamOpened failed event
@@ -547,7 +538,7 @@ public class HubMain {
         }
     }
 
-    private BuildStreamTask getTaskOf(final String path) {
+    private BuildStreamTask getTaskOf(final String path, boolean removeWavHdr) {
         try {
             if (path.contains("type=cp")) {
                 return new CompositeStreamTask(path, (cvo) -> {
@@ -556,15 +547,19 @@ public class HubMain {
                         return bst.key() != null ? _scsService.asCache(bst) : bst;
                     }
                     return null;
-                });
+                }, removeWavHdr);
             } else if (path.contains("type=tts")) {
-                final BuildStreamTask bst = new TTSStreamTask(path, this::selectTTSAgent, null);
+                final BuildStreamTask bst = new TTSStreamTask(path, this::selectTTSAgent, (synthesizer) -> {
+                    synthesizer.setFormat(removeWavHdr ? OutputFormatEnum.PCM : OutputFormatEnum.WAV);
+                });
                 return bst.key() != null ? _scsService.asCache(bst) : bst;
             } else if (path.contains("type=cosy")) {
-                final BuildStreamTask bst = new CosyStreamTask(path, this::selectCosyAgent, null);
+                final BuildStreamTask bst = new CosyStreamTask(path, this::selectCosyAgent, (synthesizer) -> {
+                    synthesizer.setFormat(removeWavHdr ? OutputFormatEnum.PCM : OutputFormatEnum.WAV);
+                });
                 return bst.key() != null ? _scsService.asCache(bst) : bst;
             } else {
-                return _scsService.asCache(new OSSStreamTask(path, _ossClient, false));
+                return _scsService.asCache(new OSSStreamTask(path, _ossClient, removeWavHdr));
             }
         } catch (Exception ex) {
             log.warn("getTaskOf failed: {}", ex.toString());

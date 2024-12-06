@@ -1,33 +1,24 @@
 package com.yulore.medhub.stream;
 
 
-import com.alibaba.nls.client.protocol.OutputFormatEnum;
-import com.alibaba.nls.client.protocol.SampleRateEnum;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.mgnt.utils.StringUnicodeEncoderDecoder;
-import com.yulore.medhub.nls.CosyAgent;
-import com.yulore.medhub.nls.TTSAgent;
-import lombok.Data;
-import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
-import org.jetbrains.annotations.NotNull;
 
-import javax.sound.sampled.AudioSystem;
-import javax.sound.sampled.UnsupportedAudioFileException;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Supplier;
 
 @Slf4j
 public class CompositeStreamTask implements BuildStreamTask {
     public CompositeStreamTask(final String path,
-                               final Function<CompositeVO, BuildStreamTask> cvo2bst) {
+                               final Function<CompositeVO, BuildStreamTask> cvo2bst,
+                               final boolean removeWavHdr) {
         _cvo2bst = cvo2bst;
+        _removeWavHdr = removeWavHdr;
         // eg: rms://{type=cp,url=ws://172.18.86.131:6789/cp,[{"b":"ylhz-aicall","p":"aispeech/wxrecoding/100007/f32a59ff70394bf7b1c2fe8455f5b3b1.wav"},
         //     {"t":"tts","v":"voice-8874311","x":"我这边是美易借钱的,就是之前的国美易卡."},
         //     {"b":"ylhz-aicall","p":"aispeech/wxrecoding/100007/2981cf9558f1415f8113cce725700070.wav"}],...}
@@ -58,8 +49,10 @@ public class CompositeStreamTask implements BuildStreamTask {
 
     @Override
     public void buildStream(final Consumer<byte[]> onPart, final Consumer<Boolean> onCompleted) {
-        // first: feed wav header
-        onPart.accept(genWaveHeader());
+        if (!_removeWavHdr) {
+            // first: feed wav header
+            onPart.accept(genWaveHeader());
+        }
         // then: feed stream generate by bst one-by-one, previous 's onCompleted then start next generate
         doBuildStream(onPart, onCompleted);
     }
@@ -184,6 +177,7 @@ public class CompositeStreamTask implements BuildStreamTask {
         dos.writeByte(i1);
     }
 
+    private final boolean _removeWavHdr;
     private final List<CompositeVO> _cvos = new ArrayList<>();
     private final Function<CompositeVO, BuildStreamTask> _cvo2bst;
 }
