@@ -108,10 +108,6 @@ public class HubMain {
     @Value("${session.match_playback}")
     private String _match_playback;
 
-    @Value("${session.playback_demo}")
-    private String _playback_demo;
-
-
     final List<ASRAgent> _asrAgents = new ArrayList<>();
     final List<TTSAgent> _ttsAgents = new ArrayList<>();
     final List<CosyAgent> _cosyAgents = new ArrayList<>();
@@ -208,8 +204,6 @@ public class HubMain {
                                 return;
                             }
                             callSession.attach(playbackSession, (_path) -> playbackOn(_path, playbackSession, webSocket));
-
-                            // playbackOn(_playback_demo, playbackSession, webSocket);
                         } else {
                             log.info("ws path {} !NOT! match: {}, NOT MediaSession: {}",
                                     clientHandshake.getResourceDescriptor(), _match_media, webSocket.getRemoteSocketAddress());
