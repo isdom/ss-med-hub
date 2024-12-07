@@ -103,7 +103,7 @@ public class ASRSession {
         if (future != null) {
             future.cancel(false);
         }
-        log.info("{} 's MediaSession close(), lasted: {} s, check idle {} times",
+        log.info("{} 's ASRSession close(), lasted: {} s, check idle {} times",
                 _sessionId, (System.currentTimeMillis() - _sessionBeginInMs) / 1000.0f, _checkIdleCount.get());
     }
 

@@ -199,10 +199,17 @@ public class HubMain {
                             final String path = clientHandshake.getResourceDescriptor();
                             final int varsBegin = path.indexOf('?');
                             final String sessionId = varsBegin > 0 ? VarsUtil.extractValue(path.substring(varsBegin + 1), "sessionId") : "unknown";
-                            final PlaybackSession session = new PlaybackSession(sessionId);
-                            webSocket.setAttachment(session);
-                            log.info("ws path match: {}, using ws as PlaybackSession: [{}]", _match_playback, session.sessionId());
-                            playbackOn(_playback_demo, session, webSocket);
+                            final PlaybackSession playbackSession = new PlaybackSession(sessionId);
+                            webSocket.setAttachment(playbackSession);
+                            log.info("ws path match: {}, using ws as PlaybackSession: [{}]", _match_playback, playbackSession.sessionId());
+                            final CallSession callSession = CallSession.findBy(sessionId);
+                            if (callSession == null) {
+                                log.info("can't find callSession by sessionId: {}, ignore", sessionId);
+                                return;
+                            }
+                            callSession.attach(playbackSession, (_path) -> playbackOn(_path, playbackSession, webSocket));
+
+                            // playbackOn(_playback_demo, playbackSession, webSocket);
                         } else {
                             log.info("ws path {} !NOT! match: {}, NOT MediaSession: {}",
                                     clientHandshake.getResourceDescriptor(), _match_media, webSocket.getRemoteSocketAddress());
