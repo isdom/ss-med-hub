@@ -6,5 +6,10 @@ nacos:
     namespace: ${NACOS_NAMESPACE}
 
 spring:
+  main:
+    web-application-type: none
   application:
     name: med-hub
+#  cloud:
+#    openfeign:
+#      lazy-attributes-resolution: true

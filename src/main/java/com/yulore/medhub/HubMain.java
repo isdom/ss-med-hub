@@ -19,6 +19,7 @@ import com.tencent.asrv2.SpeechRecognizer;
 import com.tencent.asrv2.SpeechRecognizerListener;
 import com.tencent.asrv2.SpeechRecognizerResponse;
 import com.tencent.core.ws.SpeechClient;
+import com.yulore.medhub.api.ScriptApi;
 import com.yulore.medhub.nls.*;
 import com.yulore.medhub.session.*;
 import com.yulore.medhub.stream.*;
@@ -41,6 +42,7 @@ import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
+import javax.annotation.Resource;
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
@@ -151,6 +153,9 @@ public class HubMain {
     @Autowired
     private StreamCacheService _scsService;
 
+    @Resource
+    private ScriptApi _scriptApi;
+
     @PostConstruct
     public void start() {
         //创建NlsClient实例应用全局创建一个即可。生命周期可和整个应用保持一致，默认服务地址为阿里云线上服务地址。
@@ -184,7 +189,7 @@ public class HubMain {
                             log.info("ws path match: {}, using ws as MediaSession {}", _match_media, sessionId);
                         } else if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_call)) {
                             // init session attach with webSocket
-                            final CallSession session = new CallSession();
+                            final CallSession session = new CallSession(_scriptApi);
                             webSocket.setAttachment(session);
                             session.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms,
                                     ()->HubEventVO.<Void>sendEvent(webSocket, "CheckIdle", null));
@@ -464,7 +469,7 @@ public class HubMain {
             log.error("UserAnswer: {} without CallSession, abort", webSocket.getRemoteSocketAddress());
             return;
         }
-        HubEventVO.sendEvent(webSocket, "CallStarted", new PayloadCallStarted(UUID.randomUUID().toString()));
+        session.notifyUserAnswer(webSocket);
     }
 
     Consumer<StreamSession.EventContext> buildSendEvent(final WebSocket webSocket, final int delayInMs) {

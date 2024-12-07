@@ -6,5 +6,7 @@ nacos:
     namespace: ${NACOS_NAMESPACE}
 
 spring:
+  main:
+    web-application-type: none
   application:
     name: med-hub
