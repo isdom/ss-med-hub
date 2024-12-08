@@ -117,8 +117,8 @@ public class CallSession extends ASRSession {
     private AIReplyVO _welcomeReply;
     private Consumer<String> _playbackOn;
     private PlaybackSession _playback;
-    private AtomicLong _idleStartInMs = new AtomicLong(System.currentTimeMillis());
-    private AtomicBoolean _isUserSpeak = new AtomicBoolean(false);
+    private final AtomicLong _idleStartInMs = new AtomicLong(System.currentTimeMillis());
+    private final AtomicBoolean _isUserSpeak = new AtomicBoolean(false);
 
     static final ConcurrentMap<String, CallSession> _callSessions = new ConcurrentHashMap<>();
 }
