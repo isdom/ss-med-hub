@@ -175,7 +175,7 @@ public class HubMain {
                                 webSocket.getLocalSocketAddress(),
                                 clientHandshake.getResourceDescriptor());
                         if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_media)) {
-                            // init session attach with webSocket
+                            // init MediaSession attach with webSocket
                             final String sessionId = clientHandshake.getFieldValue("x-sessionid");
                             final MediaSession session = new MediaSession(sessionId, _test_enable_delay, _test_delay_ms,
                                     _test_enable_disconnect, _test_disconnect_probability, ()->webSocket.close(1006, "test_disconnect"));
@@ -184,14 +184,14 @@ public class HubMain {
                                     ()->HubEventVO.<Void>sendEvent(webSocket, "CheckIdle", null));
                             log.info("ws path match: {}, using ws as MediaSession {}", _match_media, sessionId);
                         } else if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_call)) {
-                            // init session attach with webSocket
-                            final CallSession session = new CallSession(_scriptApi);
+                            // init CallSession attach with webSocket
+                            final CallSession session = new CallSession(_scriptApi, _oss_bucket);
                             webSocket.setAttachment(session);
-                            session.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms,
-                                    ()->HubEventVO.<Void>sendEvent(webSocket, "CheckIdle", null));
+                            session.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms, session::checkIdle);
+
                             log.info("ws path match: {}, using ws as CallSession", _match_call);
                         } else if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_playback)) {
-                            // init session attach with webSocket
+                            // init PlaybackSession attach with webSocket
                             final String path = clientHandshake.getResourceDescriptor();
                             final int varsBegin = path.indexOf('?');
                             final String sessionId = varsBegin > 0 ? VarsUtil.extractValue(path.substring(varsBegin + 1), "sessionId") : "unknown";
@@ -281,12 +281,14 @@ public class HubMain {
         // interval = 20 ms
         int interval = 20;
         log.info("playbackOn: sample rate: {}/interval: {}/channels: {}", 16000, interval, 1);
+        session.notifyPlaybackStart();
         final PlayStreamPCMTask task = new PlayStreamPCMTask(
                 _scheduledExecutor,
                 new SampleInfo(16000, interval, 16, 1),
                 webSocket,
                 // session::stopCurrentIfMatch
-                (ignored) -> playbackOn(path, session, webSocket)
+                (ignored) -> session.notifyPlaybackStop()
+
         );
         final BuildStreamTask bst = getTaskOf(path, true);
         if (bst != null) {
@@ -1296,6 +1298,9 @@ public class HubMain {
 
     private void notifySentenceBegin(final WebSocket webSocket, final PayloadSentenceBegin payload) {
         try {
+            if (webSocket.getAttachment() instanceof ASRSession session) {
+                session.notifySentenceBegin(payload);
+            }
             HubEventVO.sendEvent(webSocket, "SentenceBegin", payload);
         } catch (WebsocketNotConnectedException ex) {
             log.info("ws disconnected when sendEvent SentenceBegin: {}", ex.toString());
@@ -1304,6 +1309,9 @@ public class HubMain {
 
     private void notifySentenceEnd(final WebSocket webSocket, final PayloadSentenceEnd payload) {
         try {
+            if (webSocket.getAttachment() instanceof ASRSession session) {
+                session.notifySentenceEnd(payload);
+            }
             HubEventVO.sendEvent(webSocket, "SentenceEnd", payload);
         } catch (WebsocketNotConnectedException ex) {
             log.info("ws disconnected when sendEvent SentenceEnd: {}", ex.toString());

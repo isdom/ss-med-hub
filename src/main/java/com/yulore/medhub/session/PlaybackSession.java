@@ -11,6 +11,7 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -34,6 +35,23 @@ public class PlaybackSession {
 
     public void unlock() {
         _lock.unlock();
+    }
+
+    public void notifyPlaybackStart() {
+        _isPlaying.set(true);
+    }
+
+    public void notifyPlaybackStop() {
+        _isPlaying.set(false);
+        _idleStartInMs.set(System.currentTimeMillis());
+    }
+
+    public boolean isPlaying() {
+        return _isPlaying.get();
+    }
+
+    public long idleStartInMs() {
+        return _idleStartInMs.get();
     }
 
     public void stopCurrentAndStartPlay(final PlayPCMTask current) {
@@ -79,6 +97,7 @@ public class PlaybackSession {
     private final Lock _lock = new ReentrantLock();
 
     final AtomicBoolean _isPlaying = new AtomicBoolean(false);
+    final AtomicLong _idleStartInMs = new AtomicLong(System.currentTimeMillis());
     final AtomicReference<PlayPCMTask> _playingTask = new AtomicReference<>(null);
     final long _sessionBeginInMs;
 }

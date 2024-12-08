@@ -1,5 +1,7 @@
 package com.yulore.medhub.session;
 
+import com.yulore.medhub.vo.PayloadSentenceBegin;
+import com.yulore.medhub.vo.PayloadSentenceEnd;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.exceptions.WebsocketNotConnectedException;
@@ -96,6 +98,12 @@ public class ASRSession {
 
     public int transmitCount() {
         return _transmitCount.get();
+    }
+
+    public void notifySentenceBegin(final PayloadSentenceBegin payload) {
+    }
+
+    public void notifySentenceEnd(final PayloadSentenceEnd payload) {
     }
 
     public void close() {

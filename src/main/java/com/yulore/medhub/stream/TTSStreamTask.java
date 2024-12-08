@@ -32,8 +32,9 @@ public class TTSStreamTask implements BuildStreamTask {
         _getTTSAgent = getTTSAgent;
         _onSynthesizer = onSynthesizer;
 
-        // eg: {type=tts,voice=xxx,url=ws://172.18.86.131:6789/playback,vars_playback_id=<uuid>,content_id=2088788,vars_start_timestamp=1732028219711854}
-        //          'StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(content)'.wav
+        // eg: {type=tts,voice=xxx,url=ws://172.18.86.131:6789/playback,vars_playback_id=<uuid>,
+        //      content_id=2088788,vars_start_timestamp=1732028219711854,text='StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(content)'}
+        //          playback_id.wav
         final int leftBracePos = path.indexOf('{');
         if (leftBracePos == -1) {
             log.warn("{} missing vars, ignore", path);
