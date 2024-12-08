@@ -56,6 +56,8 @@ public class CallSession extends ASRSession {
                             _scriptApi.ai_reply(_sessionId, null, _isUserSpeak.get() ? 1 : 0, idleTime);
                     if (response.getData() != null) {
                         doPlayback(response.getData());
+                    } else {
+                        log.info("checkIdle: ai_reply {}, do nothing\n", response);
                     }
                 } catch (Exception ex) {
                     log.warn("checkIdle: ai_reply error, detail: {}", ex.toString());
