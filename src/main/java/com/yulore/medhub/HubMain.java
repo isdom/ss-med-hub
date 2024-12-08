@@ -185,7 +185,7 @@ public class HubMain {
                             log.info("ws path match: {}, using ws as MediaSession {}", _match_media, sessionId);
                         } else if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_call)) {
                             // init CallSession attach with webSocket
-                            final CallSession session = new CallSession(_scriptApi, _oss_bucket);
+                            final CallSession session = new CallSession(_scriptApi, ()->webSocket.close(1000, "hangup"), _oss_bucket);
                             webSocket.setAttachment(session);
                             session.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms, session::checkIdle);
 
@@ -203,7 +203,7 @@ public class HubMain {
                                 log.info("can't find callSession by sessionId: {}, ignore", sessionId);
                                 return;
                             }
-                            callSession.attach(playbackSession, (_path) -> playbackOn(_path, playbackSession, webSocket));
+                            callSession.attach(playbackSession, (_path) -> playbackOn(_path, callSession, playbackSession, webSocket));
                         } else {
                             log.info("ws path {} !NOT! match: {}, NOT MediaSession: {}",
                                     clientHandshake.getResourceDescriptor(), _match_media, webSocket.getRemoteSocketAddress());
@@ -277,17 +277,21 @@ public class HubMain {
         _wsServer.start();
     }
 
-    private void playbackOn(final String path, final PlaybackSession session, final WebSocket webSocket) {
+    private void playbackOn(final String path, final CallSession callSession, final PlaybackSession playbackSession, final WebSocket webSocket) {
         // interval = 20 ms
         int interval = 20;
         log.info("playbackOn: sample rate: {}/interval: {}/channels: {}", 16000, interval, 1);
-        session.notifyPlaybackStart();
+        callSession.notifyPlaybackStart();
+        playbackSession.notifyPlaybackStart();
         final PlayStreamPCMTask task = new PlayStreamPCMTask(
                 _scheduledExecutor,
                 new SampleInfo(16000, interval, 16, 1),
                 webSocket,
                 // session::stopCurrentIfMatch
-                (ignored) -> session.notifyPlaybackStop()
+                (ignored) -> {
+                    callSession.notifyPlaybackStop();
+                    playbackSession.notifyPlaybackStop();
+                }
 
         );
         final BuildStreamTask bst = getTaskOf(path, true, 16000);

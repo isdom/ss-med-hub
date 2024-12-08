@@ -24,10 +24,10 @@ import java.util.function.Consumer;
 @Slf4j
 public class CallSession extends ASRSession {
     static final long CHECK_IDLE_TIMEOUT = 5000L; // 5 seconds to report check idle to script engine
-
-    public CallSession(final ScriptApi scriptApi, final String bucket) {
+    public CallSession(final ScriptApi scriptApi, final Runnable doHangup, final String bucket) {
         _sessionId = null;
         _scriptApi = scriptApi;
+        _doHangup = doHangup;
         _bucket = bucket;
     }
 
@@ -35,7 +35,7 @@ public class CallSession extends ASRSession {
         try {
             final ApiResponse<ApplySessionVO> response = _scriptApi.apply_session("", "");
             _sessionId = response.getData().getSessionId();
-            _welcomeReply = response.getData();
+            _lastReply = response.getData();
             _callSessions.put(_sessionId, this);
             log.info("apply session response: {}", response);
             HubEventVO.sendEvent(webSocket, "CallStarted", new PayloadCallStarted(response.getData().getSessionId()));
@@ -55,7 +55,8 @@ public class CallSession extends ASRSession {
                     final ApiResponse<AIReplyVO> response =
                             _scriptApi.ai_reply(_sessionId, null, _isUserSpeak.get() ? 1 : 0, idleTime);
                     if (response.getData() != null) {
-                        doPlayback(response.getData());
+                        _lastReply = response.getData();
+                        doPlayback(_lastReply);
                     } else {
                         log.info("checkIdle: ai_reply {}, do nothing\n", response);
                     }
@@ -81,6 +82,16 @@ public class CallSession extends ASRSession {
         _idleStartInMs.set(System.currentTimeMillis());
     }
 
+    public void notifyPlaybackStart() {
+    }
+
+    public void notifyPlaybackStop() {
+        if (_lastReply != null && _lastReply.getHangup() == 1) {
+            // hangup call
+            _doHangup.run();
+        }
+    }
+
     @Override
     public void close() {
         super.close();
@@ -90,7 +101,7 @@ public class CallSession extends ASRSession {
     public void attach(final PlaybackSession playback, final Consumer<String> playbackOn) {
         _playback = playback;
         _playbackOn = playbackOn;
-        doPlayback(_welcomeReply);
+        doPlayback(_lastReply);
     }
 
     private void doPlayback(final AIReplyVO replyVO) {
@@ -112,9 +123,10 @@ public class CallSession extends ASRSession {
     }
 
     private final ScriptApi _scriptApi;
+    private final Runnable _doHangup;
     private final String _bucket;
     private String _sessionId;
-    private AIReplyVO _welcomeReply;
+    private AIReplyVO _lastReply;
     private Consumer<String> _playbackOn;
     private PlaybackSession _playback;
     private final AtomicLong _idleStartInMs = new AtomicLong(System.currentTimeMillis());
