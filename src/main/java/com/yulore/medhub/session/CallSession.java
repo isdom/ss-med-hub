@@ -51,9 +51,14 @@ public class CallSession extends ASRSession {
             && (_playback != null && !_playback.isPlaying())) {
             if (idleTime > CHECK_IDLE_TIMEOUT) {
                 log.info("checkIdle: idle duration: {} ms >=: [{}] ms\n", idleTime, CHECK_IDLE_TIMEOUT);
-                final ApiResponse<AIReplyVO> response = _scriptApi.ai_reply(_sessionId, null, _isUserSpeak.get() ? 1 : 0, idleTime);
-                if (response.getData() != null) {
-                    doPlayback(response.getData());
+                try {
+                    final ApiResponse<AIReplyVO> response =
+                            _scriptApi.ai_reply(_sessionId, null, _isUserSpeak.get() ? 1 : 0, idleTime);
+                    if (response.getData() != null) {
+                        doPlayback(response.getData());
+                    }
+                } catch (Exception ex) {
+                    log.warn("checkIdle: ai_reply error, detail: {}", ex.toString());
                 }
             }
         }
