@@ -97,10 +97,11 @@ public class TTSStreamTask implements BuildStreamTask {
                     if (null != _speechRate && !_speechRate.isEmpty()) {
                         synthesizer.setSpeechRate(Integer.parseInt(_speechRate));
                     }
-                    //设置返回音频的编码格式
-                    synthesizer.setFormat(OutputFormatEnum.WAV);
-                    //设置返回音频的采样率
-                    synthesizer.setSampleRate(SampleRateEnum.SAMPLE_RATE_8K);
+
+                    // 设置返回音频的编码格式
+                    // synthesizer.setFormat(OutputFormatEnum.WAV);
+                    // 设置返回音频的采样率
+                    // synthesizer.setSampleRate(SampleRateEnum.SAMPLE_RATE_8K);
 
                     if (_onSynthesizer != null) {
                         _onSynthesizer.accept(synthesizer);

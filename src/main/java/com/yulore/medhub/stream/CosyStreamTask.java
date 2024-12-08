@@ -146,10 +146,10 @@ public class CosyStreamTask implements BuildStreamTask {
             //音量，范围是0~100，可选，默认50。
             synthesizer.setVolume(100);
 
-            //设置返回音频的编码格式
-            synthesizer.setFormat(OutputFormatEnum.WAV);
-            //设置返回音频的采样率。
-            synthesizer.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
+            // 设置返回音频的编码格式
+            // synthesizer.setFormat(OutputFormatEnum.WAV);
+            // 设置返回音频的采样率。
+            // synthesizer.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
 
             if (_onSynthesizer != null) {
                 _onSynthesizer.accept(synthesizer);

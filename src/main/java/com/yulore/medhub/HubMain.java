@@ -290,7 +290,7 @@ public class HubMain {
                 (ignored) -> session.notifyPlaybackStop()
 
         );
-        final BuildStreamTask bst = getTaskOf(path, true);
+        final BuildStreamTask bst = getTaskOf(path, true, 16000);
         if (bst != null) {
             bst.buildStream(task::appendData, (ignore)->task.appendCompleted());
         }
@@ -526,7 +526,7 @@ public class HubMain {
         webSocket.setAttachment(_ss);
 
         if (!isWrite) {
-            final BuildStreamTask bst = getTaskOf(path, false);
+            final BuildStreamTask bst = getTaskOf(path, false, 8000);
             if (bst == null) {
                 webSocket.setAttachment(null); // remove Attached ss
                 // TODO: define StreamOpened failed event
@@ -546,7 +546,7 @@ public class HubMain {
         }
     }
 
-    private BuildStreamTask getTaskOf(final String path, boolean removeWavHdr) {
+    private BuildStreamTask getTaskOf(final String path, final boolean removeWavHdr, final int sampleRate) {
         try {
             if (path.contains("type=cp")) {
                 return new CompositeStreamTask(path, (cvo) -> {
@@ -559,11 +559,13 @@ public class HubMain {
             } else if (path.contains("type=tts")) {
                 final BuildStreamTask bst = new TTSStreamTask(path, this::selectTTSAgent, (synthesizer) -> {
                     synthesizer.setFormat(removeWavHdr ? OutputFormatEnum.PCM : OutputFormatEnum.WAV);
+                    synthesizer.setSampleRate(sampleRate);
                 });
                 return bst.key() != null ? _scsService.asCache(bst) : bst;
             } else if (path.contains("type=cosy")) {
                 final BuildStreamTask bst = new CosyStreamTask(path, this::selectCosyAgent, (synthesizer) -> {
                     synthesizer.setFormat(removeWavHdr ? OutputFormatEnum.PCM : OutputFormatEnum.WAV);
+                    synthesizer.setSampleRate(sampleRate);
                 });
                 return bst.key() != null ? _scsService.asCache(bst) : bst;
             } else {
