@@ -137,6 +137,9 @@ public class HubMain {
     @Value("${oss.bucket}")
     private String _oss_bucket;
 
+    @Value("${oss.path}")
+    private String _oss_path;
+
     @Value("${oss.match_prefix}")
     private String _oss_match_prefix;
 
@@ -185,7 +188,7 @@ public class HubMain {
                             log.info("ws path match: {}, using ws as MediaSession {}", _match_media, sessionId);
                         } else if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_call)) {
                             // init CallSession attach with webSocket
-                            final CallSession session = new CallSession(_scriptApi, ()->webSocket.close(1000, "hangup"), _oss_bucket);
+                            final CallSession session = new CallSession(_scriptApi, ()->webSocket.close(1000, "hangup"), _oss_bucket, _oss_path);
                             webSocket.setAttachment(session);
                             session.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms, session::checkIdle);
 

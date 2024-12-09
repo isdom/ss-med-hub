@@ -24,11 +24,13 @@ import java.util.function.Consumer;
 @Slf4j
 public class CallSession extends ASRSession {
     static final long CHECK_IDLE_TIMEOUT = 5000L; // 5 seconds to report check idle to script engine
-    public CallSession(final ScriptApi scriptApi, final Runnable doHangup, final String bucket) {
+
+    public CallSession(final ScriptApi scriptApi, final Runnable doHangup, final String bucket, final String wavPath) {
         _sessionId = null;
         _scriptApi = scriptApi;
         _doHangup = doHangup;
         _bucket = bucket;
+        _wavPath = wavPath;
     }
 
     public void notifyUserAnswer(final WebSocket webSocket) {
@@ -129,7 +131,7 @@ public class CallSession extends ASRSession {
         if ("cp".equals(replyVO.getVoiceMode())) {
             _playbackOn.accept(String.format("type=cp,%s", JSON.toJSONString(replyVO.getCps())));
         } else if ("wav".equals(replyVO.getVoiceMode())) {
-            _playbackOn.accept(String.format("{bucket=%s}%s", _bucket, replyVO.getAi_speech_file()));
+            _playbackOn.accept(String.format("{bucket=%s}%s%s", _bucket, _wavPath, replyVO.getAi_speech_file()));
         } else if ("tts".equals(replyVO.getVoiceMode())) {
             _playbackOn.accept(String.format("{type=tts,text=%s}tts.wav",
                     StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(replyVO.getReply_content())));
@@ -147,6 +149,7 @@ public class CallSession extends ASRSession {
     private final ScriptApi _scriptApi;
     private final Runnable _doHangup;
     private final String _bucket;
+    private final String _wavPath;
     private String _sessionId;
     private AIReplyVO _lastReply;
     private Consumer<String> _playbackOn;
