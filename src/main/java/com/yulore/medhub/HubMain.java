@@ -299,6 +299,7 @@ public class HubMain {
         );
         final BuildStreamTask bst = getTaskOf(path, true, 16000);
         if (bst != null) {
+            playbackSession.attach(task);
             bst.buildStream(task::appendData, (ignore)->task.appendCompleted());
         }
 

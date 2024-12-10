@@ -113,7 +113,6 @@ public class PlayStreamPCMTask {
                     // _is.close();
                     current = _executor.schedule(() -> {
                                 safeSendPlaybackStopEvent(true);
-                                _onEnd.accept(this);
                                 log.info("schedule: schedule playback by {} send action", idx);
                             },
                             delay, TimeUnit.MILLISECONDS);
@@ -167,6 +166,7 @@ public class PlayStreamPCMTask {
 
     private void safeSendPlaybackStopEvent(final boolean completed) {
         if (_stopEventSended.compareAndSet(false, true)) {
+            _onEnd.accept(this);
             HubEventVO.sendEvent(_webSocket, "PlaybackStop", new PayloadPlaybackStop(0,"pcm", -1, completed));
         }
     }

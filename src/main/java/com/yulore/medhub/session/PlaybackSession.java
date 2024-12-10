@@ -1,6 +1,7 @@
 package com.yulore.medhub.session;
 
 import com.yulore.medhub.task.PlayPCMTask;
+import com.yulore.medhub.task.PlayStreamPCMTask;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
@@ -54,8 +55,15 @@ public class PlaybackSession {
         return _idleStartInMs.get();
     }
 
-    public void stopCurrentAndStartPlay(final PlayPCMTask current) {
-        final PlayPCMTask previous = _playingTask.getAndSet(current);
+    public void attach(final PlayStreamPCMTask current) {
+        final PlayStreamPCMTask previous = _playingTask.getAndSet(current);
+        if (previous != null) {
+            previous.stop();
+        }
+    }
+
+    public void stopCurrentAndStartPlay(final PlayStreamPCMTask current) {
+        final PlayStreamPCMTask previous = _playingTask.getAndSet(current);
         if (previous != null) {
             previous.stop();
         }
@@ -64,6 +72,7 @@ public class PlaybackSession {
         }
     }
 
+    /*
     public void stopCurrentIfMatch(final PlayPCMTask current) {
         if (_playingTask.compareAndSet(current, null)) {
             if (current != null) {
@@ -92,12 +101,13 @@ public class PlaybackSession {
             current.resume();
         }
     }
+     */
 
     private final String _sessionId;
     private final Lock _lock = new ReentrantLock();
 
     final AtomicBoolean _isPlaying = new AtomicBoolean(false);
     final AtomicLong _idleStartInMs = new AtomicLong(System.currentTimeMillis());
-    final AtomicReference<PlayPCMTask> _playingTask = new AtomicReference<>(null);
+    final AtomicReference<PlayStreamPCMTask> _playingTask = new AtomicReference<>(null);
     final long _sessionBeginInMs;
 }
