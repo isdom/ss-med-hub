@@ -296,11 +296,11 @@ public class HubMain {
                     playbackSession.notifyPlaybackStop(_task);
                 }
         );
-        callSession.notifyPlaybackStart(task);
-        playbackSession.notifyPlaybackStart(task);
         final BuildStreamTask bst = getTaskOf(path, true, 16000);
         if (bst != null) {
             playbackSession.attach(task);
+            callSession.notifyPlaybackStart(task);
+            playbackSession.notifyPlaybackStart(task);
             bst.buildStream(task::appendData, (ignore)->task.appendCompleted());
         }
 

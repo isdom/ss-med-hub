@@ -86,6 +86,7 @@ public class PlayStreamPCMTask {
             log.warn("pcm task has stopped, can't start again");
         }
         if (_started.compareAndSet(false, true)) {
+            log.info("pcm task for: {} start to playback", _path);
             HubEventVO.sendEvent(_webSocket, "PlaybackStart", new PayloadPlaybackStart(0,"pcm", _sampleInfo.sampleRate, _sampleInfo.interval, _sampleInfo.channels));
             _startTimestamp = System.currentTimeMillis();
             schedule(1 );
