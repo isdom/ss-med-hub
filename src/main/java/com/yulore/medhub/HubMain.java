@@ -289,7 +289,6 @@ public class HubMain {
                 _scheduledExecutor,
                 new SampleInfo(16000, interval, 16, 1),
                 webSocket,
-                // session::stopCurrentIfMatch
                 (_task) -> {
                     log.info("PlayStreamPCMTask {} stopped with completed: {}", _task.path(), _task.isCompleted());
                     callSession.notifyPlaybackStop(_task);
@@ -303,8 +302,6 @@ public class HubMain {
             playbackSession.notifyPlaybackStart(task);
             bst.buildStream(task::appendData, (ignore)->task.appendCompleted());
         }
-
-        //session.stopCurrentAndStartPlay();
     }
 
     private void initNlsAgents(final NlsClient client) {
