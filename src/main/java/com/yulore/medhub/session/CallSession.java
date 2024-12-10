@@ -6,6 +6,7 @@ import com.yulore.medhub.api.AIReplyVO;
 import com.yulore.medhub.api.ApiResponse;
 import com.yulore.medhub.api.ApplySessionVO;
 import com.yulore.medhub.api.ScriptApi;
+import com.yulore.medhub.task.PlayStreamPCMTask;
 import com.yulore.medhub.vo.HubEventVO;
 import com.yulore.medhub.vo.PayloadCallStarted;
 import com.yulore.medhub.vo.PayloadSentenceBegin;
@@ -104,10 +105,10 @@ public class CallSession extends ASRSession {
         }
     }
 
-    public void notifyPlaybackStart() {
+    public void notifyPlaybackStart(final PlayStreamPCMTask task) {
     }
 
-    public void notifyPlaybackStop() {
+    public void notifyPlaybackStop(final PlayStreamPCMTask task) {
         if (_lastReply != null && _lastReply.getHangup() == 1) {
             // hangup call
             _doHangup.run();

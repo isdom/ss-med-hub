@@ -27,10 +27,12 @@ import java.util.function.Consumer;
 @ToString
 @Slf4j
 public class PlayStreamPCMTask {
+    final String _path;
     final ScheduledExecutorService _executor;
     final SampleInfo _sampleInfo;
     final WebSocket _webSocket;
     final Consumer<PlayStreamPCMTask> _onEnd;
+    final AtomicBoolean _completed = new AtomicBoolean(false);
 
     int _lenInBytes;
     final AtomicReference<ScheduledFuture<?>> _currentFuture = new AtomicReference<>(null);
@@ -47,6 +49,14 @@ public class PlayStreamPCMTask {
     private int _length = 0;
     final List<byte[]> _bufs = new ArrayList<>();
     private final Lock _lock = new ReentrantLock();
+
+    public String path() {
+        return _path;
+    }
+
+    public boolean isCompleted() {
+        return _completed.get();
+    }
 
     public void appendData(final byte[] bytes) {
         try {
@@ -112,7 +122,8 @@ public class PlayStreamPCMTask {
                 } else {
                     // _is.close();
                     current = _executor.schedule(() -> {
-                                safeSendPlaybackStopEvent(true);
+                                _completed.compareAndSet(false, true);
+                                safeSendPlaybackStopEvent();
                                 log.info("schedule: schedule playback by {} send action", idx);
                             },
                             delay, TimeUnit.MILLISECONDS);
@@ -159,15 +170,15 @@ public class PlayStreamPCMTask {
                 if (null != current) {
                     current.cancel(false);
                 }
-                safeSendPlaybackStopEvent(false);
+                safeSendPlaybackStopEvent();
             }
         }
     }
 
-    private void safeSendPlaybackStopEvent(final boolean completed) {
+    private void safeSendPlaybackStopEvent() {
         if (_stopEventSended.compareAndSet(false, true)) {
             _onEnd.accept(this);
-            HubEventVO.sendEvent(_webSocket, "PlaybackStop", new PayloadPlaybackStop(0,"pcm", -1, completed));
+            HubEventVO.sendEvent(_webSocket, "PlaybackStop", new PayloadPlaybackStop(0,"pcm", -1, _completed.get()));
         }
     }
 }

@@ -1,22 +1,14 @@
 package com.yulore.medhub.session;
 
-import com.yulore.medhub.task.PlayPCMTask;
 import com.yulore.medhub.task.PlayStreamPCMTask;
-import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
-import org.java_websocket.WebSocket;
-import org.java_websocket.exceptions.WebsocketNotConnectedException;
 
-import java.nio.ByteBuffer;
-import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Consumer;
 
 @ToString
 @Slf4j
@@ -38,11 +30,11 @@ public class PlaybackSession {
         _lock.unlock();
     }
 
-    public void notifyPlaybackStart() {
+    public void notifyPlaybackStart(final PlayStreamPCMTask task) {
         _isPlaying.set(true);
     }
 
-    public void notifyPlaybackStop() {
+    public void notifyPlaybackStop(final PlayStreamPCMTask task) {
         _isPlaying.set(false);
         _idleStartInMs.set(System.currentTimeMillis());
     }

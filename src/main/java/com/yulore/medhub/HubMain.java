@@ -283,20 +283,21 @@ public class HubMain {
     private void playbackOn(final String path, final CallSession callSession, final PlaybackSession playbackSession, final WebSocket webSocket) {
         // interval = 20 ms
         int interval = 20;
-        log.info("playbackOn: sample rate: {}/interval: {}/channels: {}", 16000, interval, 1);
-        callSession.notifyPlaybackStart();
-        playbackSession.notifyPlaybackStart();
+        log.info("playbackOn: {} => sample rate: {}/interval: {}/channels: {}", path, 16000, interval, 1);
         final PlayStreamPCMTask task = new PlayStreamPCMTask(
+                path,
                 _scheduledExecutor,
                 new SampleInfo(16000, interval, 16, 1),
                 webSocket,
                 // session::stopCurrentIfMatch
-                (ignored) -> {
-                    callSession.notifyPlaybackStop();
-                    playbackSession.notifyPlaybackStop();
+                (_task) -> {
+                    log.info("PlayStreamPCMTask {} stopped with completed: {}", _task.path(), _task.isCompleted());
+                    callSession.notifyPlaybackStop(_task);
+                    playbackSession.notifyPlaybackStop(_task);
                 }
-
         );
+        callSession.notifyPlaybackStart(task);
+        playbackSession.notifyPlaybackStart(task);
         final BuildStreamTask bst = getTaskOf(path, true, 16000);
         if (bst != null) {
             playbackSession.attach(task);
