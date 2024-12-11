@@ -79,6 +79,9 @@ public class CallSession extends ASRSession {
     public void notifySentenceBegin(final PayloadSentenceBegin payload) {
         super.notifySentenceBegin(payload);
         _isUserSpeak.set(true);
+        if (_lastReply != null && _lastReply.getPause_on_speak() != null && _lastReply.getPause_on_speak()) {
+            _playback.pauseCurrentAnyway();
+        }
     }
 
     @Override
@@ -86,6 +89,10 @@ public class CallSession extends ASRSession {
         super.notifySentenceEnd(payload);
         _isUserSpeak.set(false);
         _idleStartInMs.set(System.currentTimeMillis());
+
+        if (_lastReply != null && _lastReply.getPause_on_speak() != null && _lastReply.getPause_on_speak()) {
+            _playback.resumeCurrentAnyway();
+        }
 
         if (_sessionId != null) {
             boolean isAiSpeaking = _playback != null && _playback.isPlaying();

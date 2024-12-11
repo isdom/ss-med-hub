@@ -79,21 +79,21 @@ public class PlaybackSession {
             current.stop();
         }
     }
+     */
 
     public void pauseCurrentAnyway() {
-        final PlayPCMTask current = _playingTask.get();
+        final PlayStreamPCMTask current = _playingTask.get();
         if (current != null) {
             current.pause();
         }
     }
 
     public void resumeCurrentAnyway() {
-        final PlayPCMTask current = _playingTask.get();
+        final PlayStreamPCMTask current = _playingTask.get();
         if (current != null) {
             current.resume();
         }
     }
-     */
 
     private final String _sessionId;
     private final Lock _lock = new ReentrantLock();
