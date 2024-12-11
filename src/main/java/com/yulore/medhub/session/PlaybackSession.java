@@ -84,6 +84,7 @@ public class PlaybackSession {
     public void pauseCurrentAnyway() {
         final PlayStreamPCMTask current = _playingTask.get();
         if (current != null) {
+            log.info("call {}'s pause", current.path());
             current.pause();
         }
     }
@@ -91,6 +92,7 @@ public class PlaybackSession {
     public void resumeCurrentAnyway() {
         final PlayStreamPCMTask current = _playingTask.get();
         if (current != null) {
+            log.info("call {}'s resume", current.path());
             current.resume();
         }
     }
