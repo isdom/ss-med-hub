@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -24,9 +25,10 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 
 @RequiredArgsConstructor
-@ToString
+@ToString(of={"_taskId", "_path", "_completed"})
 @Slf4j
 public class PlayStreamPCMTask {
+    private final String _taskId = UUID.randomUUID().toString();
     final String _path;
     final ScheduledExecutorService _executor;
     final SampleInfo _sampleInfo;
@@ -49,6 +51,10 @@ public class PlayStreamPCMTask {
     private int _length = 0;
     final List<byte[]> _bufs = new ArrayList<>();
     private final Lock _lock = new ReentrantLock();
+
+    public String taskId() {
+        return _taskId;
+    }
 
     public String path() {
         return _path;
