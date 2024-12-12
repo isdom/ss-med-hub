@@ -1,5 +1,6 @@
 package com.yulore.medhub.session;
 
+import com.alibaba.nls.client.protocol.asr.SpeechTranscriber;
 import com.yulore.medhub.vo.PayloadSentenceBegin;
 import com.yulore.medhub.vo.PayloadSentenceEnd;
 import lombok.ToString;
@@ -113,6 +114,10 @@ public class ASRSession {
         }
         log.info("{} 's ASRSession close(), lasted: {} s, check idle {} times",
                 _sessionId, (System.currentTimeMillis() - _sessionBeginInMs) / 1000.0f, _checkIdleCount.get());
+    }
+
+    public SpeechTranscriber onSpeechTranscriberCreated(final SpeechTranscriber speechTranscriber) {
+        return speechTranscriber;
     }
 
     public void setASR(final Runnable stopASR, final Consumer<ByteBuffer> transmitData) {

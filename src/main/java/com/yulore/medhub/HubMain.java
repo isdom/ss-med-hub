@@ -143,6 +143,12 @@ public class HubMain {
     @Value("${oss.match_prefix}")
     private String _oss_match_prefix;
 
+    @Value("${rec.bucket}")
+    private String _rec_bucket;
+
+    @Value("${rec.path}")
+    private String _rec_path;
+
     private OSS _ossClient;
 
     private ExecutorService _ossAccessExecutor;
@@ -188,7 +194,15 @@ public class HubMain {
                             log.info("ws path match: {}, using ws as MediaSession {}", _match_media, sessionId);
                         } else if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_call)) {
                             // init CallSession attach with webSocket
-                            final CallSession session = new CallSession(_scriptApi, ()->webSocket.close(1000, "hangup"), _oss_bucket, _oss_path);
+                            final CallSession session = new CallSession(_scriptApi, ()->webSocket.close(1000, "hangup"), _oss_bucket, _oss_path, (ctx) -> {
+                                final long startUploadInMs = System.currentTimeMillis();
+                                _ossAccessExecutor.submit(()->{
+                                    final String objectName = _rec_path + ctx.sessionId + ".wav";
+                                    _ossClient.putObject(_rec_bucket, objectName, ctx.content);
+                                    log.info("[{}]: upload record to oss => bucket:{}/object:{}, cost {} ms",
+                                            ctx.sessionId, _rec_bucket, objectName, System.currentTimeMillis() - startUploadInMs);
+                                });
+                            });
                             webSocket.setAttachment(session);
                             session.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms, session::checkIdle);
 
@@ -1138,7 +1152,8 @@ public class HubMain {
         final long startConnectingInMs = System.currentTimeMillis();
         final ASRAgent agent = selectASRAgent();
 
-        final SpeechTranscriber speechTranscriber = buildSpeechTranscriber(agent, buildTranscriberListener(session, webSocket, agent, session.sessionId(), startConnectingInMs));
+        final SpeechTranscriber speechTranscriber = session.onSpeechTranscriberCreated(
+                buildSpeechTranscriber(agent, buildTranscriberListener(session, webSocket, agent, session.sessionId(), startConnectingInMs)));
 
         session.setASR(()-> {
             try {

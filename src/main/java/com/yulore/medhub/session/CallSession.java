@@ -1,6 +1,8 @@
 package com.yulore.medhub.session;
 
 import com.alibaba.fastjson.JSON;
+import com.alibaba.nls.client.protocol.SampleRateEnum;
+import com.alibaba.nls.client.protocol.asr.SpeechTranscriber;
 import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.medhub.api.AIReplyVO;
 import com.yulore.medhub.api.ApiResponse;
@@ -11,10 +13,17 @@ import com.yulore.medhub.vo.HubEventVO;
 import com.yulore.medhub.vo.PayloadCallStarted;
 import com.yulore.medhub.vo.PayloadSentenceBegin;
 import com.yulore.medhub.vo.PayloadSentenceEnd;
+import com.yulore.util.ByteArrayListInputStream;
+import com.yulore.util.WaveUtil;
+import lombok.AllArgsConstructor;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
 
+import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -24,14 +33,30 @@ import java.util.function.Consumer;
 @ToString
 @Slf4j
 public class CallSession extends ASRSession {
+    @AllArgsConstructor
+    static public class RecordContext {
+        public String sessionId;
+        public InputStream content;
+    }
+
     static final long CHECK_IDLE_TIMEOUT = 5000L; // 5 seconds to report check idle to script engine
 
-    public CallSession(final ScriptApi scriptApi, final Runnable doHangup, final String bucket, final String wavPath) {
+    public CallSession(final ScriptApi scriptApi, final Runnable doHangup, final String bucket, final String wavPath, final Consumer<RecordContext> doRecord) {
         _sessionId = null;
         _scriptApi = scriptApi;
         _doHangup = doHangup;
         _bucket = bucket;
         _wavPath = wavPath;
+        _doRecord = doRecord;
+
+        _usBufs.add(WaveUtil.genWaveHeader(16000, 1));
+    }
+
+    @Override
+    public SpeechTranscriber onSpeechTranscriberCreated(final SpeechTranscriber speechTranscriber) {
+        speechTranscriber.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
+
+        return super.onSpeechTranscriberCreated(speechTranscriber);
     }
 
     public void notifyUserAnswer(final WebSocket webSocket) {
@@ -73,6 +98,17 @@ public class CallSession extends ASRSession {
         }
         log.info("checkIdle: sessionId: {}/is_speaking: {}/is_playing: {}/idle duration: {} ms",
                 _sessionId, _isUserSpeak.get(), isAiSpeaking, idleTime);
+    }
+
+    @Override
+    public boolean transmit(final ByteBuffer bytes) {
+        final boolean result = super.transmit(bytes);
+
+        final byte[] srcBytes = new byte[bytes.remaining()];
+        bytes.get(srcBytes, 0, srcBytes.length);
+        _usBufs.add(srcBytes);
+
+        return result;
     }
 
     @Override
@@ -132,6 +168,7 @@ public class CallSession extends ASRSession {
     public void close() {
         super.close();
         _callSessions.remove(_sessionId);
+        _doRecord.accept(new RecordContext(_sessionId, new ByteArrayListInputStream(_usBufs)));
     }
 
     public void attach(final PlaybackSession playback, final Consumer<String> playbackOn) {
@@ -171,5 +208,8 @@ public class CallSession extends ASRSession {
     private final AtomicLong _idleStartInMs = new AtomicLong(System.currentTimeMillis());
     private final AtomicBoolean _isUserSpeak = new AtomicBoolean(false);
 
-    static final ConcurrentMap<String, CallSession> _callSessions = new ConcurrentHashMap<>();
+    private static final ConcurrentMap<String, CallSession> _callSessions = new ConcurrentHashMap<>();
+
+    private final List<byte[]> _usBufs = new ArrayList<>();
+    private final Consumer<RecordContext> _doRecord;
 }
