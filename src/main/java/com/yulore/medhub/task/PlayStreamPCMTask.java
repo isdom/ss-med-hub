@@ -32,7 +32,8 @@ public class PlayStreamPCMTask {
     final String _path;
     final ScheduledExecutorService _executor;
     final SampleInfo _sampleInfo;
-    final WebSocket _webSocket;
+    // final WebSocket _webSocket;
+    final Consumer<byte[]> _doSendData;
     final Consumer<PlayStreamPCMTask> _onEnd;
     final AtomicBoolean _completed = new AtomicBoolean(false);
 
@@ -93,7 +94,7 @@ public class PlayStreamPCMTask {
         }
         if (_started.compareAndSet(false, true)) {
             log.info("pcm task for: {} start to playback", _path);
-            HubEventVO.sendEvent(_webSocket, "PlaybackStart", new PayloadPlaybackStart(0,"pcm", _sampleInfo.sampleRate, _sampleInfo.interval, _sampleInfo.channels));
+            // HubEventVO.sendEvent(_webSocket, "PlaybackStart", new PayloadPlaybackStart(0,"pcm", _sampleInfo.sampleRate, _sampleInfo.interval, _sampleInfo.channels));
             _startTimestamp = System.currentTimeMillis();
             schedule(1 );
         } else {
@@ -123,7 +124,8 @@ public class PlayStreamPCMTask {
                 final long delay = _startTimestamp + (long) _sampleInfo.interval * idx - System.currentTimeMillis();
                 if (readSize == _lenInBytes) {
                     current = _executor.schedule(() -> {
-                        _webSocket.send(bytes);
+                        _doSendData.accept(bytes);
+                        // _webSocket.send(bytes);
                         schedule(idx + 1);
                     }, delay, TimeUnit.MILLISECONDS);
                 } else {
@@ -185,7 +187,7 @@ public class PlayStreamPCMTask {
     private void safeSendPlaybackStopEvent() {
         if (_stopEventSended.compareAndSet(false, true)) {
             _onEnd.accept(this);
-            HubEventVO.sendEvent(_webSocket, "PlaybackStop", new PayloadPlaybackStop(0,"pcm", -1, _completed.get()));
+            // HubEventVO.sendEvent(_webSocket, "PlaybackStop", new PayloadPlaybackStop(0,"pcm", -1, _completed.get()));
         }
     }
 }
