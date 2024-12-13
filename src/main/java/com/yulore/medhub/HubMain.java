@@ -302,8 +302,11 @@ public class HubMain {
                 path,
                 _scheduledExecutor,
                 new SampleInfo(16000, interval, 16, 1),
+                callSession::notifyPlaybackSendStart,
+                callSession::notifyPlaybackSendStop,
                 (bytes) -> {
                     webSocket.send(bytes);
+                    callSession.notifyPlaybackSendData(bytes);
                 },
                 (_task) -> {
                     log.info("PlayStreamPCMTask {} stopped with completed: {}", _task.path(), _task.isCompleted());

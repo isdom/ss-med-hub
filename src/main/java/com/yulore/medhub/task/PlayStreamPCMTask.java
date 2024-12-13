@@ -19,6 +19,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -33,9 +34,13 @@ public class PlayStreamPCMTask {
     final ScheduledExecutorService _executor;
     final SampleInfo _sampleInfo;
     // final WebSocket _webSocket;
-    final Consumer<byte[]> _doSendData;
-    final Consumer<PlayStreamPCMTask> _onEnd;
-    final AtomicBoolean _completed = new AtomicBoolean(false);
+    private final Consumer<Long> _onStartSend;
+    private final Consumer<Long> _onStopSend;
+    private final Consumer<byte[]> _doSendData;
+    private final AtomicLong _startSendTimestamp = new AtomicLong(0);
+
+    private final Consumer<PlayStreamPCMTask> _onEnd;
+    private final AtomicBoolean _completed = new AtomicBoolean(false);
 
     int _lenInBytes;
     final AtomicReference<ScheduledFuture<?>> _currentFuture = new AtomicReference<>(null);
@@ -124,8 +129,11 @@ public class PlayStreamPCMTask {
                 final long delay = _startTimestamp + (long) _sampleInfo.interval * idx - System.currentTimeMillis();
                 if (readSize == _lenInBytes) {
                     current = _executor.schedule(() -> {
+                        if (_startSendTimestamp.compareAndSet(0, 1)) {
+                            _startSendTimestamp.set(System.currentTimeMillis());
+                            _onStartSend.accept(_startSendTimestamp.get());
+                        }
                         _doSendData.accept(bytes);
-                        // _webSocket.send(bytes);
                         schedule(idx + 1);
                     }, delay, TimeUnit.MILLISECONDS);
                 } else {
@@ -159,6 +167,8 @@ public class PlayStreamPCMTask {
         final ScheduledFuture<?> current = _currentFuture.getAndSet(null);
         if (null != current) {
             current.cancel(true);
+            _startSendTimestamp.set(0);
+            _onStopSend.accept(System.currentTimeMillis());
         }
         _pauseTimestamp = System.currentTimeMillis();
     }
@@ -186,6 +196,8 @@ public class PlayStreamPCMTask {
 
     private void safeSendPlaybackStopEvent() {
         if (_stopEventSended.compareAndSet(false, true)) {
+            _startSendTimestamp.set(0);
+            _onStopSend.accept(System.currentTimeMillis());
             _onEnd.accept(this);
             // HubEventVO.sendEvent(_webSocket, "PlaybackStop", new PayloadPlaybackStop(0,"pcm", -1, _completed.get()));
         }

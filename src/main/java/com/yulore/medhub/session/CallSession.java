@@ -16,18 +16,21 @@ import com.yulore.medhub.vo.PayloadSentenceEnd;
 import com.yulore.util.ByteArrayListInputStream;
 import com.yulore.util.WaveUtil;
 import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
 
-import java.io.InputStream;
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 @ToString
@@ -49,7 +52,7 @@ public class CallSession extends ASRSession {
         _wavPath = wavPath;
         _doRecord = doRecord;
 
-        _usBufs.add(WaveUtil.genWaveHeader(16000, 1));
+        // _usBufs.add(WaveUtil.genWaveHeader(16000, 1));
     }
 
     @Override
@@ -106,9 +109,36 @@ public class CallSession extends ASRSession {
 
         final byte[] srcBytes = new byte[bytes.remaining()];
         bytes.get(srcBytes, 0, srcBytes.length);
+        if (_recordStartTimestamp.compareAndSet(0, 1)) {
+            _recordStartTimestamp.set(System.currentTimeMillis());
+        }
         _usBufs.add(srcBytes);
 
         return result;
+    }
+
+    public void notifyPlaybackSendStart(final long startTimestamp) {
+        if (!_currentPS.compareAndSet(null, new PlaybackSegment(startTimestamp))) {
+            log.warn("[{}]: notifyPlaybackSendStart: current PlaybackSegment is !NOT! null", _sessionId);
+        }
+    }
+
+    public void notifyPlaybackSendStop(final long stopTimestamp) {
+        final PlaybackSegment ps = _currentPS.getAndSet(null);
+        if (ps != null) {
+            _dsBufs.add(ps);
+        } else {
+            log.warn("[{}]: notifyPlaybackSendStop: current PlaybackSegment is null", _sessionId);
+        }
+    }
+
+    public void notifyPlaybackSendData(final byte[] bytes) {
+        final PlaybackSegment ps = _currentPS.get();
+        if (ps != null) {
+            ps._data.add(bytes);
+        } else {
+            log.warn("[{}]: notifyPlaybackSendData: current PlaybackSegment is null", _sessionId);
+        }
     }
 
     @Override
@@ -168,7 +198,71 @@ public class CallSession extends ASRSession {
     public void close() {
         super.close();
         _callSessions.remove(_sessionId);
-        _doRecord.accept(new RecordContext(_sessionId, new ByteArrayListInputStream(_usBufs)));
+        // start to generate record file, REF: https://developer.aliyun.com/article/245440
+        try (final ByteArrayOutputStream bos = new ByteArrayOutputStream();
+             final InputStream upsample_is = new ByteArrayListInputStream(_usBufs)) {
+            final byte[] one_sample = new byte[2];
+            InputStream downsample_is = null;
+
+            // output wave header with 16K sample rate and 2 channels
+            bos.write(WaveUtil.genWaveHeader(16000, 2));
+
+            long currentInMs = _recordStartTimestamp.get();
+            PlaybackSegment ps = null;
+
+            if (!_dsBufs.isEmpty()) {
+                ps = _dsBufs.remove(0);
+                if (ps != null) {
+                    log.info("new current ps's start tm: {} / currentInMS: {}", ps.timestamp, currentInMs);
+                }
+            }
+
+            int sample_count = 0;
+            while (upsample_is.read(one_sample) == 2) {
+                if (downsample_is == null && ps != null && ps.timestamp == currentInMs) {
+                    log.info("current ps {} match currentInMS", ps.timestamp);
+                    downsample_is = new ByteArrayListInputStream(ps._data);
+                }
+                sample_count++;
+                boolean downsample_written = false;
+                // read up stream data ok
+                bos.write(one_sample);
+                if (downsample_is != null) {
+                    if (downsample_is.read(one_sample) == 2) {
+                        bos.write(one_sample);
+                        downsample_written = true;
+                    } else {
+                        // current ps written
+                        downsample_is.close();
+                        downsample_is = null;
+                        if (!_dsBufs.isEmpty()) {
+                            ps = _dsBufs.remove(0);
+                            if (ps != null) {
+                                log.info("new current ps's start tm: {} / currentInMS: {}", ps.timestamp, currentInMs);
+                            }
+                        }
+                    }
+                }
+                if (!downsample_written) {
+                    // silent data
+                    one_sample[0] = (byte)0x00;
+                    one_sample[1] = (byte)0x00;
+                    bos.write(one_sample);
+                }
+                if (sample_count % 16 == 0) {
+                    // 1 millisecond == 16 sample == 16 * 2 bytes = 32 bytes
+                    currentInMs++;
+                }
+            }
+
+            log.info("total written {} samples, {} seconds", sample_count, (float)sample_count / 16000);
+
+            bos.flush();
+            _doRecord.accept(new RecordContext(_sessionId, new ByteArrayInputStream(bos.toByteArray())));
+        } catch (IOException ex) {
+            log.warn("[{}] close: generate record stream error, detail: {}", _sessionId, ex.toString());
+            throw new RuntimeException(ex);
+        }
     }
 
     public void attach(final PlaybackSession playback, final Consumer<String> playbackOn) {
@@ -211,5 +305,15 @@ public class CallSession extends ASRSession {
     private static final ConcurrentMap<String, CallSession> _callSessions = new ConcurrentHashMap<>();
 
     private final List<byte[]> _usBufs = new ArrayList<>();
+
+    @RequiredArgsConstructor
+    private static class PlaybackSegment {
+        final long timestamp;
+        final List<byte[]> _data = new LinkedList<>();
+    }
+    private final AtomicReference<PlaybackSegment> _currentPS = new AtomicReference<>(null);
+    private final List<PlaybackSegment> _dsBufs = new ArrayList<>();
+
+    private final AtomicLong _recordStartTimestamp = new AtomicLong(0);
     private final Consumer<RecordContext> _doRecord;
 }
