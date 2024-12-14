@@ -144,10 +144,10 @@ public class CallSession extends ASRSession {
         super.notifySentenceBegin(payload);
         _isUserSpeak.set(true);
         if (_lastReply != null && _lastReply.getPause_on_speak() != null && _lastReply.getPause_on_speak()) {
-            log.info("notifySentenceBegin: lastReply: {}, pauseCurrentAnyway", _lastReply);
+            // log.info("notifySentenceBegin: lastReply: {}, pauseCurrentAnyway", _lastReply);
             _playback.pauseCurrent();
         } else {
-            log.info("notifySentenceBegin: lastReply: {}, ignore", _lastReply);
+            // log.info("notifySentenceBegin: lastReply: {}, ignore", _lastReply);
         }
     }
 
@@ -158,10 +158,10 @@ public class CallSession extends ASRSession {
         _idleStartInMs.set(System.currentTimeMillis());
 
         if (_lastReply != null && _lastReply.getPause_on_speak() != null && _lastReply.getPause_on_speak()) {
-            log.info("notifySentenceEnd: lastReply: {}, resumeCurrentAnyway", _lastReply);
+            // log.info("notifySentenceEnd: lastReply: {}, resumeCurrentAnyway", _lastReply);
             _playback.resumeCurrent();
         } else {
-            log.info("notifySentenceEnd: lastReply: {}, ignore", _lastReply);
+            // log.info("notifySentenceEnd: lastReply: {}, ignore", _lastReply);
         }
 
         if (_sessionId != null) {

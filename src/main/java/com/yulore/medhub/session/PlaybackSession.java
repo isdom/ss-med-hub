@@ -35,8 +35,12 @@ public class PlaybackSession {
     }
 
     public void notifyPlaybackStop(final PlayStreamPCMTask task) {
-        _isPlaying.set(false);
-        _idleStartInMs.set(System.currentTimeMillis());
+        if (_playingTask.compareAndSet(task, null)) {
+            _isPlaying.set(false);
+            _idleStartInMs.set(System.currentTimeMillis());
+        } else {
+            log.warn("PlaybackSession.notifyPlaybackStop: playingTask: {} !NOT! match notify sourceTask: {}, ignore stop notify", _playingTask.get(), task);
+        }
     }
 
     public boolean isPlaying() {
