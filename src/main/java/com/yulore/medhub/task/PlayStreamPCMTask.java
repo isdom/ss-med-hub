@@ -33,7 +33,6 @@ public class PlayStreamPCMTask {
     final String _path;
     final ScheduledExecutorService _executor;
     final SampleInfo _sampleInfo;
-    // final WebSocket _webSocket;
     private final Consumer<Long> _onStartSend;
     private final Consumer<Long> _onStopSend;
     private final Consumer<byte[]> _doSendData;
@@ -95,15 +94,15 @@ public class PlayStreamPCMTask {
     public void start() {
         _lenInBytes = _sampleInfo.lenInBytes();
         if (_stopped.get()) {
-            log.warn("pcm task has stopped, can't start again");
+            log.warn("({}): pcm task has stopped, can't start again", this);
         }
         if (_started.compareAndSet(false, true)) {
-            log.info("pcm task for: {} start to playback", _path);
+            log.info("({}): pcm task start to playback", this);
             // HubEventVO.sendEvent(_webSocket, "PlaybackStart", new PayloadPlaybackStart(0,"pcm", _sampleInfo.sampleRate, _sampleInfo.interval, _sampleInfo.channels));
             _startTimestamp = System.currentTimeMillis();
             schedule(1 );
         } else {
-            log.warn("pcm task started, ignore multi-call start()");
+            log.warn("({}): pcm task started, ignore multi-call start()", this);
         }
     }
 
@@ -137,11 +136,11 @@ public class PlayStreamPCMTask {
                         schedule(idx + 1);
                     }, delay, TimeUnit.MILLISECONDS);
                 } else {
-                    // _is.close();
                     current = _executor.schedule(() -> {
+                                _stopped.compareAndSet(false, true);
                                 _completed.compareAndSet(false, true);
                                 safeSendPlaybackStopEvent();
-                                log.info("schedule: schedule playback by {} send action", idx);
+                                log.info("({}): finish playback by {} send action", this, idx);
                             },
                             delay, TimeUnit.MILLISECONDS);
                 }
@@ -159,23 +158,30 @@ public class PlayStreamPCMTask {
         }
     }
 
-    public void pause() {
+    public boolean pause() {
         if (_stopped.get()) {
             // ignore if stopped flag set
-            return;
+            log.warn("({}): pcm task has stopped, ignore pause request", this);
+            return false;
         }
         final ScheduledFuture<?> current = _currentFuture.getAndSet(null);
         if (null != current) {
             current.cancel(true);
             _startSendTimestamp.set(0);
             _onStopSend.accept(System.currentTimeMillis());
+            _pauseTimestamp = System.currentTimeMillis();
+            return true;
+        } else {
+            log.warn("({}): pcm task current schedule is null, NOT start or paused already, ignore pause request", this);
+            return false;
         }
-        _pauseTimestamp = System.currentTimeMillis();
+        // _pauseTimestamp = System.currentTimeMillis();
     }
 
     public void resume() {
         if (_stopped.get()) {
             // ignore if stopped flag set
+            log.warn("({}): pcm task has stopped, ignore resume request", this);
             return;
         }
         _startTimestamp += System.currentTimeMillis() - _pauseTimestamp;
