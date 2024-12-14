@@ -72,26 +72,29 @@ public class PlaybackSession {
             }
         }
     }
+    */
 
-    public void stopCurrentAnyway() {
-        final PlayPCMTask current = _playingTask.getAndSet(null);
+    public void stopCurrent() {
+        final PlayStreamPCMTask current = _playingTask.getAndSet(null);
         if (current != null) {
             current.stop();
         }
     }
-     */
 
-    public void pauseCurrentAnyway() {
+    public void pauseCurrent() {
         final PlayStreamPCMTask current = _playingTask.get();
         if (current != null) {
-            current.pause();
-            log.info("task {} paused", current);
+            if (current.pause()) {
+                log.info("task {} paused success", current);
+            } else {
+                log.warn("task {} paused failed", current);
+            }
         }
     }
 
-    public void resumeCurrentAnyway() {
+    public void resumeCurrent() {
         final PlayStreamPCMTask current = _playingTask.get();
-        if (current != null) {
+        if (current != null && current.isPaused()) {
             current.resume();
             log.info("task {} resumed", current);
         }

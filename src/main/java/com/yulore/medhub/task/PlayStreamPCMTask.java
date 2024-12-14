@@ -14,7 +14,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
@@ -39,9 +38,7 @@ public class PlayStreamPCMTask {
 
     int _interval_bytes;
     final AtomicReference<ScheduledFuture<?>> _next = new AtomicReference<>(null);
-    final AtomicInteger _currentIdx = new AtomicInteger(0);
     private long _startTimestamp;
-    private long _pauseTimestamp;
 
     final AtomicBoolean _started = new AtomicBoolean(false);
     final AtomicBoolean _stopped = new AtomicBoolean(false);
@@ -60,6 +57,10 @@ public class PlayStreamPCMTask {
 
     public String path() {
         return _path;
+    }
+
+    public boolean isPaused() {
+        return _paused.get();
     }
 
     public boolean isCompleted() {
@@ -110,7 +111,7 @@ public class PlayStreamPCMTask {
         }
     }
 
-    private void playAndSchedule(final int idx) {
+    private void playAndSchedule(final int intervalCount) {
         ScheduledFuture<?> next = null;
         try {
             _lock.lock();
@@ -119,27 +120,24 @@ public class PlayStreamPCMTask {
                 log.warn("({}): pcm task has stopped, abort playAndSchedule", this);
                 return;
             }
-            _currentIdx.set(idx);
             if (_pos + _interval_bytes > _length && _streaming) {
                 // need more data
-                final long delay = _startTimestamp + (long) _sampleInfo.interval() * idx - System.currentTimeMillis();
-                next = _executor.schedule(() -> playAndSchedule(idx + 1), delay, TimeUnit.MILLISECONDS);
+                final long delay = _startTimestamp + (long) _sampleInfo.interval() * intervalCount - System.currentTimeMillis();
+                next = _executor.schedule(() -> playAndSchedule(intervalCount + 1), delay, TimeUnit.MILLISECONDS);
+                log.warn("({}): pcm task need_more_data, delay_playback_to_next", this);
             } else {
                 final byte[] bytes = new byte[_interval_bytes];
-                final InputStream is = new ByteArrayListInputStream(_bufs);
-                is.skip(_pos);
-                final int readSize = is.read(bytes);
-                _pos += readSize;
-                if (readSize == _interval_bytes) {
+                final int read_size = fillIntervalData(bytes);
+                if (read_size == _interval_bytes) {
                     fireStartSendOnce();
                     _doSendData.accept(bytes);
-                    final long delay = _startTimestamp + (long) _sampleInfo.interval() * idx - System.currentTimeMillis();
-                    next = _executor.schedule(() -> playAndSchedule(idx + 1), delay, TimeUnit.MILLISECONDS);
+                    final long delay = _startTimestamp + (long) _sampleInfo.interval() * intervalCount - System.currentTimeMillis();
+                    next = _executor.schedule(() -> playAndSchedule(intervalCount + 1), delay, TimeUnit.MILLISECONDS);
                 } else {
                     _stopped.compareAndSet(false, true);
                     _completed.compareAndSet(false, true);
                     safeSendPlaybackStopEvent();
-                    log.info("({}): finish playback by {} send action", this, idx);
+                    log.info("({}): finish playback by {} send action", this, intervalCount);
                 }
             }
         } catch (IOException ex) {
@@ -151,6 +149,20 @@ public class PlayStreamPCMTask {
         }
     }
 
+    private int fillIntervalData(final byte[] bytes) throws IOException {
+        if (_paused.get()) {
+            // playback in paused state, so send silent data
+            return bytes.length;
+        } else {
+            try (final InputStream is = new ByteArrayListInputStream(_bufs)) {
+                is.skip(_pos);
+                final int read_size = is.read(bytes);
+                _pos += read_size;
+                return read_size;
+            }
+        }
+    }
+
     private void fireStartSendOnce() {
         if (_startSendTimestamp.compareAndSet(0, 1)) {
             _startSendTimestamp.set(System.currentTimeMillis());
@@ -159,46 +171,30 @@ public class PlayStreamPCMTask {
     }
 
     public boolean pause() {
-        try {
-            _lock.lock();
-            if (!_started.get()) {
-                // ignore if !NOT! started
-                log.warn("({}): pcm task NOT started, ignore pause request", this);
-                return false;
-            }
-            if (_stopped.get()) {
-                // ignore if stopped flag set
-                log.warn("({}): pcm task has stopped, ignore pause request", this);
-                return false;
-            }
-            final ScheduledFuture<?> current = _next.getAndSet(null);
-            if (null != current) {
-                current.cancel(true);
-                _startSendTimestamp.set(0);
-                _onStopSend.accept(System.currentTimeMillis());
-                _pauseTimestamp = System.currentTimeMillis();
-                return true;
-            } else {
-                log.warn("({}): pcm task current schedule is null, NOT start or paused already, ignore pause request", this);
-                return false;
-            }
-        } finally {
-            _lock.unlock();
+        if (_stopped.get()) {
+            // ignore if stopped flag set
+            log.warn("({}): pcm task has stopped, ignore pause request", this);
+            return false;
+        }
+        if (_paused.compareAndSet(false, true)) {
+            log.info("({}): pcm task change to paused state", this);
+            return true;
+        } else {
+            log.warn("({}): pcm task paused already, ignore pause request", this);
+            return false;
         }
     }
 
     public void resume() {
-        try {
-            _lock.lock();
-            if (_stopped.get()) {
-                // ignore if stopped flag set
-                log.warn("({}): pcm task has stopped, ignore resume request", this);
-                return;
-            }
-            _startTimestamp += System.currentTimeMillis() - _pauseTimestamp;
-            playAndSchedule(_currentIdx.get());
-        } finally {
-            _lock.unlock();
+        if (_stopped.get()) {
+            // ignore if stopped flag set
+            log.warn("({}): pcm task has stopped, ignore resume request", this);
+            return;
+        }
+        if (_paused.compareAndSet(true, false)) {
+            log.info("({}): pcm task resume to playback", this);
+        } else {
+            log.warn("({}): pcm task !NOT! paused, ignore resume request", this);
         }
     }
 

@@ -51,8 +51,6 @@ public class CallSession extends ASRSession {
         _bucket = bucket;
         _wavPath = wavPath;
         _doRecord = doRecord;
-
-        // _usBufs.add(WaveUtil.genWaveHeader(16000, 1));
     }
 
     @Override
@@ -147,7 +145,7 @@ public class CallSession extends ASRSession {
         _isUserSpeak.set(true);
         if (_lastReply != null && _lastReply.getPause_on_speak() != null && _lastReply.getPause_on_speak()) {
             log.info("notifySentenceBegin: lastReply: {}, pauseCurrentAnyway", _lastReply);
-            _playback.pauseCurrentAnyway();
+            _playback.pauseCurrent();
         } else {
             log.info("notifySentenceBegin: lastReply: {}, ignore", _lastReply);
         }
@@ -161,7 +159,7 @@ public class CallSession extends ASRSession {
 
         if (_lastReply != null && _lastReply.getPause_on_speak() != null && _lastReply.getPause_on_speak()) {
             log.info("notifySentenceEnd: lastReply: {}, resumeCurrentAnyway", _lastReply);
-            _playback.resumeCurrentAnyway();
+            _playback.resumeCurrent();
         } else {
             log.info("notifySentenceEnd: lastReply: {}, ignore", _lastReply);
         }
@@ -198,6 +196,14 @@ public class CallSession extends ASRSession {
     public void close() {
         super.close();
         _callSessions.remove(_sessionId);
+        if (_playback != null) {
+            // stop current playback when call close()
+            _playback.stopCurrent();
+        }
+        generateRecordAndUpload();
+    }
+
+    private void generateRecordAndUpload() {
         // start to generate record file, REF: https://developer.aliyun.com/article/245440
         try (final ByteArrayOutputStream bos = new ByteArrayOutputStream();
              final InputStream upsample_is = new ByteArrayListInputStream(_usBufs)) {
@@ -295,7 +301,6 @@ public class CallSession extends ASRSession {
     private final Runnable _doHangup;
     private final String _bucket;
     private final String _wavPath;
-    private String _sessionId;
     private AIReplyVO _lastReply;
     private Consumer<String> _playbackOn;
     private PlaybackSession _playback;
