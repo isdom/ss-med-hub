@@ -3,7 +3,6 @@ package com.yulore.medhub.task;
 import com.yulore.medhub.vo.HubEventVO;
 import com.yulore.medhub.vo.PayloadPlaybackStart;
 import com.yulore.medhub.vo.PayloadPlaybackStop;
-import lombok.AllArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
@@ -43,13 +42,13 @@ public class PlayPCMTask {
     final AtomicInteger _samples = new AtomicInteger(0);
 
     public void start() {
-        _lenInBytes = _sampleInfo.lenInBytes();
+        _lenInBytes = _sampleInfo.bytesPerInterval();
         _samples.set(_initialSamples);
         if (_stopped.get()) {
             log.warn("pcm task has stopped, can't start again");
         }
         if (_started.compareAndSet(false, true)) {
-            HubEventVO.sendEvent(_webSocket, "PlaybackStart", new PayloadPlaybackStart(_id,"pcm", _sampleInfo.sampleRate, _sampleInfo.interval, _sampleInfo.channels));
+            HubEventVO.sendEvent(_webSocket, "PlaybackStart", new PayloadPlaybackStart(_id,"pcm", _sampleInfo.sampleRate(), _sampleInfo.interval(), _sampleInfo.channels()));
             _startTimestamp = System.currentTimeMillis();
             schedule(1 );
         } else {
@@ -68,11 +67,11 @@ public class PlayPCMTask {
             final byte[] bytes = new byte[_lenInBytes];
             final int readSize = _is.read(bytes);
             // log.info("PlayPCMTask {}: schedule read {} bytes", idx, readSize);
-            final long delay = _startTimestamp + (long) _sampleInfo.interval * idx - System.currentTimeMillis();
+            final long delay = _startTimestamp + (long) _sampleInfo.interval() * idx - System.currentTimeMillis();
             if (readSize == _lenInBytes) {
                 current = _executor.schedule(() -> {
                     _webSocket.send(bytes);
-                    _samples.addAndGet(_sampleInfo.sampleRate / (1000 / _sampleInfo.interval));
+                    _samples.addAndGet(_sampleInfo.sampleRate() / (1000 / _sampleInfo.interval()));
                     schedule(idx+1);
                 },  delay, TimeUnit.MILLISECONDS);
             } else {

@@ -1,8 +1,5 @@
 package com.yulore.medhub.task;
 
-import com.yulore.medhub.vo.HubEventVO;
-import com.yulore.medhub.vo.PayloadPlaybackStart;
-import com.yulore.medhub.vo.PayloadPlaybackStop;
 import com.yulore.util.ByteArrayListInputStream;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
@@ -25,7 +22,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 
 @RequiredArgsConstructor
-@ToString(of={"_taskId", "_path", "_completed"})
+@ToString(of={"_taskId", "_path", "_started", "_stopped", "_paused", "_completed"})
 @Slf4j
 public class PlayStreamPCMTask {
     private final String _taskId = UUID.randomUUID().toString();
@@ -40,14 +37,15 @@ public class PlayStreamPCMTask {
     private final Consumer<PlayStreamPCMTask> _onEnd;
     private final AtomicBoolean _completed = new AtomicBoolean(false);
 
-    int _lenInBytes;
-    final AtomicReference<ScheduledFuture<?>> _currentFuture = new AtomicReference<>(null);
+    int _interval_bytes;
+    final AtomicReference<ScheduledFuture<?>> _next = new AtomicReference<>(null);
     final AtomicInteger _currentIdx = new AtomicInteger(0);
     private long _startTimestamp;
     private long _pauseTimestamp;
 
     final AtomicBoolean _started = new AtomicBoolean(false);
     final AtomicBoolean _stopped = new AtomicBoolean(false);
+    final AtomicBoolean _paused = new AtomicBoolean(false);
     final AtomicBoolean _stopEventSended = new AtomicBoolean(false);
 
     private boolean _streaming = true;
@@ -91,111 +89,133 @@ public class PlayStreamPCMTask {
     }
 
     public void start() {
-        _lenInBytes = _sampleInfo.lenInBytes();
-        if (_stopped.get()) {
-            log.warn("({}): pcm task has stopped, can't start again", this);
-        }
-        if (_started.compareAndSet(false, true)) {
-            log.info("({}): pcm task start to playback", this);
-            // HubEventVO.sendEvent(_webSocket, "PlaybackStart", new PayloadPlaybackStart(0,"pcm", _sampleInfo.sampleRate, _sampleInfo.interval, _sampleInfo.channels));
-            _startTimestamp = System.currentTimeMillis();
-            schedule(1 );
-        } else {
-            log.warn("({}): pcm task started, ignore multi-call start()", this);
+        try {
+            _lock.lock();
+            if (_stopped.get()) {
+                // maybe call stop() before call start()
+                log.warn("({}): pcm task has stopped, can't start again", this);
+                return;
+            }
+            _interval_bytes = _sampleInfo.bytesPerInterval();
+            if (_started.compareAndSet(false, true)) {
+                log.info("({}): pcm task start to playback", this);
+                // HubEventVO.sendEvent(_webSocket, "PlaybackStart", new PayloadPlaybackStart(0,"pcm", _sampleInfo.sampleRate, _sampleInfo.interval, _sampleInfo.channels));
+                _startTimestamp = System.currentTimeMillis();
+                playAndSchedule(1 );
+            } else {
+                log.warn("({}): pcm task started, ignore multi-call start()", this);
+            }
+        } finally {
+            _lock.unlock();
         }
     }
 
-    private void schedule(final int idx) {
-        if (_stopped.get()) {
-            // ignore if stopped flag set
-            return;
-        }
-        _currentIdx.set(idx);
-        ScheduledFuture<?> current = null;
+    private void playAndSchedule(final int idx) {
+        ScheduledFuture<?> next = null;
         try {
             _lock.lock();
-            if (_pos + _lenInBytes > _length && _streaming) {
+            if (_stopped.get()) {
+                // ignore if stopped flag set
+                log.warn("({}): pcm task has stopped, abort playAndSchedule", this);
+                return;
+            }
+            _currentIdx.set(idx);
+            if (_pos + _interval_bytes > _length && _streaming) {
                 // need more data
-                final long delay = _startTimestamp + (long) _sampleInfo.interval * idx - System.currentTimeMillis();
-                current = _executor.schedule(() -> schedule(idx + 1), delay, TimeUnit.MILLISECONDS);
+                final long delay = _startTimestamp + (long) _sampleInfo.interval() * idx - System.currentTimeMillis();
+                next = _executor.schedule(() -> playAndSchedule(idx + 1), delay, TimeUnit.MILLISECONDS);
             } else {
-                final byte[] bytes = new byte[_lenInBytes];
+                final byte[] bytes = new byte[_interval_bytes];
                 final InputStream is = new ByteArrayListInputStream(_bufs);
                 is.skip(_pos);
                 final int readSize = is.read(bytes);
                 _pos += readSize;
-                final long delay = _startTimestamp + (long) _sampleInfo.interval * idx - System.currentTimeMillis();
-                if (readSize == _lenInBytes) {
-                    current = _executor.schedule(() -> {
-                        if (_startSendTimestamp.compareAndSet(0, 1)) {
-                            _startSendTimestamp.set(System.currentTimeMillis());
-                            _onStartSend.accept(_startSendTimestamp.get());
-                        }
-                        _doSendData.accept(bytes);
-                        schedule(idx + 1);
-                    }, delay, TimeUnit.MILLISECONDS);
+                if (readSize == _interval_bytes) {
+                    fireStartSendOnce();
+                    _doSendData.accept(bytes);
+                    final long delay = _startTimestamp + (long) _sampleInfo.interval() * idx - System.currentTimeMillis();
+                    next = _executor.schedule(() -> playAndSchedule(idx + 1), delay, TimeUnit.MILLISECONDS);
                 } else {
-                    current = _executor.schedule(() -> {
-                                _stopped.compareAndSet(false, true);
-                                _completed.compareAndSet(false, true);
-                                safeSendPlaybackStopEvent();
-                                log.info("({}): finish playback by {} send action", this, idx);
-                            },
-                            delay, TimeUnit.MILLISECONDS);
+                    _stopped.compareAndSet(false, true);
+                    _completed.compareAndSet(false, true);
+                    safeSendPlaybackStopEvent();
+                    log.info("({}): finish playback by {} send action", this, idx);
                 }
             }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+        } catch (IOException ex) {
+            log.warn("({}): pcm task schedule failed, detail: {}", this, ex.toString());
+            throw new RuntimeException(ex);
         } finally {
+            _next.set(next);
             _lock.unlock();
         }
-        if (_stopped.get()) {
-            // cancel if stopped flag set
-            current.cancel(false);
-        } else {
-            _currentFuture.set(current);
+    }
+
+    private void fireStartSendOnce() {
+        if (_startSendTimestamp.compareAndSet(0, 1)) {
+            _startSendTimestamp.set(System.currentTimeMillis());
+            _onStartSend.accept(_startSendTimestamp.get());
         }
     }
 
     public boolean pause() {
-        if (_stopped.get()) {
-            // ignore if stopped flag set
-            log.warn("({}): pcm task has stopped, ignore pause request", this);
-            return false;
+        try {
+            _lock.lock();
+            if (!_started.get()) {
+                // ignore if !NOT! started
+                log.warn("({}): pcm task NOT started, ignore pause request", this);
+                return false;
+            }
+            if (_stopped.get()) {
+                // ignore if stopped flag set
+                log.warn("({}): pcm task has stopped, ignore pause request", this);
+                return false;
+            }
+            final ScheduledFuture<?> current = _next.getAndSet(null);
+            if (null != current) {
+                current.cancel(true);
+                _startSendTimestamp.set(0);
+                _onStopSend.accept(System.currentTimeMillis());
+                _pauseTimestamp = System.currentTimeMillis();
+                return true;
+            } else {
+                log.warn("({}): pcm task current schedule is null, NOT start or paused already, ignore pause request", this);
+                return false;
+            }
+        } finally {
+            _lock.unlock();
         }
-        final ScheduledFuture<?> current = _currentFuture.getAndSet(null);
-        if (null != current) {
-            current.cancel(true);
-            _startSendTimestamp.set(0);
-            _onStopSend.accept(System.currentTimeMillis());
-            _pauseTimestamp = System.currentTimeMillis();
-            return true;
-        } else {
-            log.warn("({}): pcm task current schedule is null, NOT start or paused already, ignore pause request", this);
-            return false;
-        }
-        // _pauseTimestamp = System.currentTimeMillis();
     }
 
     public void resume() {
-        if (_stopped.get()) {
-            // ignore if stopped flag set
-            log.warn("({}): pcm task has stopped, ignore resume request", this);
-            return;
+        try {
+            _lock.lock();
+            if (_stopped.get()) {
+                // ignore if stopped flag set
+                log.warn("({}): pcm task has stopped, ignore resume request", this);
+                return;
+            }
+            _startTimestamp += System.currentTimeMillis() - _pauseTimestamp;
+            playAndSchedule(_currentIdx.get());
+        } finally {
+            _lock.unlock();
         }
-        _startTimestamp += System.currentTimeMillis() - _pauseTimestamp;
-        schedule(_currentIdx.get());
     }
 
     public void stop() {
-        if (_stopped.compareAndSet(false, true)) {
-            if (_started.get()) {
-                final ScheduledFuture<?> current = _currentFuture.getAndSet(null);
-                if (null != current) {
-                    current.cancel(false);
+        try {
+            _lock.lock();
+            if (_stopped.compareAndSet(false, true)) {
+                if (_started.get()) {
+                    final ScheduledFuture<?> current = _next.getAndSet(null);
+                    if (null != current) {
+                        current.cancel(false);
+                    }
+                    safeSendPlaybackStopEvent();
                 }
-                safeSendPlaybackStopEvent();
             }
+        } finally {
+            _lock.unlock();
         }
     }
 

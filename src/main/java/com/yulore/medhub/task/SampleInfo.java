@@ -1,19 +1,7 @@
 package com.yulore.medhub.task;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.ToString;
-
-@AllArgsConstructor
-@Data
-@ToString
-public class SampleInfo {
-    final int sampleRate;
-    final int interval;
-    final int sampleSizeInBits;
-    final int channels;
-
-    public int lenInBytes() {
+public record SampleInfo(int sampleRate, int interval, int sampleSizeInBits, int channels) {
+    public int bytesPerInterval() {
         return (sampleRate / (1000 / interval) * (sampleSizeInBits / 8)) * channels;
     }
 
