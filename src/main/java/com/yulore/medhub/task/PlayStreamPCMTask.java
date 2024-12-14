@@ -7,7 +7,6 @@ import com.yulore.util.ByteArrayListInputStream;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
-import org.java_websocket.WebSocket;
 
 import java.io.IOException;
 import java.io.InputStream;
