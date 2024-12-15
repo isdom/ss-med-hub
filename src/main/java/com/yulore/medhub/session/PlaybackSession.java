@@ -31,15 +31,21 @@ public class PlaybackSession {
     }
 
     public void notifyPlaybackStart(final PlayStreamPCMTask task) {
-        _isPlaying.set(true);
+        if (_playingTask.get() == task) {
+            _isPlaying.set(true);
+        } else {
+            log.warn("PlaybackSession.notifyPlaybackStart: playingTask: {} !NOT! match notify sourceTask: {}, ignore",
+                    _playingTask.get(), task);
+        }
     }
 
     public void notifyPlaybackStop(final PlayStreamPCMTask task) {
         if (_playingTask.compareAndSet(task, null)) {
             _isPlaying.set(false);
             _idleStartInMs.set(System.currentTimeMillis());
-        } else {
-            log.warn("PlaybackSession.notifyPlaybackStop: playingTask: {} !NOT! match notify sourceTask: {}, ignore stop notify", _playingTask.get(), task);
+        } else if (_playingTask.get() != null) {
+            log.warn("PlaybackSession.notifyPlaybackStop: playingTask: {} !NOT! match notify sourceTask: {}, ignore",
+                    _playingTask.get(), task);
         }
     }
 
@@ -52,19 +58,12 @@ public class PlaybackSession {
     }
 
     public void attach(final PlayStreamPCMTask current) {
-        final PlayStreamPCMTask previous = _playingTask.getAndSet(current);
+        final PlayStreamPCMTask previous = _playingTask.getAndSet(null);
         if (previous != null) {
             previous.stop();
         }
-    }
-
-    public void stopCurrentAndStartPlay(final PlayStreamPCMTask current) {
-        final PlayStreamPCMTask previous = _playingTask.getAndSet(current);
-        if (previous != null) {
-            previous.stop();
-        }
-        if (current != null) {
-            current.start();
+        if (!_playingTask.compareAndSet(null, current)) {
+            log.warn("attach {} failed, another task has attached", current);
         }
     }
 

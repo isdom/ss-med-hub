@@ -1088,7 +1088,7 @@ public class HubMain {
                 try {
                     HubEventVO.sendEvent(webSocket, "TranscriptionStarted", (Void) null);
                 } catch (WebsocketNotConnectedException ex) {
-                    log.info("ws disconnected when sendEvent TranscriptionStarted: {}", ex.toString());
+                    log.info("ws disconnected when sendEvent onRecognitionStart: {}", ex.toString());
                 }
             }
 
