@@ -309,7 +309,7 @@ public class HubMain {
                     callSession.notifyPlaybackSendData(bytes);
                 },
                 (_task) -> {
-                    log.info("PlayStreamPCMTask {} stopped with completed: {}", _task.path(), _task.isCompleted());
+                    log.info("PlayStreamPCMTask {} stopped with completed: {}", _task, _task.isCompleted());
                     callSession.notifyPlaybackStop(_task);
                     playbackSession.notifyPlaybackStop(_task);
                 }
