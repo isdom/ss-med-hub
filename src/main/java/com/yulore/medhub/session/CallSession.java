@@ -60,23 +60,35 @@ public class CallSession extends ASRSession {
     }
 
     public void notifyUserAnswer(final HubCommandVO cmd, final WebSocket webSocket) {
+        if (!_isUserAnswered.compareAndSet(false, true)) {
+            log.warn("[{}]: notifyUserAnswer called already, ignore!", _sessionId);
+            return;
+        }
         try {
             final String kid = cmd.getPayload() != null ? cmd.getPayload().get("kid") : "";
             final String tid = cmd.getPayload() != null ? cmd.getPayload().get("tid") : "";
             final String realName = cmd.getPayload() != null ? cmd.getPayload().get("realName") : "";
+            final String aesMobile = cmd.getPayload() != null ? cmd.getPayload().get("aesMobile") : "";
             final String genderStr = cmd.getPayload() != null ? cmd.getPayload().get("genderStr") : "";
 
-            final ApiResponse<ApplySessionVO> response = _callApi.apply_session(kid, tid, realName, null, genderStr, null, System.currentTimeMillis());
+            final ApiResponse<ApplySessionVO> response = _callApi.apply_session(CallApi.ApplySessionRequest.builder()
+                    .kid(kid)
+                    .tid(tid)
+                    .realName(realName)
+                    .genderStr(genderStr)
+                    .aesMobile(aesMobile)
+                    .answerTime(System.currentTimeMillis())
+                    .build());
+            log.info("apply_session => response: {}", response);
             _sessionId = response.getData().getSessionId();
-            log.info("[{}]: userAnswer: kid:{}/tid:{}/realName:{}/gender:{} => response: {}", _sessionId, kid, tid, realName, genderStr, response);
+            log.info("[{}]: userAnswer: kid:{}/tid:{}/realName:{}/gender:{}/aesMobile:{} => response: {}", _sessionId, kid, tid, realName, genderStr, aesMobile, response);
 
             _lastReply = response.getData();
             _aiSetting = response.getData().getAiSetting();
             _callSessions.put(_sessionId, this);
-            log.info("apply session response: {}", response);
             HubEventVO.sendEvent(webSocket, "CallStarted", new PayloadCallStarted(response.getData().getSessionId()));
         } catch (Exception ex) {
-            log.warn("failed for _scriptApi.apply_session, detail: {}", ex.toString());
+            log.warn("failed for callApi.apply_session, detail: {}", ex.toString());
         }
     }
 
@@ -218,7 +230,7 @@ public class CallSession extends ASRSession {
             log.warn("{} missing vars, ignore", path);
             return;
         }
-        final int braceEnd = path.indexOf('}');
+        final int braceEnd = path.lastIndexOf('}');
         if (braceEnd == -1) {
             log.warn("{} missing vars, ignore", path);
             return;
@@ -325,6 +337,8 @@ public class CallSession extends ASRSession {
     static public CallSession findBy(final String sessionId) {
         return _callSessions.get(sessionId);
     }
+
+    private final AtomicBoolean _isUserAnswered = new AtomicBoolean(false);
 
     private final CallApi _callApi;
     private final ScriptApi _scriptApi;
