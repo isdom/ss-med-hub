@@ -4,15 +4,10 @@ import com.alibaba.fastjson.JSON;
 import com.alibaba.nls.client.protocol.SampleRateEnum;
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriber;
 import com.mgnt.utils.StringUnicodeEncoderDecoder;
-import com.yulore.medhub.api.AIReplyVO;
-import com.yulore.medhub.api.ApiResponse;
-import com.yulore.medhub.api.ApplySessionVO;
-import com.yulore.medhub.api.ScriptApi;
+import com.yulore.medhub.api.*;
+import com.yulore.medhub.stream.VarsUtil;
 import com.yulore.medhub.task.PlayStreamPCMTask;
-import com.yulore.medhub.vo.HubEventVO;
-import com.yulore.medhub.vo.PayloadCallStarted;
-import com.yulore.medhub.vo.PayloadSentenceBegin;
-import com.yulore.medhub.vo.PayloadSentenceEnd;
+import com.yulore.medhub.vo.*;
 import com.yulore.util.ByteArrayListInputStream;
 import com.yulore.util.WaveUtil;
 import lombok.AllArgsConstructor;
@@ -36,17 +31,21 @@ import java.util.function.Consumer;
 @ToString
 @Slf4j
 public class CallSession extends ASRSession {
+
     @AllArgsConstructor
     static public class RecordContext {
         public String sessionId;
+        public String bucketName;
+        public String objectName;
         public InputStream content;
     }
 
     static final long CHECK_IDLE_TIMEOUT = 5000L; // 5 seconds to report check idle to script engine
 
-    public CallSession(final ScriptApi scriptApi, final Runnable doHangup, final String bucket, final String wavPath, final Consumer<RecordContext> doRecord) {
+    public CallSession(final CallApi callApi, final ScriptApi scriptApi, final Runnable doHangup, final String bucket, final String wavPath, final Consumer<RecordContext> doRecord) {
         _sessionId = null;
         _scriptApi = scriptApi;
+        _callApi = callApi;
         _doHangup = doHangup;
         _bucket = bucket;
         _wavPath = wavPath;
@@ -60,11 +59,19 @@ public class CallSession extends ASRSession {
         return super.onSpeechTranscriberCreated(speechTranscriber);
     }
 
-    public void notifyUserAnswer(final WebSocket webSocket) {
+    public void notifyUserAnswer(final HubCommandVO cmd, final WebSocket webSocket) {
         try {
-            final ApiResponse<ApplySessionVO> response = _scriptApi.apply_session("", "");
+            final String kid = cmd.getPayload() != null ? cmd.getPayload().get("kid") : "";
+            final String tid = cmd.getPayload() != null ? cmd.getPayload().get("tid") : "";
+            final String realName = cmd.getPayload() != null ? cmd.getPayload().get("realName") : "";
+            final String genderStr = cmd.getPayload() != null ? cmd.getPayload().get("genderStr") : "";
+
+            final ApiResponse<ApplySessionVO> response = _callApi.apply_session(kid, tid, realName, null, genderStr, null, System.currentTimeMillis());
             _sessionId = response.getData().getSessionId();
+            log.info("[{}]: userAnswer: kid:{}/tid:{}/realName:{}/gender:{} => response: {}", _sessionId, kid, tid, realName, genderStr, response);
+
             _lastReply = response.getData();
+            _aiSetting = response.getData().getAiSetting();
             _callSessions.put(_sessionId, this);
             log.info("apply session response: {}", response);
             HubEventVO.sendEvent(webSocket, "CallStarted", new PayloadCallStarted(response.getData().getSessionId()));
@@ -204,6 +211,28 @@ public class CallSession extends ASRSession {
     }
 
     private void generateRecordAndUpload() {
+        final String path = _aiSetting.getAnswer_record_file();
+        // eg: "answer_record_file": "rms://{uuid={uuid},url=xxxx,bucket=<bucketName>}<objectName>",
+        final int braceBegin = path.indexOf('{');
+        if (braceBegin == -1) {
+            log.warn("{} missing vars, ignore", path);
+            return;
+        }
+        final int braceEnd = path.indexOf('}');
+        if (braceEnd == -1) {
+            log.warn("{} missing vars, ignore", path);
+            return;
+        }
+        final String vars = path.substring(braceBegin + 1, braceEnd);
+
+        final String bucketName = VarsUtil.extractValue(vars, "bucket");
+        if (null == bucketName) {
+            log.warn("{} missing bucket field, ignore", path);
+            return;
+        }
+
+        final String objectName = path.substring(braceEnd + 1);
+
         // start to generate record file, REF: https://developer.aliyun.com/article/245440
         try (final ByteArrayOutputStream bos = new ByteArrayOutputStream();
              final InputStream upsample_is = new ByteArrayListInputStream(_usBufs)) {
@@ -264,7 +293,7 @@ public class CallSession extends ASRSession {
             log.info("total written {} samples, {} seconds", sample_count, (float)sample_count / 16000);
 
             bos.flush();
-            _doRecord.accept(new RecordContext(_sessionId, new ByteArrayInputStream(bos.toByteArray())));
+            _doRecord.accept(new RecordContext(_sessionId, bucketName, objectName, new ByteArrayInputStream(bos.toByteArray())));
         } catch (IOException ex) {
             log.warn("[{}] close: generate record stream error, detail: {}", _sessionId, ex.toString());
             throw new RuntimeException(ex);
@@ -297,11 +326,14 @@ public class CallSession extends ASRSession {
         return _callSessions.get(sessionId);
     }
 
+    private final CallApi _callApi;
     private final ScriptApi _scriptApi;
     private final Runnable _doHangup;
     private final String _bucket;
     private final String _wavPath;
     private AIReplyVO _lastReply;
+    private AiSettingVO _aiSetting;
+
     private Consumer<String> _playbackOn;
     private PlaybackSession _playback;
     private final AtomicLong _idleStartInMs = new AtomicLong(System.currentTimeMillis());

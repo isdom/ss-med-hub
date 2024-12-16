@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 @FeignClient(value = "${CALL_PRPOVIDER}")
 public interface CallApi {
-    @RequestMapping(value = "${script.api.apply_session}", method = RequestMethod.GET)
+    @RequestMapping(value = "${call.api.apply_session}", method = RequestMethod.GET)
     ApiResponse<ApplySessionVO> apply_session(
             @RequestParam("kid")        String kid,
             @RequestParam("tid")        String tid,

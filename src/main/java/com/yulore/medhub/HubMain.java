@@ -19,6 +19,7 @@ import com.tencent.asrv2.SpeechRecognizer;
 import com.tencent.asrv2.SpeechRecognizerListener;
 import com.tencent.asrv2.SpeechRecognizerResponse;
 import com.tencent.core.ws.SpeechClient;
+import com.yulore.medhub.api.CallApi;
 import com.yulore.medhub.api.ScriptApi;
 import com.yulore.medhub.nls.*;
 import com.yulore.medhub.session.*;
@@ -161,6 +162,9 @@ public class HubMain {
     @Resource
     private ScriptApi _scriptApi;
 
+    @Resource
+    private CallApi _callApi;
+
     @PostConstruct
     public void start() {
         //创建NlsClient实例应用全局创建一个即可。生命周期可和整个应用保持一致，默认服务地址为阿里云线上服务地址。
@@ -194,13 +198,12 @@ public class HubMain {
                             log.info("ws path match: {}, using ws as MediaSession {}", _match_media, sessionId);
                         } else if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_call)) {
                             // init CallSession attach with webSocket
-                            final CallSession session = new CallSession(_scriptApi, ()->webSocket.close(1000, "hangup"), _oss_bucket, _oss_path, (ctx) -> {
+                            final CallSession session = new CallSession(_callApi, _scriptApi, ()->webSocket.close(1000, "hangup"), _oss_bucket, _oss_path, (ctx) -> {
                                 final long startUploadInMs = System.currentTimeMillis();
                                 _ossAccessExecutor.submit(()->{
-                                    final String objectName = _rec_path + ctx.sessionId + ".wav";
-                                    _ossClient.putObject(_rec_bucket, objectName, ctx.content);
+                                    _ossClient.putObject(ctx.bucketName, ctx.objectName, ctx.content);
                                     log.info("[{}]: upload record to oss => bucket:{}/object:{}, cost {} ms",
-                                            ctx.sessionId, _rec_bucket, objectName, System.currentTimeMillis() - startUploadInMs);
+                                            ctx.sessionId, ctx.bucketName, ctx.objectName, System.currentTimeMillis() - startUploadInMs);
                                 });
                             });
                             webSocket.setAttachment(session);
@@ -497,7 +500,7 @@ public class HubMain {
             log.error("UserAnswer: {} without CallSession, abort", webSocket.getRemoteSocketAddress());
             return;
         }
-        session.notifyUserAnswer(webSocket);
+        session.notifyUserAnswer(cmd, webSocket);
     }
 
     Consumer<StreamSession.EventContext> buildSendEvent(final WebSocket webSocket, final int delayInMs) {

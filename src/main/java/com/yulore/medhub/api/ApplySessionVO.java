@@ -11,6 +11,6 @@ import java.util.Map;
 @Data
 @ToString(callSuper = true)
 public class ApplySessionVO extends AIReplyVO {
-    @SerializedName("sessionId")
     private String sessionId;
+    private AiSettingVO aiSetting;
 }
