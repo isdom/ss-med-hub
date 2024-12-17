@@ -5,7 +5,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 
-@FeignClient(value = "${SCRIPT_PRPOVIDER}")
+@FeignClient(value = "${SCRIPT_PROVIDER}")
 public interface ScriptApi {
     @RequestMapping(value = "${script.api.apply_session}", method = RequestMethod.GET)
     ApiResponse<ApplySessionVO> apply_session(

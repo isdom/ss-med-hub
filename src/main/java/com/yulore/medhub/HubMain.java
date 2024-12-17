@@ -109,6 +109,9 @@ public class HubMain {
     @Value("${session.match_playback}")
     private String _match_playback;
 
+    @Value("${session.match_preview}")
+    private String _match_preview;
+
     final List<ASRAgent> _asrAgents = new ArrayList<>();
     final List<TTSAgent> _ttsAgents = new ArrayList<>();
     final List<CosyAgent> _cosyAgents = new ArrayList<>();
@@ -224,6 +227,14 @@ public class HubMain {
                                 return;
                             }
                             callSession.attach(playbackSession, (_path) -> playbackOn(_path, callSession, playbackSession, webSocket));
+                        } else if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_preview)) {
+                            // init PlaybackSession attach with webSocket
+//                            final String path = clientHandshake.getResourceDescriptor();
+//                            final int varsBegin = path.indexOf('?');
+//                            final String sessionId = varsBegin > 0 ? VarsUtil.extractValue(path.substring(varsBegin + 1), "sessionId") : "unknown";
+                            final PreviewSession previewSession = new PreviewSession();
+                            webSocket.setAttachment(previewSession);
+                            log.info("ws path match: {}, using ws as PreviewSession: [{}]", _match_preview, previewSession);
                         } else {
                             log.info("ws path {} !NOT! match: {}, NOT MediaSession: {}",
                                     clientHandshake.getResourceDescriptor(), _match_media, webSocket.getRemoteSocketAddress());
@@ -489,9 +500,51 @@ public class HubMain {
             _sessionExecutor.submit(()-> handleFileTellCommand(cmd, webSocket));
         } else if ("UserAnswer".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handleUserAnswerCommand(cmd, webSocket));
+        } else if ("Preview".equals(cmd.getHeader().get("name"))) {
+            _sessionExecutor.submit(()-> handlePreviewCommand(cmd, webSocket));
         } else {
             log.warn("handleHubCommand: Unknown Command: {}", cmd);
         }
+    }
+
+    private void previewOn(final String path, final PreviewSession previewSession, final WebSocket webSocket) {
+        // interval = 20 ms
+        int interval = 20;
+        log.info("previewOn: {} => sample rate: {}/interval: {}/channels: {}", path, 16000, interval, 1);
+        final PlayStreamPCMTask task = new PlayStreamPCMTask(
+                path,
+                _scheduledExecutor,
+                new SampleInfo(16000, interval, 16, 1),
+                (ignore)->{},
+                (ignore)->{},
+                webSocket::send,
+                (_task) -> {
+                    log.info("previewOn PlayStreamPCMTask {} stopped with completed: {}", _task, _task.isCompleted());
+                    webSocket.close(1000, "close");
+                }
+        );
+        final BuildStreamTask bst = getTaskOf(path, true, 16000);
+        if (bst != null) {
+            previewSession.attach(task);
+            previewSession.notifyPlaybackStart(task);
+            bst.buildStream(task::appendData, (ignore)->task.appendCompleted());
+        }
+    }
+
+    private void handlePreviewCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        final String cps = cmd.getPayload().get("cps");
+        final PreviewSession previewSession = webSocket.getAttachment();
+        if (previewSession == null) {
+            log.error("Preview: {} without PreviewSession, abort: {}", webSocket.getRemoteSocketAddress(), cps);
+            return;
+        }
+
+        if (previewSession.isPlaying()) {
+            log.error("Preview: {} has already playing, ignore: {}", previewSession, cps);
+            return;
+        }
+
+        previewOn(String.format("type=cp,%s", cps), previewSession, webSocket);
     }
 
     private void handleUserAnswerCommand(final HubCommandVO cmd, final WebSocket webSocket) {
