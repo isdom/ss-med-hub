@@ -13,6 +13,7 @@ import com.aliyun.oss.OSSClientBuilder;
 import com.aliyun.oss.model.OSSObject;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.base.Charsets;
 import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.tencent.asrv2.AsrConstant;
 import com.tencent.asrv2.SpeechRecognizer;
@@ -50,6 +51,7 @@ import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.UnsupportedAudioFileException;
 import java.io.*;
 import java.net.InetSocketAddress;
+import java.net.URLDecoder;
 import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.*;
@@ -532,7 +534,7 @@ public class HubMain {
     }
 
     private void handlePreviewCommand(final HubCommandVO cmd, final WebSocket webSocket) {
-        final String cps = cmd.getPayload().get("cps");
+        final String cps = URLDecoder.decode(cmd.getPayload().get("cps"), Charsets.UTF_8);
         final PreviewSession previewSession = webSocket.getAttachment();
         if (previewSession == null) {
             log.error("Preview: {} without PreviewSession, abort: {}", webSocket.getRemoteSocketAddress(), cps);
@@ -659,7 +661,7 @@ public class HubMain {
     }
 
     private BuildStreamTask cvo2bst(final CompositeVO cvo) {
-        if (cvo.getBucket() != null) {
+        if (cvo.getBucket() != null && !cvo.getBucket().isEmpty() && cvo.getObject() != null && !cvo.getObject().isEmpty()) {
             log.info("support CVO => OSS Stream: {}", cvo);
             return new OSSStreamTask("{bucket=" + cvo.getBucket() + "}" + cvo.getObject(), _ossClient, true);
         } else if (cvo.getType() != null && cvo.getType().equals("tts")) {

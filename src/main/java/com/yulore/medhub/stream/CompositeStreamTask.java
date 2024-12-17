@@ -2,6 +2,7 @@ package com.yulore.medhub.stream;
 
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 
@@ -34,7 +35,9 @@ public class CompositeStreamTask implements BuildStreamTask {
         }
         final String vars = path.substring(leftBracePos, rightBracePos + 1);
         try {
-            final CompositeVO[] cvos = new ObjectMapper().readValue(vars, CompositeVO[].class);
+            final CompositeVO[] cvos = new ObjectMapper()
+                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+                    .readValue(vars, CompositeVO[].class);
             log.info("got cvos: {}", Arrays.toString(cvos));
             _cvos.addAll(Arrays.asList(cvos));
         } catch (JsonProcessingException e) {
