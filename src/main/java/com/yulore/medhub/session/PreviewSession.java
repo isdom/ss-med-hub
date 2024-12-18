@@ -17,14 +17,6 @@ public class PreviewSession {
         _sessionBeginInMs = System.currentTimeMillis();
     }
 
-    public void lock() {
-        _lock.lock();
-    }
-
-    public void unlock() {
-        _lock.unlock();
-    }
-
     public void notifyPlaybackStart(final PlayStreamPCMTask task) {
         if (_playingTask.get() == task) {
             _isPlaying.set(true);
@@ -87,8 +79,6 @@ public class PreviewSession {
             log.info("task {} resumed", current);
         }
     }
-
-    private final Lock _lock = new ReentrantLock();
 
     final AtomicBoolean _isPlaying = new AtomicBoolean(false);
     final AtomicLong _idleStartInMs = new AtomicLong(System.currentTimeMillis());
