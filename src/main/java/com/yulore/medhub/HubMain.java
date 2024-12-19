@@ -21,6 +21,7 @@ import com.tencent.asrv2.SpeechRecognizerListener;
 import com.tencent.asrv2.SpeechRecognizerResponse;
 import com.tencent.core.ws.SpeechClient;
 import com.yulore.medhub.api.CallApi;
+import com.yulore.medhub.api.CompositeVO;
 import com.yulore.medhub.api.ScriptApi;
 import com.yulore.medhub.nls.*;
 import com.yulore.medhub.session.*;
@@ -678,7 +679,6 @@ public class HubMain {
 
     private BuildStreamTask genCosyStreamTask(final CompositeVO cvo) {
         return new CosyStreamTask(cvo2cosy(cvo), this::selectCosyAgent, (synthesizer) -> {
-            synthesizer.setVolume(50);
             //设置返回音频的编码格式
             synthesizer.setFormat(OutputFormatEnum.PCM);
             //设置返回音频的采样率。
@@ -698,14 +698,24 @@ public class HubMain {
     static private String cvo2tts(final CompositeVO cvo) {
         // {type=tts,voice=xxx,url=ws://172.18.86.131:6789/playback,vars_playback_id=<uuid>,content_id=2088788,vars_start_timestamp=1732028219711854,text='StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(content)'}
         //          unused.wav
-        return String.format("{type=tts,cache=%s,voice=%s,text=%s}tts.wav", cvo.getCache(), cvo.getVoice(),
+        return String.format("{type=tts,cache=%s,voice=%s,pitch_rate=%s,speech_rate=%s,volume=%s,text=%s}tts.wav",
+                cvo.getCache(),
+                cvo.getVoice(),
+                cvo.getPitch_rate(),
+                cvo.getSpeech_rate(),
+                cvo.getVolume(),
                 StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(cvo.getText()));
     }
 
     static private String cvo2cosy(final CompositeVO cvo) {
         // eg: {type=cosy,voice=xxx,url=ws://172.18.86.131:6789/cosy,vars_playback_id=<uuid>,content_id=2088788,vars_start_timestamp=1732028219711854,text='StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(content)'}
         //          unused.wav
-        return String.format("{type=cosy,cache=%s,voice=%s,text=%s}cosy.wav", cvo.getCache(), cvo.getVoice(),
+        return String.format("{type=cosy,cache=%s,voice=%s,pitch_rate=%s,speech_rate=%s,volume=%s,text=%s}cosy.wav",
+                cvo.getCache(),
+                cvo.getVoice(),
+                cvo.getPitch_rate(),
+                cvo.getSpeech_rate(),
+                cvo.getVolume(),
                 StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(cvo.getText()));
     }
 

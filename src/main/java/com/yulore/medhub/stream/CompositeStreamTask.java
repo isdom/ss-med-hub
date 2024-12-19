@@ -4,6 +4,7 @@ package com.yulore.medhub.stream;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yulore.medhub.api.CompositeVO;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.*;

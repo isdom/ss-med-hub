@@ -1,8 +1,5 @@
 package com.yulore.medhub.stream;
 
-import com.alibaba.nls.client.protocol.OutputFormatEnum;
-import com.alibaba.nls.client.protocol.SampleRateEnum;
-import com.alibaba.nls.client.protocol.tts.SpeechSynthesizer;
 import com.alibaba.nls.client.protocol.tts.StreamInputTts;
 import com.alibaba.nls.client.protocol.tts.StreamInputTtsListener;
 import com.alibaba.nls.client.protocol.tts.StreamInputTtsResponse;
@@ -11,7 +8,6 @@ import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
 import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.medhub.nls.CosyAgent;
-import com.yulore.medhub.nls.TTSAgent;
 import lombok.extern.slf4j.Slf4j;
 
 import java.nio.ByteBuffer;
@@ -40,16 +36,17 @@ public class CosyStreamTask implements BuildStreamTask {
         }
         final String vars = path.substring(leftBracePos + 1, rightBracePos);
 
-        _text = VarsUtil.extractValue(vars, "text");
-        if (_text == null) {
+        final String rawText = VarsUtil.extractValue(vars, "text");
+        if (rawText == null) {
             log.warn("{} missing text, ignore", path);
             throw new RuntimeException(path + " missing text.");
         }
-        _text = StringUnicodeEncoderDecoder.decodeUnicodeSequenceToString(_text);
+        _text = StringUnicodeEncoderDecoder.decodeUnicodeSequenceToString(rawText);
         _voice = VarsUtil.extractValue(vars, "voice");
-        _pitchRate = VarsUtil.extractValue(vars, "pitch_rate");
-        _speechRate = VarsUtil.extractValue(vars, "speech_rate");
-        _cache = VarsUtil.extractValueAsBoolean(vars, "cache", false);
+        _pitch_rate = VarsUtil.extractValue(vars, "pitch_rate");
+        _speech_rate = VarsUtil.extractValue(vars, "speech_rate");
+        _volume = VarsUtil.extractValue(vars, "volume");
+        final boolean _cache = VarsUtil.extractValueAsBoolean(vars, "cache", false);
         _key = _cache ? buildKey() : null;
     }
 
@@ -57,9 +54,11 @@ public class CosyStreamTask implements BuildStreamTask {
         final StringBuilder sb = new StringBuilder();
         sb.append(_voice);
         sb.append(":");
-        sb.append(_pitchRate);
+        sb.append(_pitch_rate);
         sb.append(":");
-        sb.append(_speechRate);
+        sb.append(_speech_rate);
+        sb.append(":");
+        sb.append(_volume);
         sb.append(":");
         sb.append(_text);
 
@@ -137,19 +136,15 @@ public class CosyStreamTask implements BuildStreamTask {
             if (null != _voice && !_voice.isEmpty()) {
                 synthesizer.setVoice(_voice);
             }
-            if (null != _pitchRate && !_pitchRate.isEmpty()) {
-                synthesizer.setPitchRate(Integer.parseInt(_pitchRate));
+            if (null != _pitch_rate && !_pitch_rate.isEmpty()) {
+                synthesizer.setPitchRate(Integer.parseInt(_pitch_rate));
             }
-            if (null != _speechRate && !_speechRate.isEmpty()) {
-                synthesizer.setSpeechRate(Integer.parseInt(_speechRate));
+            if (null != _speech_rate && !_speech_rate.isEmpty()) {
+                synthesizer.setSpeechRate(Integer.parseInt(_speech_rate));
             }
-            //音量，范围是0~100，可选，默认50。
-            synthesizer.setVolume(100);
-
-            // 设置返回音频的编码格式
-            // synthesizer.setFormat(OutputFormatEnum.WAV);
-            // 设置返回音频的采样率。
-            // synthesizer.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
+            if (null != _volume && !_volume.isEmpty()) {
+                synthesizer.setVolume(Integer.parseInt(_volume));
+            }
 
             if (_onSynthesizer != null) {
                 _onSynthesizer.accept(synthesizer);
@@ -175,10 +170,10 @@ public class CosyStreamTask implements BuildStreamTask {
 
     private final Supplier<CosyAgent> _getCosyAgent;
     private final Consumer<StreamInputTts> _onSynthesizer;
-    private String _key;
-    private String _text;
-    private String _voice;
-    private String _pitchRate;
-    private String _speechRate;
-    private boolean _cache;
+    private final String _key;
+    private final String _text;
+    private final String _voice;
+    private final String _pitch_rate;
+    private final String _speech_rate;
+    private final String _volume;
 }
