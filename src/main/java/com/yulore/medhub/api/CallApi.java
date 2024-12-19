@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 
-@FeignClient(value = "${CALL_PROVIDER}")
+@FeignClient(value = "${CALL_PROVIDER:unknown-srv}")
 public interface CallApi {
     @Builder
     @Data
@@ -22,6 +22,6 @@ public interface CallApi {
         private long answerTime;
     }
 
-    @RequestMapping(value = "${call.api.apply_session}", method = RequestMethod.POST)
+    @RequestMapping(value = "${call.api.apply_session:unknown_api}", method = RequestMethod.POST)
     ApiResponse<ApplySessionVO> apply_session(@RequestBody ApplySessionRequest request);
 }
