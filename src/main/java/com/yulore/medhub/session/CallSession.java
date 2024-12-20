@@ -137,6 +137,8 @@ public class CallSession extends ASRSession {
     public void notifyPlaybackSendStart(final long startTimestamp) {
         if (!_currentPS.compareAndSet(null, new PlaybackSegment(startTimestamp))) {
             log.warn("[{}]: notifyPlaybackSendStart: current PlaybackSegment is !NOT! null", _sessionId);
+        } else {
+            log.info("[{}]: notifyPlaybackSendStart: add new PlaybackSegment", _sessionId);
         }
     }
 
@@ -144,6 +146,7 @@ public class CallSession extends ASRSession {
         final PlaybackSegment ps = _currentPS.getAndSet(null);
         if (ps != null) {
             _dsBufs.add(ps);
+            log.info("[{}]: notifyPlaybackSendStop: move current PlaybackSegment to _dsBufs", _sessionId);
         } else {
             log.warn("[{}]: notifyPlaybackSendStop: current PlaybackSegment is null", _sessionId);
         }
@@ -163,10 +166,7 @@ public class CallSession extends ASRSession {
         super.notifySentenceBegin(payload);
         _isUserSpeak.set(true);
         if (_lastReply != null && _lastReply.getPause_on_speak() != null && _lastReply.getPause_on_speak()) {
-            // log.info("notifySentenceBegin: lastReply: {}, pauseCurrentAnyway", _lastReply);
             _playback.pauseCurrent();
-        } else {
-            // log.info("notifySentenceBegin: lastReply: {}, ignore", _lastReply);
         }
     }
 
@@ -177,10 +177,7 @@ public class CallSession extends ASRSession {
         _idleStartInMs.set(System.currentTimeMillis());
 
         if (_lastReply != null && _lastReply.getPause_on_speak() != null && _lastReply.getPause_on_speak()) {
-            // log.info("notifySentenceEnd: lastReply: {}, resumeCurrentAnyway", _lastReply);
             _playback.resumeCurrent();
-        } else {
-            // log.info("notifySentenceEnd: lastReply: {}, ignore", _lastReply);
         }
 
         if (_sessionId != null) {
@@ -255,25 +252,55 @@ public class CallSession extends ASRSession {
             bos.write(WaveUtil.genWaveHeader(16000, 2));
 
             long currentInMs = _recordStartTimestamp.get();
-            PlaybackSegment ps = null;
+            PlaybackSegment ps = null, next_ps = null;
 
             if (!_dsBufs.isEmpty()) {
                 ps = _dsBufs.remove(0);
                 if (ps != null) {
                     log.info("new current ps's start tm: {} / currentInMS: {}", ps.timestamp, currentInMs);
                 }
+                if (!_dsBufs.isEmpty()) {
+                    // prefetch next ps
+                    next_ps = _dsBufs.get(0);
+                    if (next_ps != null) {
+                        log.info("next current ps's start tm: {} / currentInMS: {}", next_ps.timestamp, currentInMs);
+                    }
+                } else {
+                    next_ps = null;
+                }
             }
 
             int sample_count = 0;
             while (upsample_is.read(one_sample) == 2) {
+                // read up stream data ok
+                bos.write(one_sample);
+
+                if (next_ps != null && next_ps.timestamp == currentInMs) {
+                    // current ps & next_ps overlapped
+                    // ignore the rest of current ps, and using next_ps as new ps for recording
+                    log.warn("current ps overlapped with next ps at timestamp: {}, using_next_ps_as_current", next_ps.timestamp);
+                    if (!_dsBufs.isEmpty()) {
+                        ps = _dsBufs.remove(0);
+                        if (ps != null) {
+                            log.info("new current ps's start tm: {} / currentInMS: {}", ps.timestamp, currentInMs);
+                        }
+                        if (!_dsBufs.isEmpty()) {
+                            // prefetch next ps
+                            next_ps = _dsBufs.get(0);
+                            if (next_ps != null) {
+                                log.info("next current ps's start tm: {} / currentInMS: {}", next_ps.timestamp, currentInMs);
+                            }
+                        } else {
+                            next_ps = null;
+                        }
+                    }
+                    downsample_is = null;
+                }
                 if (downsample_is == null && ps != null && ps.timestamp == currentInMs) {
                     log.info("current ps {} match currentInMS", ps.timestamp);
                     downsample_is = new ByteArrayListInputStream(ps._data);
                 }
-                sample_count++;
                 boolean downsample_written = false;
-                // read up stream data ok
-                bos.write(one_sample);
                 if (downsample_is != null) {
                     if (downsample_is.read(one_sample) == 2) {
                         bos.write(one_sample);
@@ -287,6 +314,15 @@ public class CallSession extends ASRSession {
                             if (ps != null) {
                                 log.info("new current ps's start tm: {} / currentInMS: {}", ps.timestamp, currentInMs);
                             }
+                            if (!_dsBufs.isEmpty()) {
+                                // prefetch next ps
+                                next_ps = _dsBufs.get(0);
+                                if (next_ps != null) {
+                                    log.info("next current ps's start tm: {} / currentInMS: {}", next_ps.timestamp, currentInMs);
+                                }
+                            } else {
+                                next_ps = null;
+                            }
                         }
                     }
                 }
@@ -296,6 +332,7 @@ public class CallSession extends ASRSession {
                     one_sample[1] = (byte)0x00;
                     bos.write(one_sample);
                 }
+                sample_count++;
                 if (sample_count % 16 == 0) {
                     // 1 millisecond == 16 sample == 16 * 2 bytes = 32 bytes
                     currentInMs++;
