@@ -252,53 +252,27 @@ public class CallSession extends ASRSession {
             bos.write(WaveUtil.genWaveHeader(16000, 2));
 
             long currentInMs = _recordStartTimestamp.get();
-            PlaybackSegment ps = null, next_ps = null;
-
-            if (!_dsBufs.isEmpty()) {
-                ps = _dsBufs.remove(0);
-                if (ps != null) {
-                    log.info("new current ps's start tm: {} / currentInMS: {}", ps.timestamp, currentInMs);
-                }
-                if (!_dsBufs.isEmpty()) {
-                    // prefetch next ps
-                    next_ps = _dsBufs.get(0);
-                    if (next_ps != null) {
-                        log.info("next current ps's start tm: {} / currentInMS: {}", next_ps.timestamp, currentInMs);
-                    }
-                } else {
-                    next_ps = null;
-                }
-            }
+            final AtomicReference<PlaybackSegment> ps = new AtomicReference<>(null), next_ps = new AtomicReference<>(null);
 
             int sample_count = 0;
             while (upsample_is.read(one_sample) == 2) {
                 // read up stream data ok
                 bos.write(one_sample);
 
-                if (next_ps != null && next_ps.timestamp == currentInMs) {
+                if (ps.get() == null) {
+                    // init ps & next_ps if downstream pcm exist
+                    fetchPS(ps, next_ps, currentInMs);
+                }
+                if (next_ps.get() != null && next_ps.get().timestamp == currentInMs) {
                     // current ps & next_ps overlapped
                     // ignore the rest of current ps, and using next_ps as new ps for recording
-                    log.warn("current ps overlapped with next ps at timestamp: {}, using_next_ps_as_current", next_ps.timestamp);
-                    if (!_dsBufs.isEmpty()) {
-                        ps = _dsBufs.remove(0);
-                        if (ps != null) {
-                            log.info("new current ps's start tm: {} / currentInMS: {}", ps.timestamp, currentInMs);
-                        }
-                        if (!_dsBufs.isEmpty()) {
-                            // prefetch next ps
-                            next_ps = _dsBufs.get(0);
-                            if (next_ps != null) {
-                                log.info("next current ps's start tm: {} / currentInMS: {}", next_ps.timestamp, currentInMs);
-                            }
-                        } else {
-                            next_ps = null;
-                        }
-                    }
+                    log.warn("current ps overlapped with next ps at timestamp: {}, using_next_ps_as_current", next_ps.get().timestamp);
+                    fetchPS(ps, next_ps, currentInMs);
                     downsample_is = null;
                 }
-                if (downsample_is == null && ps != null && ps.timestamp == currentInMs) {
-                    log.info("current ps {} match currentInMS", ps.timestamp);
-                    downsample_is = new ByteArrayListInputStream(ps._data);
+                if (downsample_is == null && ps.get() != null && ps.get().timestamp == currentInMs) {
+                    log.info("current ps {} match currentInMS", ps.get().timestamp);
+                    downsample_is = new ByteArrayListInputStream(ps.get()._data);
                 }
                 boolean downsample_written = false;
                 if (downsample_is != null) {
@@ -309,21 +283,8 @@ public class CallSession extends ASRSession {
                         // current ps written
                         downsample_is.close();
                         downsample_is = null;
-                        if (!_dsBufs.isEmpty()) {
-                            ps = _dsBufs.remove(0);
-                            if (ps != null) {
-                                log.info("new current ps's start tm: {} / currentInMS: {}", ps.timestamp, currentInMs);
-                            }
-                            if (!_dsBufs.isEmpty()) {
-                                // prefetch next ps
-                                next_ps = _dsBufs.get(0);
-                                if (next_ps != null) {
-                                    log.info("next current ps's start tm: {} / currentInMS: {}", next_ps.timestamp, currentInMs);
-                                }
-                            } else {
-                                next_ps = null;
-                            }
-                        }
+                        ps.set(null);
+                        next_ps.set(null);
                     }
                 }
                 if (!downsample_written) {
@@ -346,6 +307,24 @@ public class CallSession extends ASRSession {
         } catch (IOException ex) {
             log.warn("[{}] close: generate record stream error, detail: {}", _sessionId, ex.toString());
             throw new RuntimeException(ex);
+        }
+    }
+
+    private void fetchPS(final AtomicReference<PlaybackSegment> ps, final AtomicReference<PlaybackSegment> next_ps, final long currentInMs) {
+        if (!_dsBufs.isEmpty()) {
+            ps.set(_dsBufs.remove(0));
+            if (ps.get() != null) {
+                log.info("new current ps's start tm: {} / currentInMS: {}", ps.get().timestamp, currentInMs);
+            }
+            if (!_dsBufs.isEmpty()) {
+                // prefetch next ps
+                next_ps.set(_dsBufs.get(0));
+                if (next_ps.get() != null) {
+                    log.info("next current ps's start tm: {} / currentInMS: {}", next_ps.get().timestamp, currentInMs);
+                }
+            } else {
+                next_ps.set(null);
+            }
         }
     }
 
