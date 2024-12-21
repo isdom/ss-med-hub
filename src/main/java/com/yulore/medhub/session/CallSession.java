@@ -93,9 +93,10 @@ public class CallSession extends ASRSession {
     }
 
     public void checkIdle() {
-        final long idleTime = System.currentTimeMillis() - Math.max(_idleStartInMs.get(), _playback != null ? _playback.idleStartInMs() : 0);
-        boolean isAiSpeaking = _playback != null && _playback.isPlaying();
+        final long idleTime = System.currentTimeMillis() - Math.max(_idleStartInMs.get(), _playback.get() != null ? _playback.get().idleStartInMs() : 0);
+        boolean isAiSpeaking = _playback.get() != null && _playback.get().isPlaying();
         if (_sessionId != null      // user answered
+            && _playback.get() != null
             && !_isUserSpeak.get()  // user not speak
             && !isAiSpeaking        // AI not speak
             ) {
@@ -165,8 +166,8 @@ public class CallSession extends ASRSession {
     public void notifySentenceBegin(final PayloadSentenceBegin payload) {
         super.notifySentenceBegin(payload);
         _isUserSpeak.set(true);
-        if (_lastReply != null && _lastReply.getPause_on_speak() != null && _lastReply.getPause_on_speak()) {
-            _playback.pauseCurrent();
+        if (_playback.get() != null && _lastReply != null && _lastReply.getPause_on_speak() != null && _lastReply.getPause_on_speak()) {
+            _playback.get().pauseCurrent();
         }
     }
 
@@ -176,12 +177,12 @@ public class CallSession extends ASRSession {
         _isUserSpeak.set(false);
         _idleStartInMs.set(System.currentTimeMillis());
 
-        if (_lastReply != null && _lastReply.getPause_on_speak() != null && _lastReply.getPause_on_speak()) {
-            _playback.resumeCurrent();
+        if (_playback.get() != null && _lastReply != null && _lastReply.getPause_on_speak() != null && _lastReply.getPause_on_speak()) {
+            _playback.get().resumeCurrent();
         }
 
         if (_sessionId != null) {
-            boolean isAiSpeaking = _playback != null && _playback.isPlaying();
+            boolean isAiSpeaking = _playback.get() != null && _playback.get().isPlaying();
             try {
                 final ApiResponse<AIReplyVO> response =
                         _scriptApi.ai_reply(_sessionId, payload.getResult(), isAiSpeaking ? 1 : 0, null);
@@ -212,9 +213,9 @@ public class CallSession extends ASRSession {
     public void close() {
         super.close();
         _callSessions.remove(_sessionId);
-        if (_playback != null) {
+        if (_playback.get() != null) {
             // stop current playback when call close()
-            _playback.stopCurrent();
+            _playback.get().stopCurrent();
         }
         generateRecordAndUpload();
     }
@@ -329,7 +330,7 @@ public class CallSession extends ASRSession {
     }
 
     public void attach(final PlaybackSession playback, final Consumer<String> playbackOn) {
-        _playback = playback;
+        _playback.set(playback);
         _playbackOn = playbackOn;
         doPlayback(_lastReply);
     }
@@ -365,7 +366,7 @@ public class CallSession extends ASRSession {
     private AiSettingVO _aiSetting;
 
     private Consumer<String> _playbackOn;
-    private PlaybackSession _playback;
+    private final AtomicReference<PlaybackSession> _playback = new AtomicReference<>(null);
     private final AtomicLong _idleStartInMs = new AtomicLong(System.currentTimeMillis());
     private final AtomicBoolean _isUserSpeak = new AtomicBoolean(false);
 
