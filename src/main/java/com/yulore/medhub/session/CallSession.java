@@ -99,8 +99,9 @@ public class CallSession extends ASRSession {
             && _playback.get() != null
             && !_isUserSpeak.get()  // user not speak
             && !isAiSpeaking        // AI not speak
+            && _aiSetting != null
             ) {
-            if (idleTime > CHECK_IDLE_TIMEOUT) {
+            if (idleTime > _aiSetting.getIdle_timeout()) {
                 log.info("checkIdle: idle duration: {} ms >=: [{}] ms\n", idleTime, CHECK_IDLE_TIMEOUT);
                 try {
                     final ApiResponse<AIReplyVO> response =
