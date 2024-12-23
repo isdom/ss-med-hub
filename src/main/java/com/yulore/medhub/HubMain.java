@@ -481,7 +481,7 @@ public class HubMain {
             _sessionExecutor.submit(()-> handleStartTranscriptionCommand(cmd, webSocket));
         } else if ("StopTranscription".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handleStopTranscriptionCommand(cmd, webSocket));
-        } else if ("Playback".equals(cmd.getHeader().get("name"))) {
+        } /* else if ("Playback".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handlePlaybackCommand(cmd, webSocket));
         } else if ("PlayTTS".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handlePlayTTSCommand(cmd, webSocket));
@@ -491,7 +491,7 @@ public class HubMain {
             _sessionExecutor.submit(()-> handlePausePlaybackCommand(cmd, webSocket));
         } else if ("ResumePlayback".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handleResumePlaybackCommand(cmd, webSocket));
-        } else if ("OpenStream".equals(cmd.getHeader().get("name"))) {
+        } */ else if ("OpenStream".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handleOpenStreamCommand(cmd, webSocket));
         } else if ("GetFileLen".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handleGetFileLenCommand(cmd, webSocket));
@@ -899,6 +899,7 @@ public class HubMain {
         task.start();
     }
 
+    /*
     private void handlePlaybackCommand(final HubCommandVO cmd, final WebSocket webSocket) {
         final MediaSession session = webSocket.getAttachment();
         if (session == null) {
@@ -1027,6 +1028,7 @@ public class HubMain {
             return defaultValue;
         }
     }
+     */
 
     private void handleStartTranscriptionCommand(final HubCommandVO cmd, final WebSocket webSocket) {
         final String provider = cmd.getPayload() != null ? cmd.getPayload().get("provider") : null;
