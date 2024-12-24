@@ -102,7 +102,7 @@ public class CallSession extends ASRSession {
             && _aiSetting != null
             ) {
             if (idleTime > _aiSetting.getIdle_timeout()) {
-                log.info("checkIdle: idle duration: {} ms >=: [{}] ms\n", idleTime, CHECK_IDLE_TIMEOUT);
+                log.info("[{}]: checkIdle: idle duration: {} ms >=: [{}] ms\n", _sessionId, idleTime, CHECK_IDLE_TIMEOUT);
                 try {
                     final ApiResponse<AIReplyVO> response =
                             _scriptApi.ai_reply(_sessionId, null, 0, idleTime);
@@ -111,14 +111,14 @@ public class CallSession extends ASRSession {
                             _lastReply = response.getData();
                         }
                     } else {
-                        log.info("checkIdle: ai_reply {}, do nothing\n", response);
+                        log.info("[{}]: checkIdle: ai_reply {}, do nothing\n", _sessionId, response);
                     }
                 } catch (Exception ex) {
-                    log.warn("checkIdle: ai_reply error, detail: {}", ex.toString());
+                    log.warn("[{}]: checkIdle: ai_reply error, detail: {}", _sessionId, ex.toString());
                 }
             }
         }
-        log.info("checkIdle: sessionId: {}/is_speaking: {}/is_playing: {}/idle duration: {} ms",
+        log.info("[{}]: checkIdle: is_speaking: {}/is_playing: {}/idle duration: {} ms",
                 _sessionId, _isUserSpeak.get(), isAiSpeaking, idleTime);
     }
 
@@ -167,8 +167,12 @@ public class CallSession extends ASRSession {
     public void notifySentenceBegin(final PayloadSentenceBegin payload) {
         super.notifySentenceBegin(payload);
         _isUserSpeak.set(true);
+        if (null != _sessionId) {
+            log.info("[{}]: notifySentenceBegin: {}", _sessionId, payload);
+        }
         if (_playback.get() != null && _lastReply != null && _lastReply.getPause_on_speak() != null && _lastReply.getPause_on_speak()) {
             _playback.get().pauseCurrent();
+            log.info("[{}]: pauseCurrent: {}", _sessionId, _playback.get());
         }
     }
 
@@ -178,8 +182,13 @@ public class CallSession extends ASRSession {
         _isUserSpeak.set(false);
         _idleStartInMs.set(System.currentTimeMillis());
 
+        if (null != _sessionId) {
+            log.info("[{}]: notifySentenceEnd: {}", _sessionId, payload);
+        }
+
         if (_playback.get() != null && _lastReply != null && _lastReply.getPause_on_speak() != null && _lastReply.getPause_on_speak()) {
             _playback.get().resumeCurrent();
+            log.info("[{}]: resumeCurrent: {}", _sessionId, _playback.get());
         }
 
         if (_sessionId != null) {
@@ -192,10 +201,10 @@ public class CallSession extends ASRSession {
                         _lastReply = response.getData();
                     }
                 } else {
-                    log.info("notifySentenceEnd: ai_reply {}, do nothing\n", response);
+                    log.info("[{}]: notifySentenceEnd: ai_reply {}, do nothing\n", _sessionId, response);
                 }
             } catch (Exception ex) {
-                log.warn("notifySentenceEnd: ai_reply error, detail: {}", ex.toString());
+                log.warn("[{}]: notifySentenceEnd: ai_reply error, detail: {}", _sessionId, ex.toString());
             }
         }
     }
@@ -337,7 +346,7 @@ public class CallSession extends ASRSession {
     }
 
     private boolean doPlayback(final AIReplyVO replyVO) {
-        log.info("doPlayback: {}", replyVO);
+        log.info("[{}]: doPlayback: {}", _sessionId, replyVO);
         if ("cp".equals(replyVO.getVoiceMode())) {
             _playbackOn.accept(String.format("type=cp,%s", JSON.toJSONString(replyVO.getCps())));
         } else if ("wav".equals(replyVO.getVoiceMode())) {
@@ -346,7 +355,7 @@ public class CallSession extends ASRSession {
             _playbackOn.accept(String.format("{type=tts,text=%s}tts.wav",
                     StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(replyVO.getReply_content())));
         } else {
-            log.info("doPlayback: unknown reply: {}, ignore", replyVO);
+            log.info("[{}]: doPlayback: unknown reply: {}, ignore", _sessionId, replyVO);
             return false;
         }
         return true;
