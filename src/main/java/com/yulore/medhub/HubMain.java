@@ -206,8 +206,9 @@ public class HubMain {
                             // init CallSession attach with webSocket
                             final CallSession session = new CallSession(_callApi, _scriptApi,
                                     (_session)->{
-                                        webSocket.close(1000, "hangup");
-                                        log.info("[{}]: call doHangup", _session.sessionId());
+                                        // webSocket.close(1000, "hangup");
+                                        HubEventVO.sendEvent(webSocket, "CallEnded", new PayloadCallEnded(_session.sessionId()));
+                                        log.info("[{}]: sendback CallEnded event", _session.sessionId());
                                     },
                                     _oss_bucket,
                                     _oss_path,
