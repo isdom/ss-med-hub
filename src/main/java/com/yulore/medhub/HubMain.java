@@ -267,6 +267,14 @@ public class HubMain {
                             log.info("wscount/{}: closed {} with exit code {} additional info: {}, CallSession-id: {}",
                                     _currentWSConnection.decrementAndGet(),
                                     webSocket.getRemoteSocketAddress(), code, reason, session.sessionId());
+                        } else if (attachment instanceof PlaybackSession session) {
+                            log.info("wscount/{}: closed {} with exit code {} additional info: {}, PlaybackSession-id: {}",
+                                    _currentWSConnection.decrementAndGet(),
+                                    webSocket.getRemoteSocketAddress(), code, reason, session.sessionId());
+                        } else if (attachment instanceof PreviewSession session) {
+                            log.info("wscount/{}: closed {} with exit code {} additional info: {}, PreviewSession",
+                                    _currentWSConnection.decrementAndGet(),
+                                    webSocket.getRemoteSocketAddress(), code, reason);
                         } else if (attachment instanceof StreamSession session) {
                             session.close();
                             log.info("wscount/{}: closed {} with exit code {} additional info: {}, StreamSession-id: {}",
