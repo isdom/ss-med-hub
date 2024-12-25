@@ -10,15 +10,11 @@ import com.alibaba.nls.client.protocol.asr.SpeechTranscriberListener;
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriberResponse;
 import com.aliyun.oss.OSS;
 import com.aliyun.oss.OSSClientBuilder;
-import com.aliyun.oss.model.OSSObject;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Charsets;
 import com.mgnt.utils.StringUnicodeEncoderDecoder;
-import com.tencent.asrv2.AsrConstant;
-import com.tencent.asrv2.SpeechRecognizer;
-import com.tencent.asrv2.SpeechRecognizerListener;
-import com.tencent.asrv2.SpeechRecognizerResponse;
+import com.tencent.asrv2.*;
 import com.tencent.core.ws.SpeechClient;
 import com.yulore.medhub.api.CallApi;
 import com.yulore.medhub.api.CompositeVO;
@@ -46,10 +42,6 @@ import org.springframework.stereotype.Component;
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import javax.annotation.Resource;
-import javax.sound.sampled.AudioFormat;
-import javax.sound.sampled.AudioInputStream;
-import javax.sound.sampled.AudioSystem;
-import javax.sound.sampled.UnsupportedAudioFileException;
 import java.io.*;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
@@ -1065,7 +1057,7 @@ public class HubMain {
             }
 
             if ("tx".equals(provider)) {
-                startWithTxasr(webSocket, session);
+                startWithTxasr(webSocket, session, cmd);
             } else {
                 startWithAliasr(webSocket, session);
             }
@@ -1078,11 +1070,24 @@ public class HubMain {
         }
     }
 
-    private void startWithTxasr(final WebSocket webSocket, final ASRSession session) throws Exception {
+    private void startWithTxasr(final WebSocket webSocket, final ASRSession session, final HubCommandVO cmd) throws Exception {
         final long startConnectingInMs = System.currentTimeMillis();
         final TxASRAgent agent = selectTxASRAgent();
 
-        final SpeechRecognizer speechRecognizer = buildSpeechRecognizer(agent, buildRecognizerListener(session, webSocket, agent, session.sessionId(), startConnectingInMs));
+        final SpeechRecognizer speechRecognizer = buildSpeechRecognizer(agent,
+                buildRecognizerListener(session, webSocket, agent, session.sessionId(), startConnectingInMs),
+                (request)-> {
+                    // https://cloud.tencent.com/document/product/1093/48982
+                    if (cmd.getPayload().get("noise_threshold") != null) {
+                        request.setNoiseThreshold(Float.parseFloat(cmd.getPayload().get("noise_threshold")));
+                    }
+                    if (cmd.getPayload().get("engine_model_type") != null) {
+                        request.setEngineModelType(cmd.getPayload().get("engine_model_type"));
+                    }
+                    if (cmd.getPayload().get("input_sample_rate") != null) {
+                        request.setInputSampleRate(Integer.parseInt(cmd.getPayload().get("input_sample_rate")));
+                    }
+                });
 
         session.setASR(()-> {
             try {
@@ -1117,42 +1122,9 @@ public class HubMain {
         }
     }
 
-    private SpeechRecognizer buildSpeechRecognizer(final TxASRAgent agent, final SpeechRecognizerListener listener) throws Exception {
+    private SpeechRecognizer buildSpeechRecognizer(final TxASRAgent agent, final SpeechRecognizerListener listener, final Consumer<SpeechRecognizerRequest> onRequest) throws Exception {
         //创建实例、建立连接。
-        final SpeechRecognizer recognizer = agent.buildSpeechRecognizer(listener);
-
-        /*
-        //输入音频编码方式。
-        transcriber.setFormat(InputFormatEnum.PCM);
-        //输入音频采样率。
-        //transcriber.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
-        transcriber.setSampleRate(SampleRateEnum.SAMPLE_RATE_8K);
-        //是否返回中间识别结果。
-        transcriber.setEnableIntermediateResult(true);
-        //是否生成并返回标点符号。
-        transcriber.setEnablePunctuation(true);
-        //是否将返回结果规整化，比如将一百返回为100。
-        transcriber.setEnableITN(true);
-
-        //设置vad断句参数。默认值：800ms，有效值：200ms～2000ms。
-        //transcriber.addCustomedParam("max_sentence_silence", 600);
-        //设置是否语义断句。
-        //transcriber.addCustomedParam("enable_semantic_sentence_detection",false);
-        //设置是否开启过滤语气词，即声音顺滑。
-        //transcriber.addCustomedParam("disfluency",true);
-        //设置是否开启词模式。
-        //transcriber.addCustomedParam("enable_words",true);
-        //设置vad噪音阈值参数，参数取值为-1～+1，如-0.9、-0.8、0.2、0.9。
-        //取值越趋于-1，判定为语音的概率越大，亦即有可能更多噪声被当成语音被误识别。
-        //取值越趋于+1，判定为噪音的越多，亦即有可能更多语音段被当成噪音被拒绝识别。
-        //该参数属高级参数，调整需慎重和重点测试。
-        //transcriber.addCustomedParam("speech_noise_threshold",0.3);
-        //设置训练后的定制语言模型id。
-        //transcriber.addCustomedParam("customization_id","你的定制语言模型id");
-        //设置训练后的定制热词id。
-        //transcriber.addCustomedParam("vocabulary_id","你的定制热词id");
-         */
-
+        final SpeechRecognizer recognizer = agent.buildSpeechRecognizer(listener, onRequest);
         return recognizer;
     }
 
