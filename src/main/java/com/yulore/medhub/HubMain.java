@@ -204,14 +204,21 @@ public class HubMain {
                             log.info("ws path match: {}, using ws as MediaSession {}", _match_media, sessionId);
                         } else if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_call)) {
                             // init CallSession attach with webSocket
-                            final CallSession session = new CallSession(_callApi, _scriptApi, ()->webSocket.close(1000, "hangup"), _oss_bucket, _oss_path, (ctx) -> {
-                                final long startUploadInMs = System.currentTimeMillis();
-                                _ossAccessExecutor.submit(()->{
-                                    _ossClient.putObject(ctx.bucketName, ctx.objectName, ctx.content);
-                                    log.info("[{}]: upload record to oss => bucket:{}/object:{}, cost {} ms",
-                                            ctx.sessionId, ctx.bucketName, ctx.objectName, System.currentTimeMillis() - startUploadInMs);
-                                });
-                            });
+                            final CallSession session = new CallSession(_callApi, _scriptApi,
+                                    (_session)->{
+                                        webSocket.close(1000, "hangup");
+                                        log.info("[{}]: call doHangup", _session.sessionId());
+                                    },
+                                    _oss_bucket,
+                                    _oss_path,
+                                    (ctx) -> {
+                                        final long startUploadInMs = System.currentTimeMillis();
+                                        _ossAccessExecutor.submit(()->{
+                                            _ossClient.putObject(ctx.bucketName, ctx.objectName, ctx.content);
+                                            log.info("[{}]: upload record to oss => bucket:{}/object:{}, cost {} ms",
+                                                    ctx.sessionId, ctx.bucketName, ctx.objectName, System.currentTimeMillis() - startUploadInMs);
+                                        });
+                                    });
                             webSocket.setAttachment(session);
                             session.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms, session::checkIdle);
 
@@ -314,8 +321,9 @@ public class HubMain {
     private void playbackOn(final String path, final CallSession callSession, final PlaybackSession playbackSession, final WebSocket webSocket) {
         // interval = 20 ms
         int interval = 20;
-        log.info("playbackOn: {} => sample rate: {}/interval: {}/channels: {}", path, 16000, interval, 1);
+        log.info("[{}]: playbackOn: {} => sample rate: {}/interval: {}/channels: {}", callSession.sessionId(), path, 16000, interval, 1);
         final PlayStreamPCMTask task = new PlayStreamPCMTask(
+                callSession.sessionId(),
                 path,
                 _scheduledExecutor,
                 new SampleInfo(16000, interval, 16, 1),
@@ -326,7 +334,7 @@ public class HubMain {
                     callSession.notifyPlaybackSendData(bytes);
                 },
                 (_task) -> {
-                    log.info("PlayStreamPCMTask {} stopped with completed: {}", _task, _task.isCompleted());
+                    log.info("[{}]: PlayStreamPCMTask {} stopped with completed: {}", callSession.sessionId(), _task, _task.isCompleted());
                     callSession.notifyPlaybackStop(_task);
                     playbackSession.notifyPlaybackStop(_task);
                 }
@@ -515,6 +523,7 @@ public class HubMain {
         int interval = 20;
         log.info("previewOn: {} => sample rate: {}/interval: {}/channels: {}", path, 16000, interval, 1);
         final PlayStreamPCMTask task = new PlayStreamPCMTask(
+                "preview",
                 path,
                 _scheduledExecutor,
                 new SampleInfo(16000, interval, 16, 1),

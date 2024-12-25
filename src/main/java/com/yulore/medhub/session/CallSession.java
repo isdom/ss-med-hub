@@ -42,7 +42,12 @@ public class CallSession extends ASRSession {
 
     static final long CHECK_IDLE_TIMEOUT = 5000L; // 5 seconds to report check idle to script engine
 
-    public CallSession(final CallApi callApi, final ScriptApi scriptApi, final Runnable doHangup, final String bucket, final String wavPath, final Consumer<RecordContext> doRecord) {
+    public CallSession(final CallApi callApi,
+                       final ScriptApi scriptApi,
+                       final Consumer<CallSession> doHangup,
+                       final String bucket,
+                       final String wavPath,
+                       final Consumer<RecordContext> doRecord) {
         _sessionId = null;
         _scriptApi = scriptApi;
         _callApi = callApi;
@@ -210,12 +215,14 @@ public class CallSession extends ASRSession {
     }
 
     public void notifyPlaybackStart(final PlayStreamPCMTask task) {
+        log.info("[{}]: notifyPlaybackStart => task: {}", _sessionId, task);
     }
 
     public void notifyPlaybackStop(final PlayStreamPCMTask task) {
+        log.info("[{}]: notifyPlaybackStop => task: {} / lastReply: {}", _sessionId, task, _lastReply);
         if (_lastReply != null && _lastReply.getHangup() == 1) {
             // hangup call
-            _doHangup.run();
+            _doHangup.accept(this);
         }
     }
 
@@ -369,7 +376,7 @@ public class CallSession extends ASRSession {
 
     private final CallApi _callApi;
     private final ScriptApi _scriptApi;
-    private final Runnable _doHangup;
+    private final Consumer<CallSession> _doHangup;
     private final String _bucket;
     private final String _wavPath;
     private AIReplyVO _lastReply;

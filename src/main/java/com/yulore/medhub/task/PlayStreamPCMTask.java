@@ -25,6 +25,7 @@ import java.util.function.Consumer;
 @Slf4j
 public class PlayStreamPCMTask {
     private final String _taskId = UUID.randomUUID().toString();
+    final String _sessionId;
     final String _path;
     final ScheduledExecutorService _executor;
     final SampleInfo _sampleInfo;
@@ -94,17 +95,17 @@ public class PlayStreamPCMTask {
             _lock.lock();
             if (_stopped.get()) {
                 // maybe call stop() before call start()
-                log.warn("({}): pcm task has stopped, can't start again", this);
+                log.warn("[{}]: pcm task ({}) has stopped, can't start again", _sessionId, this);
                 return;
             }
             _interval_bytes = _sampleInfo.bytesPerInterval();
             if (_started.compareAndSet(false, true)) {
-                log.info("({}): pcm task start to playback", this);
+                log.info("[{}]: pcm task ({}) start to playback", _sessionId, this);
                 // HubEventVO.sendEvent(_webSocket, "PlaybackStart", new PayloadPlaybackStart(0,"pcm", _sampleInfo.sampleRate, _sampleInfo.interval, _sampleInfo.channels));
                 _startTimestamp = System.currentTimeMillis();
                 playAndSchedule(1 );
             } else {
-                log.warn("({}): pcm task started, ignore multi-call start()", this);
+                log.warn("[{}]: pcm task ({}) started, ignore multi-call start()", _sessionId, this);
             }
         } finally {
             _lock.unlock();
@@ -117,14 +118,14 @@ public class PlayStreamPCMTask {
             _lock.lock();
             if (_stopped.get()) {
                 // ignore if stopped flag set
-                log.warn("({}): pcm task has stopped, abort playAndSchedule", this);
+                log.warn("[{}]: pcm task ({}) has stopped, abort playAndSchedule", _sessionId, this);
                 return;
             }
             if (_pos + _interval_bytes > _length && _streaming) {
                 // need more data
                 final long delay = _startTimestamp + (long) _sampleInfo.interval() * intervalCount - System.currentTimeMillis();
                 next = _executor.schedule(() -> playAndSchedule(intervalCount + 1), delay, TimeUnit.MILLISECONDS);
-                log.warn("({}): pcm task need_more_data, delay_playback_to_next", this);
+                log.warn("[{}]: pcm task ({}) need_more_data, delay_playback_to_next", _sessionId, this);
             } else {
                 final byte[] bytes = new byte[_interval_bytes];
                 final int read_size = fillIntervalData(bytes);
@@ -137,11 +138,11 @@ public class PlayStreamPCMTask {
                     _stopped.compareAndSet(false, true);
                     _completed.compareAndSet(false, true);
                     safeSendPlaybackStopEvent();
-                    log.info("({}): finish playback by {} send action", this, intervalCount);
+                    log.info("[{}]: finish ({}) playback by {} send action", _sessionId, this, intervalCount);
                 }
             }
         } catch (IOException ex) {
-            log.warn("({}): pcm task schedule failed, detail: {}", this, ex.toString());
+            log.warn("[{}]: pcm task ({}) schedule failed, detail: {}", _sessionId, this, ex.toString());
             throw new RuntimeException(ex);
         } finally {
             _next.set(next);
@@ -173,14 +174,14 @@ public class PlayStreamPCMTask {
     public boolean pause() {
         if (_stopped.get()) {
             // ignore if stopped flag set
-            log.warn("({}): pcm task has stopped, ignore pause request", this);
+            log.warn("[{}]: pcm task ({}) has stopped, ignore pause request", _sessionId, this);
             return false;
         }
         if (_paused.compareAndSet(false, true)) {
-            log.info("({}): pcm task change to paused state", this);
+            log.info("[{}]: pcm task ({}) change to paused state", _sessionId, this);
             return true;
         } else {
-            log.warn("({}): pcm task paused already, ignore pause request", this);
+            log.warn("[{}]: pcm task ({}) paused already, ignore pause request", _sessionId, this);
             return false;
         }
     }
@@ -188,13 +189,13 @@ public class PlayStreamPCMTask {
     public void resume() {
         if (_stopped.get()) {
             // ignore if stopped flag set
-            log.warn("({}): pcm task has stopped, ignore resume request", this);
+            log.warn("[{}]: pcm task ({}) has stopped, ignore resume request", _sessionId, this);
             return;
         }
         if (_paused.compareAndSet(true, false)) {
-            log.info("({}): pcm task resume to playback", this);
+            log.info("[{}]: pcm task ({}) resume to playback", _sessionId, this);
         } else {
-            log.warn("({}): pcm task !NOT! paused, ignore resume request", this);
+            log.warn("[{}]: pcm task ({}) !NOT! paused, ignore resume request", _sessionId, this);
         }
     }
 
