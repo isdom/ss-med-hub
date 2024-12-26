@@ -1087,6 +1087,9 @@ public class HubMain {
                     if (cmd.getPayload().get("input_sample_rate") != null) {
                         request.setInputSampleRate(Integer.parseInt(cmd.getPayload().get("input_sample_rate")));
                     }
+                    if (cmd.getPayload().get("vad_silence_time") != null) {
+                        request.setVadSilenceTime(Integer.parseInt(cmd.getPayload().get("vad_silence_time")));
+                    }
                 });
 
         session.setASR(()-> {
