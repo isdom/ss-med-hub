@@ -22,23 +22,34 @@ public class OSSStreamTask implements BuildStreamTask {
         final int leftBracePos = path.indexOf('{');
         if (leftBracePos == -1) {
             log.warn("{} missing vars, ignore", path);
-            return;
+            throw new RuntimeException(path + " missing vars, ignore");
         }
         final int rightBracePos = path.indexOf('}');
         if (rightBracePos == -1) {
             log.warn("{} missing vars, ignore", path);
-            return;
+            throw new RuntimeException(path + " missing vars, ignore");
         }
         final String vars = path.substring(leftBracePos + 1, rightBracePos);
 
         _bucketName = VarsUtil.extractValue(vars, "bucket");
         if (null == _bucketName) {
             log.warn("{} missing bucket field, ignore", path);
-            return;
+            throw new RuntimeException(path + " missing bucket field, ignore");
         }
 
         _objectName = path.substring(rightBracePos + 1);
-        _key = _objectName.replace('/', '_');
+        _key = buildKey();
+    }
+
+    private String buildKey() {
+        final StringBuilder sb = new StringBuilder();
+        sb.append("oss-hdr:");
+        sb.append(!_removeWavHdr);
+        sb.append(":");
+        sb.append(_bucketName);
+        sb.append(":");
+        sb.append(_objectName);
+        return sb.toString();
     }
 
     @Override
@@ -75,8 +86,8 @@ public class OSSStreamTask implements BuildStreamTask {
     }
 
     private final OSS _ossClient;
-    private String _bucketName;
-    private String _objectName;
-    private String _key;
+    private final String _bucketName;
+    private final String _objectName;
+    private final String _key;
     private final boolean _removeWavHdr;
 }
