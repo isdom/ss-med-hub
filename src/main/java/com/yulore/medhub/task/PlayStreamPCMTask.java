@@ -14,6 +14,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
@@ -51,6 +52,10 @@ public class PlayStreamPCMTask {
     private int _length = 0;
     final List<byte[]> _bufs = new ArrayList<>();
     private final Lock _lock = new ReentrantLock();
+
+    private final AtomicInteger _sendDataCounter = new AtomicInteger(0);
+    private final AtomicLong _sendDataLastTimestamp = new AtomicLong(0);
+    private final AtomicReference<StringBuilder> _sendDataIntervalLog = new AtomicReference<>(new StringBuilder());
 
     public String taskId() {
         return _taskId;
@@ -103,6 +108,7 @@ public class PlayStreamPCMTask {
                 log.info("[{}]: pcm task ({}) start to playback", _sessionId, this);
                 // HubEventVO.sendEvent(_webSocket, "PlaybackStart", new PayloadPlaybackStart(0,"pcm", _sampleInfo.sampleRate, _sampleInfo.interval, _sampleInfo.channels));
                 _startTimestamp = System.currentTimeMillis();
+                _sendDataLastTimestamp.set(_startTimestamp);
                 playAndSchedule(1 );
             } else {
                 log.warn("[{}]: pcm task ({}) started, ignore multi-call start()", _sessionId, this);
@@ -132,8 +138,16 @@ public class PlayStreamPCMTask {
                 if (read_size == _interval_bytes) {
                     fireStartSendOnce();
                     _doSendData.accept(bytes);
-                    final long delay = _startTimestamp + (long) _sampleInfo.interval() * intervalCount - System.currentTimeMillis();
+                    final int send_count = _sendDataCounter.incrementAndGet();
+                    final long now = System.currentTimeMillis();
+                    final long delay = _startTimestamp + (long) _sampleInfo.interval() * intervalCount - now;
                     next = _executor.schedule(() -> playAndSchedule(intervalCount + 1), delay, TimeUnit.MILLISECONDS);
+                    final int interval_in_ms = (int)(now - _sendDataLastTimestamp.get());
+                    if (send_count % 50 == 0) {
+                        outputSendDataIntervalLogsAndReset();
+                    }
+                    _sendDataIntervalLog.get().append(interval_in_ms);
+                    _sendDataIntervalLog.get().append(' ');
                 } else {
                     _stopped.compareAndSet(false, true);
                     _completed.compareAndSet(false, true);
@@ -148,6 +162,11 @@ public class PlayStreamPCMTask {
             _next.set(next);
             _lock.unlock();
         }
+    }
+
+    private void outputSendDataIntervalLogsAndReset() {
+        log.info("[{}]: {} pcm_send_data_interval: {}", _sessionId, _taskId, _sendDataIntervalLog.get());
+        _sendDataIntervalLog.set(new StringBuilder());
     }
 
     private int fillIntervalData(final byte[] bytes) throws IOException {
@@ -221,6 +240,7 @@ public class PlayStreamPCMTask {
             _startSendTimestamp.set(0);
             _onStopSend.accept(System.currentTimeMillis());
             _onEnd.accept(this);
+            outputSendDataIntervalLogsAndReset();
             // HubEventVO.sendEvent(_webSocket, "PlaybackStop", new PayloadPlaybackStop(0,"pcm", -1, _completed.get()));
         }
     }
