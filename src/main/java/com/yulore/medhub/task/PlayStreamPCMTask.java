@@ -143,6 +143,7 @@ public class PlayStreamPCMTask {
                     final long delay = _startTimestamp + (long) _sampleInfo.interval() * intervalCount - now;
                     next = _executor.schedule(() -> playAndSchedule(intervalCount + 1), delay, TimeUnit.MILLISECONDS);
                     final int interval_in_ms = (int)(now - _sendDataLastTimestamp.get());
+                    _sendDataLastTimestamp.set(now);
                     if (send_count % 50 == 0) {
                         outputSendDataIntervalLogsAndReset();
                     }
