@@ -139,14 +139,8 @@ public class HubMain {
     @Value("${oss.path}")
     private String _oss_path;
 
-    @Value("${oss.match_prefix}")
-    private String _oss_match_prefix;
-
-    @Value("${rec.bucket}")
-    private String _rec_bucket;
-
-    @Value("${rec.path}")
-    private String _rec_path;
+    //@Value("${oss.match_prefix}")
+    //private String _oss_match_prefix;
 
     private OSS _ossClient;
 
