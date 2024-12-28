@@ -95,6 +95,9 @@ public class HubMain {
     @Value("${session.check_idle_interval_ms}")
     private long _check_idle_interval_ms;
 
+    @Value("${session.match_fs}")
+    private String _match_fs;
+
     @Value("${session.match_media}")
     private String _match_media;
 
@@ -142,6 +145,15 @@ public class HubMain {
     //@Value("${oss.match_prefix}")
     //private String _oss_match_prefix;
 
+    @Value("${rms.cp_prefix}")
+    private String _rms_cp_prefix;
+
+    @Value("${rms.tts_prefix}")
+    private String _rms_tts_prefix;
+
+    @Value("${rms.wav_prefix}")
+    private String _rms_wav_prefix;
+
     private OSS _ossClient;
 
     private ExecutorService _ossAccessExecutor;
@@ -179,7 +191,26 @@ public class HubMain {
                                 webSocket.getRemoteSocketAddress(),
                                 webSocket.getLocalSocketAddress(),
                                 clientHandshake.getResourceDescriptor());
-                        if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_media)) {
+                        if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_fs)) {
+                            // init FsSession attach with webSocket
+                            final String sessionId = clientHandshake.getFieldValue("x-sessionid");
+                            final String welcome = clientHandshake.getFieldValue("x-welcome");
+                            final FsSession session = new FsSession(sessionId,
+                                    (event,payload)->HubEventVO.sendEvent(webSocket, event, payload),
+                                    _scriptApi,
+                                    welcome,
+                                    _rms_cp_prefix,
+                                    _rms_tts_prefix,
+                                    _rms_wav_prefix,
+                                    _test_enable_delay,
+                                    _test_delay_ms,
+                                    _test_enable_disconnect,
+                                    _test_disconnect_probability,
+                                    ()->webSocket.close(1006, "test_disconnect"));
+                            webSocket.setAttachment(session);
+                            session.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms, session::checkIdle);
+                            log.info("ws path match: {}, using ws as FsSession {}", _match_fs, sessionId);
+                        } else if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_media)) {
                             // init MediaSession attach with webSocket
                             final String sessionId = clientHandshake.getFieldValue("x-sessionid");
                             final MediaSession session = new MediaSession(sessionId, _test_enable_delay, _test_delay_ms,
@@ -225,10 +256,7 @@ public class HubMain {
                             }
                             callSession.attach(playbackSession, (_path) -> playbackOn(_path, callSession, playbackSession, webSocket));
                         } else if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_preview)) {
-                            // init PlaybackSession attach with webSocket
-//                            final String path = clientHandshake.getResourceDescriptor();
-//                            final int varsBegin = path.indexOf('?');
-//                            final String sessionId = varsBegin > 0 ? VarsUtil.extractValue(path.substring(varsBegin + 1), "sessionId") : "unknown";
+                            // init PreviewSession attach with webSocket
                             final PreviewSession previewSession = new PreviewSession();
                             webSocket.setAttachment(previewSession);
                             log.info("ws path match: {}, using ws as PreviewSession: [{}]", _match_preview, previewSession);
@@ -241,7 +269,13 @@ public class HubMain {
                     @Override
                     public void onClose(final WebSocket webSocket, final int code, final String reason, final boolean remote) {
                         final Object attachment = webSocket.getAttachment();
-                        if (attachment instanceof MediaSession session) {
+                        if (attachment instanceof FsSession session) {
+                            stopAndCloseTranscriber(webSocket);
+                            session.close();
+                            log.info("wscount/{}: closed {} with exit code {} additional info: {}, FsSession-id {}",
+                                    _currentWSConnection.decrementAndGet(),
+                                    webSocket.getRemoteSocketAddress(), code, reason, session.sessionId());
+                        } else if (attachment instanceof MediaSession session) {
                             stopAndCloseTranscriber(webSocket);
                             session.close();
                             log.info("wscount/{}: closed {} with exit code {} additional info: {}, MediaSession-id {}",
@@ -1134,24 +1168,18 @@ public class HubMain {
         return new SpeechRecognizerListener() {
             @Override
             public void onRecognitionStart(final SpeechRecognizerResponse response) {
-                log.info("{} sessionId={},voice_id:{},{},cost={} ms", "onRecognitionStart",
+                log.info("onRecognitionStart sessionId={},voice_id:{},{},cost={} ms",
                         sessionId,
                         response.getVoiceId(),
                         JSON.toJSONString(response),
                         System.currentTimeMillis() - startConnectingInMs);
-                // notifyTranscriptionStarted(webSocket, account, response);
-                session.transcriptionStarted();
                 account.incConnected();
-                try {
-                    HubEventVO.sendEvent(webSocket, "TranscriptionStarted", (Void) null);
-                } catch (WebsocketNotConnectedException ex) {
-                    log.info("ws disconnected when sendEvent onRecognitionStart: {}", ex.toString());
-                }
+                notifyTranscriptionStarted(webSocket);
             }
 
             @Override
             public void onSentenceBegin(final SpeechRecognizerResponse response) {
-                log.info("{} sessionId={},voice_id:{},{}", "onSentenceBegin",
+                log.info("onSentenceBegin sessionId={},voice_id:{},{}",
                         sessionId,
                         response.getVoiceId(),
                         JSON.toJSONString(response));
@@ -1161,7 +1189,7 @@ public class HubMain {
 
             @Override
             public void onSentenceEnd(final SpeechRecognizerResponse response) {
-                log.info("{} sessionId={},voice_id:{},{}", "onSentenceEnd",
+                log.info("onSentenceEnd sessionId={},voice_id:{},{}",
                         sessionId,
                         response.getVoiceId(),
                         JSON.toJSONString(response));
@@ -1175,7 +1203,7 @@ public class HubMain {
 
             @Override
             public void onRecognitionResultChange(final SpeechRecognizerResponse response) {
-                log.info("{} sessionId={},voice_id:{},{}", "onRecognitionResultChange",
+                log.info("onRecognitionResultChange sessionId={},voice_id:{},{}",
                         sessionId,
                         response.getVoiceId(),
                         JSON.toJSONString(response));
@@ -1187,7 +1215,7 @@ public class HubMain {
 
             @Override
             public void onRecognitionComplete(final SpeechRecognizerResponse response) {
-                log.info("{} sessionId={},voice_id:{},{}", "onRecognitionComplete",
+                log.info("onRecognitionComplete sessionId={},voice_id:{},{}",
                         sessionId,
                         response.getVoiceId(),
                         JSON.toJSONString(response));
@@ -1196,7 +1224,7 @@ public class HubMain {
 
             @Override
             public void onFail(final SpeechRecognizerResponse response) {
-                log.warn("{} sessionId={},voice_id:{},{}", "onFail",
+                log.warn("onFail sessionId={},voice_id:{},{}",
                         sessionId,
                         response.getVoiceId(),
                         JSON.toJSONString(response));
@@ -1301,7 +1329,8 @@ public class HubMain {
                         response.getName(),
                         response.getStatus(),
                         System.currentTimeMillis() - startConnectingInMs);
-                notifyTranscriptionStarted(webSocket, account, response);
+                account.incConnected();
+                notifyTranscriptionStarted(webSocket);
             }
 
             @Override
@@ -1370,11 +1399,11 @@ public class HubMain {
         };
     }
 
-    private void notifyTranscriptionStarted(final WebSocket webSocket, final ASRAgent account, final SpeechTranscriberResponse response) {
-        final ASRSession session = webSocket.getAttachment();
-        session.transcriptionStarted();
-        account.incConnected();
+    private void notifyTranscriptionStarted(final WebSocket webSocket) {
         try {
+            if (webSocket.getAttachment() instanceof ASRSession session) {
+                session.transcriptionStarted();
+            }
             HubEventVO.sendEvent(webSocket, "TranscriptionStarted", (Void) null);
         } catch (WebsocketNotConnectedException ex) {
             log.info("ws disconnected when sendEvent TranscriptionStarted: {}", ex.toString());
@@ -1405,6 +1434,9 @@ public class HubMain {
 
     private void notifyTranscriptionResultChanged(final WebSocket webSocket, final PayloadTranscriptionResultChanged payload) {
         try {
+            if (webSocket.getAttachment() instanceof ASRSession session) {
+                session.notifyTranscriptionResultChanged(payload);
+            }
             HubEventVO.sendEvent(webSocket, "TranscriptionResultChanged", payload);
         } catch (WebsocketNotConnectedException ex) {
             log.info("ws disconnected when sendEvent TranscriptionResultChanged: {}", ex.toString());

@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 
-@FeignClient(value = "${CALL_PROVIDER:unknown-srv}")
+@FeignClient(value = "${CALL_PROVIDER:unknown-call}")
 public interface CallApi {
     @Builder
     @Data

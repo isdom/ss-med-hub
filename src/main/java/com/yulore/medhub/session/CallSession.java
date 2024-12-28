@@ -110,7 +110,7 @@ public class CallSession extends ASRSession {
                 log.info("[{}]: checkIdle: idle duration: {} ms >=: [{}] ms\n", _sessionId, idleTime, CHECK_IDLE_TIMEOUT);
                 try {
                     final ApiResponse<AIReplyVO> response =
-                            _scriptApi.ai_reply(_sessionId, null, 0, idleTime);
+                            _scriptApi.ai_reply(_sessionId, null, idleTime, 0);
                     if (response.getData() != null) {
                         if (doPlayback(response.getData())) {
                             _lastReply = response.getData();
@@ -200,7 +200,7 @@ public class CallSession extends ASRSession {
             boolean isAiSpeaking = _playback.get() != null && _playback.get().isPlaying();
             try {
                 final ApiResponse<AIReplyVO> response =
-                        _scriptApi.ai_reply(_sessionId, payload.getResult(), isAiSpeaking ? 1 : 0, null);
+                        _scriptApi.ai_reply(_sessionId, payload.getResult(),null, isAiSpeaking ? 1 : 0);
                 if (response.getData() != null) {
                     if (doPlayback(response.getData())) {
                         _lastReply = response.getData();

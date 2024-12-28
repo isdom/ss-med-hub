@@ -5,17 +5,17 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 
-@FeignClient(value = "${SCRIPT_PROVIDER:unknown-srv}")
+@FeignClient(value = "${SCRIPT_PROVIDER:unknown-script}")
 public interface ScriptApi {
-    @RequestMapping(value = "${script.api.ai_reply:unknown_api}", method = RequestMethod.GET)
+    @RequestMapping(value = "${script.api.ai_reply:unknown_ai_api}", method = RequestMethod.GET)
     ApiResponse<AIReplyVO> ai_reply(
             @RequestParam("ccs_call_id")            String sessionId,
             @RequestParam("user_speech_text")       String userSpeechText,
-            @RequestParam("is_speaking")            int is_speaking,
-            @RequestParam("idle_time")              Long idle_time // in ms
+            @RequestParam("idle_time")              Long idle_time, // in ms
+            @RequestParam("is_speaking")            int is_speaking
             );
 
-    @RequestMapping(value = "${script.api.content_report:unknown_report}", method = RequestMethod.GET)
+    @RequestMapping(value = "${script.api.content_report:unknown_report_content}", method = RequestMethod.GET)
     ApiResponse<Void> report_content(
             @RequestParam("ccs_call_id")            String sessionId,
             @RequestParam("content_id")             String content_id,
@@ -27,7 +27,7 @@ public interface ScriptApi {
             @RequestParam("speak_duration")         long speak_duration
             );
 
-    @RequestMapping(value = "${script.api.asr_report:unknown_report}", method = RequestMethod.GET)
+    @RequestMapping(value = "${script.api.asr_report:unknown_report_asrtime}", method = RequestMethod.GET)
     ApiResponse<Void> report_asrtime(
             @RequestParam("ccs_call_id")            String sessionId,
             @RequestParam("content_id")             String content_id,
