@@ -17,7 +17,6 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
 @ToString
@@ -155,18 +154,23 @@ public class FsSession extends ASRSession {
             return false;
         }
 
-        _currentAIContentId.set(Long.toString(vo.getAi_content_id()));
+        final String ai_content_id = Long.toString(vo.getAi_content_id());
         final String playback_id = UUID.randomUUID().toString();
-        // 更新当前 的 播放ID
-        _currentPlaybackId.set(playback_id);
 
         final String file = aireply2file(vo,
                 ()->String.format("%s=%s,content_id=%s,vars_start_timestamp=%d,playback_idx=%d",
-                PLAYBACK_ID_NAME, playback_id, _currentAIContentId.get(), System.currentTimeMillis() * 1000L, 0),
+                PLAYBACK_ID_NAME, playback_id, ai_content_id, System.currentTimeMillis() * 1000L, 0),
                 playback_id);
 
         if (file != null) {
-            _sendEvent.accept("FSPlayback", new PayloadFSPlayback(_uuid, _currentPlaybackId.get(), file));
+            final String prevPlaybackId = _currentPlaybackId.getAndSet(null);
+            if (prevPlaybackId != null) {
+                _sendEvent.accept("FSPlaybackStop", new PayloadFSPlaybackOperation(_uuid, prevPlaybackId));
+            }
+
+            _currentAIContentId.set(ai_content_id);
+            _currentPlaybackId.set(playback_id);
+            _sendEvent.accept("FSPlayback", new PayloadFSPlayback(_uuid, playback_id, file));
             log.info("[{}]: fs play [{}] as {}", _sessionId, file, playback_id);
             return true;
         } else {
@@ -215,7 +219,7 @@ public class FsSession extends ASRSession {
     public void notifySentenceBegin(final PayloadSentenceBegin payload) {
         super.notifySentenceBegin(payload);
         if (_currentPlaybackId.get() != null) {
-            _sendEvent.accept("FSPlaybackPause", new PayloadFSPlaybackPauseOrResume(_uuid, _currentPlaybackId.get()));
+            _sendEvent.accept("FSPlaybackPause", new PayloadFSPlaybackOperation(_uuid, _currentPlaybackId.get()));
         }
 
         /*
@@ -240,7 +244,7 @@ public class FsSession extends ASRSession {
         super.notifySentenceEnd(payload);
 
         if (_currentPlaybackId.get() != null) {
-            _sendEvent.accept("FSPlaybackResume", new PayloadFSPlaybackPauseOrResume(_uuid, _currentPlaybackId.get()));
+            _sendEvent.accept("FSPlaybackResume", new PayloadFSPlaybackOperation(_uuid, _currentPlaybackId.get()));
         }
 
         /*

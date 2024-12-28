@@ -7,7 +7,7 @@ import lombok.ToString;
 @AllArgsConstructor
 @Data
 @ToString
-public class PayloadFSPlaybackPauseOrResume {
+public class PayloadFSPlaybackOperation {
     String uuid;
-    String content_id;
+    String playback_id;
 }
