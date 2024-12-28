@@ -151,6 +151,10 @@ public class FsSession extends ASRSession {
     }
 
     private boolean doPlayback(final AIReplyVO vo) {
+        if (vo.getVoiceMode() == null || vo.getAi_content_id() == null) {
+            return false;
+        }
+
         _currentAIContentId.set(Long.toString(vo.getAi_content_id()));
         final String playback_id = UUID.randomUUID().toString();
         // 更新当前 的 播放ID
@@ -210,6 +214,10 @@ public class FsSession extends ASRSession {
     @Override
     public void notifySentenceBegin(final PayloadSentenceBegin payload) {
         super.notifySentenceBegin(payload);
+        if (_currentPlaybackId.get() != null) {
+            _sendEvent.accept("FSPlaybackPause", new PayloadFSPlaybackPauseOrResume(_uuid, _currentPlaybackId.get()));
+        }
+
         /*
         _isUserSpeak.set(true);
         if (null != _sessionId) {
@@ -230,6 +238,11 @@ public class FsSession extends ASRSession {
     @Override
     public void notifySentenceEnd(final PayloadSentenceEnd payload) {
         super.notifySentenceEnd(payload);
+
+        if (_currentPlaybackId.get() != null) {
+            _sendEvent.accept("FSPlaybackResume", new PayloadFSPlaybackPauseOrResume(_uuid, _currentPlaybackId.get()));
+        }
+
         /*
         _isUserSpeak.set(false);
         _idleStartInMs.set(System.currentTimeMillis());
