@@ -193,9 +193,12 @@ public class HubMain {
                                 clientHandshake.getResourceDescriptor());
                         if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_fs)) {
                             // init FsSession attach with webSocket
+                            final String uuid = clientHandshake.getFieldValue("x-uuid");
                             final String sessionId = clientHandshake.getFieldValue("x-sessionid");
                             final String welcome = clientHandshake.getFieldValue("x-welcome");
-                            final FsSession session = new FsSession(sessionId,
+                            final FsSession session = new FsSession(
+                                    uuid,
+                                    sessionId,
                                     (event,payload)->HubEventVO.sendEvent(webSocket, event, payload),
                                     _scriptApi,
                                     welcome,

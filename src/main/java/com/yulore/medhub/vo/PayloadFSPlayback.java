@@ -8,5 +8,7 @@ import lombok.ToString;
 @Data
 @ToString
 public class PayloadFSPlayback {
+    String uuid;
+    String content_id;
     String file;
 }
