@@ -170,7 +170,7 @@ public class FsSession extends ASRSession {
 
             _currentAIContentId.set(ai_content_id);
             _currentPlaybackId.set(playback_id);
-            _sendEvent.accept("FSPlayback", new PayloadFSPlayback(_uuid, playback_id, file));
+            _sendEvent.accept("FSPlayback", new PayloadFSPlayback(_uuid, ai_content_id, file));
             log.info("[{}]: fs play [{}] as {}", _sessionId, file, playback_id);
             return true;
         } else {
