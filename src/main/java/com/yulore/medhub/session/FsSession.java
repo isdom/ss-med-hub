@@ -259,7 +259,8 @@ public class FsSession extends ASRSession {
         }
 
         if (_sessionId != null) {
-            boolean isAiSpeaking = _playback.get() != null && _playback.get().isPlaying();
+        */
+            boolean isAiSpeaking = false; //_playback.get() != null && _playback.get().isPlaying();
             try {
                 final ApiResponse<AIReplyVO> response =
                         _scriptApi.ai_reply(_sessionId, payload.getResult(), null, isAiSpeaking ? 1 : 0);
@@ -273,8 +274,7 @@ public class FsSession extends ASRSession {
             } catch (Exception ex) {
                 log.warn("[{}]: notifySentenceEnd: ai_reply error, detail: {}", _sessionId, ex.toString());
             }
-        }
-         */
+        // }
     }
 
     private final String _uuid;
