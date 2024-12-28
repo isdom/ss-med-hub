@@ -218,10 +218,6 @@ public class FsSession extends ASRSession {
     @Override
     public void notifySentenceBegin(final PayloadSentenceBegin payload) {
         super.notifySentenceBegin(payload);
-        if (_currentPlaybackId.get() != null) {
-            _sendEvent.accept("FSPlaybackPause", new PayloadFSPlaybackOperation(_uuid, _currentPlaybackId.get()));
-        }
-
         /*
         _isUserSpeak.set(true);
         if (null != _sessionId) {
@@ -237,15 +233,17 @@ public class FsSession extends ASRSession {
     @Override
     public void notifyTranscriptionResultChanged(final PayloadTranscriptionResultChanged payload) {
         super.notifyTranscriptionResultChanged(payload);
+        if (_currentPlaybackId.get() != null) {
+            if (payload.getResult().length() > 5) {
+                _sendEvent.accept("FSPlaybackPause", new PayloadFSPlaybackOperation(_uuid, _currentPlaybackId.get()));
+                log.info("notifyTranscriptionResultChanged: pause current for result {} text > 5", payload.getResult());
+            }
+        }
     }
 
     @Override
     public void notifySentenceEnd(final PayloadSentenceEnd payload) {
         super.notifySentenceEnd(payload);
-
-        if (_currentPlaybackId.get() != null) {
-            _sendEvent.accept("FSPlaybackResume", new PayloadFSPlaybackOperation(_uuid, _currentPlaybackId.get()));
-        }
 
         /*
         _isUserSpeak.set(false);
@@ -269,6 +267,11 @@ public class FsSession extends ASRSession {
                 if (response.getData() != null) {
                     if (doPlayback(response.getData())) {
                         _lastReply = response.getData();
+                    } else {
+                        if (_currentPlaybackId.get() != null) {
+                            _sendEvent.accept("FSPlaybackResume", new PayloadFSPlaybackOperation(_uuid, _currentPlaybackId.get()));
+                            log.info("notifySentenceEnd: resume current for ai_reply {} do nothing", payload.getResult());
+                        }
                     }
                 } else {
                     log.info("[{}]: notifySentenceEnd: ai_reply {}, do nothing\n", _sessionId, response);
