@@ -140,8 +140,11 @@ public class FsSession extends ASRSession {
 
     public void notifyFSPlaybackStopped(final HubCommandVO cmd) {
         final String playback_id = cmd.getPayload().get("playback_id");
-        if (_currentPlaybackId.compareAndSet(playback_id, null)) {
-            log.info("current playback_id matched:{}", playback_id);
+        if (_currentPlaybackId.get() != null
+            && playback_id != null
+            && playback_id.equals(_currentPlaybackId.get()) ) {
+            _currentPlaybackId.set(null);
+            log.info("current playback_id matched:{}, clear current PlaybackId", playback_id);
         } else {
             log.warn("!NOT! current playback_id:{}, ignored", playback_id);
         }
