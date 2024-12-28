@@ -6,10 +6,7 @@ import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.medhub.api.AIReplyVO;
 import com.yulore.medhub.api.ApiResponse;
 import com.yulore.medhub.api.ScriptApi;
-import com.yulore.medhub.vo.PayloadFSPlayback;
-import com.yulore.medhub.vo.PayloadSentenceBegin;
-import com.yulore.medhub.vo.PayloadSentenceEnd;
-import com.yulore.medhub.vo.PayloadTranscriptionResultChanged;
+import com.yulore.medhub.vo.*;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +17,8 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 @ToString
 @Slf4j
@@ -139,24 +138,62 @@ public class FsSession extends ASRSession {
         }
     }
 
+    public void notifyFSPlaybackStopped(final HubCommandVO cmd) {
+        final String playback_id = cmd.getPayload().get("playback_id");
+        if (_currentPlaybackId.compareAndSet(playback_id, null)) {
+            log.info("current playback_id matched:{}", playback_id);
+        } else {
+            log.warn("!NOT! current playback_id:{}, ignored", playback_id);
+        }
+    }
+
     private boolean doPlayback(final AIReplyVO vo) {
         _currentAIContentId.set(Long.toString(vo.getAi_content_id()));
-        if ("cp".equals(vo.getVoiceMode())) {
-            playRms(_rms_cp_prefix.replace("{cpvars}", tryExtractCVOS(vo)),vo);
+        final String playback_id = UUID.randomUUID().toString();
+        // 更新当前 的 播放ID
+        _currentPlaybackId.set(playback_id);
+
+        final String file = aireply2file(vo,
+                ()->String.format("%s=%s,content_id=%s,vars_start_timestamp=%d,playback_idx=%d",
+                PLAYBACK_ID_NAME, playback_id, _currentAIContentId.get(), System.currentTimeMillis() * 1000L, 0),
+                playback_id);
+
+        if (file != null) {
+            _sendEvent.accept("FSPlayback", new PayloadFSPlayback(_uuid, _currentPlaybackId.get(), file));
+            log.info("[{}]: fs play [{}] as {}", _sessionId, file, playback_id);
             return true;
+        } else {
+            return false;
+        }
+    }
+
+    private String aireply2file(final AIReplyVO vo, final Supplier<String> vars, final String playback_id) {
+        if ("cp".equals(vo.getVoiceMode())) {
+            return _rms_cp_prefix.replace("{cpvars}", tryExtractCVOS(vo))
+                    .replace("{uuid}", _uuid)
+                    .replace("{vars}", vars.get())
+                    + playback_id + ".wav"
+                    ;
         }
 
         if ("tts".equals(vo.getVoiceMode())) {
-            playTTS(vo.getReply_content(), vo.getTts_fixed_content(),vo);
-            return true;
+            return _rms_tts_prefix
+                    .replace("{uuid}", _uuid)
+                    .replace("{vars}", String.format("text=%s,%s",
+                            StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(vo.getReply_content()),
+                            vars.get()))
+                    + playback_id + ".wav"
+                    ;
         }
 
         if ("wav".equals(vo.getVoiceMode())) {
-            playAudio(vo.getAi_speech_file(), vo.getReply_content(),vo);
-            return true;
+            return _rms_wav_prefix
+                    .replace("{uuid}", _uuid)
+                    .replace("{vars}", vars.get())
+                    + vo.getAi_speech_file();
         }
 
-        return false;
+        return null;
     }
 
     private String tryExtractCVOS(final AIReplyVO vo) {
@@ -165,61 +202,6 @@ public class FsSession extends ASRSession {
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
         }
-    }
-
-    private String playRms(final String cpprefix, final AIReplyVO vo) {
-        final String playback_id = UUID.randomUUID().toString();
-        // 更新当前 的 播放ID
-        _currentPlaybackId.set(playback_id);
-
-        final String prefix = cpprefix
-                .replace("{uuid}", _uuid)
-                .replace("{vars}", String.format("%s=%s,content_id=%d,vars_start_timestamp=%d,playback_idx=%d",
-                        PLAYBACK_ID_NAME, playback_id,vo.getAi_content_id(), System.currentTimeMillis() * 1000L, 0))
-                ;
-        final String file = prefix + playback_id + ".wav";
-
-        _sendEvent.accept("FSPlayback", new PayloadFSPlayback(_uuid, Long.toString(vo.getAi_content_id()), file));
-        log.info("[{}]: rms: play [{}] as {}", _sessionId, file, playback_id);
-
-        return playback_id;
-    }
-
-    public String playTTS(final String content, Boolean isFixed, AIReplyVO vo) {
-        final String playback_id = UUID.randomUUID().toString();
-        // 更新当前 的 播放ID
-        _currentPlaybackId.set(playback_id);
-
-        final String prefix = _rms_tts_prefix
-                .replace("{uuid}", _uuid)
-                .replace("{vars}",String.format("%s=%s,text=%s,content_id=%d,vars_start_timestamp=%d,playback_idx=%d",
-                        PLAYBACK_ID_NAME, playback_id, StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(content),
-                        vo.getAi_content_id(), System.currentTimeMillis() * 1000L, 0))
-                ;
-
-        final String file = prefix + playback_id + ".wav";
-
-        _sendEvent.accept("FSPlayback", new PayloadFSPlayback(_uuid, Long.toString(vo.getAi_content_id()), file));
-        log.info("[{}]: rms: play [{}] as {}", _sessionId, file, playback_id);
-        return playback_id;
-    }
-
-    public String playAudio(final String path, final String content, AIReplyVO vo) {
-        final String playback_id = UUID.randomUUID().toString();
-        // 更新当前 的 播放ID
-        _currentPlaybackId.set(playback_id);
-
-        final String prefix = _rms_wav_prefix
-                .replace("{uuid}", _uuid)
-                .replace("{vars}", String.format("%s=%s,content_id=%d,vars_start_timestamp=%d,playback_idx=%d",
-                        PLAYBACK_ID_NAME, playback_id,vo.getAi_content_id(), System.currentTimeMillis() * 1000L, 0))
-                ;
-
-        final String file = prefix + path;
-
-        _sendEvent.accept("FSPlayback", new PayloadFSPlayback(_uuid, Long.toString(vo.getAi_content_id()), file));
-        log.info("[{}]: rms: play [{}] as {}", _sessionId, file, playback_id);
-        return playback_id;
     }
 
     @Override
@@ -260,7 +242,7 @@ public class FsSession extends ASRSession {
 
         if (_sessionId != null) {
         */
-            boolean isAiSpeaking = false; //_playback.get() != null && _playback.get().isPlaying();
+            boolean isAiSpeaking = _currentPlaybackId.get() != null;
             try {
                 final ApiResponse<AIReplyVO> response =
                         _scriptApi.ai_reply(_sessionId, payload.getResult(), null, isAiSpeaking ? 1 : 0);

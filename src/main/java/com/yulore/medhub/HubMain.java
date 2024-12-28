@@ -521,6 +521,8 @@ public class HubMain {
             _sessionExecutor.submit(()-> handleStartTranscriptionCommand(cmd, webSocket));
         } else if ("StopTranscription".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handleStopTranscriptionCommand(cmd, webSocket));
+        } else if ("FSPlaybackStopped".equals(cmd.getHeader().get("name"))) {
+            _sessionExecutor.submit(()-> handleFSPlaybackStoppedCommand(cmd, webSocket));
         } /* else if ("Playback".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handlePlaybackCommand(cmd, webSocket));
         } else if ("PlayTTS".equals(cmd.getHeader().get("name"))) {
@@ -547,6 +549,13 @@ public class HubMain {
             _sessionExecutor.submit(()-> handlePreviewCommand(cmd, webSocket));
         } else {
             log.warn("handleHubCommand: Unknown Command: {}", cmd);
+        }
+    }
+
+    private void handleFSPlaybackStoppedCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        final Object attachment = webSocket.getAttachment();
+        if (attachment instanceof FsSession session) {
+            session.notifyFSPlaybackStopped(cmd);
         }
     }
 
