@@ -234,9 +234,9 @@ public class FsSession extends ASRSession {
     public void notifyTranscriptionResultChanged(final PayloadTranscriptionResultChanged payload) {
         super.notifyTranscriptionResultChanged(payload);
         if (_currentPlaybackId.get() != null) {
-            if (payload.getResult().length() > 5) {
+            if (payload.getResult().length() >= 3) {
                 _sendEvent.accept("FSPlaybackPause", new PayloadFSPlaybackOperation(_uuid, _currentPlaybackId.get()));
-                log.info("notifyTranscriptionResultChanged: pause current for result {} text > 5", payload.getResult());
+                log.info("notifyTranscriptionResultChanged: pause current for result {} text >= 3", payload.getResult());
             }
         }
     }
