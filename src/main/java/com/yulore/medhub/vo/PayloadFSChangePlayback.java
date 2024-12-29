@@ -7,8 +7,7 @@ import lombok.ToString;
 @AllArgsConstructor
 @Data
 @ToString
-public class PayloadFSPlayback {
+public class PayloadFSChangePlayback {
     String uuid;
-    String content_id;
-    String file;
+    String playback_id;
 }
