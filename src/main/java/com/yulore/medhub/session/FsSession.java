@@ -143,7 +143,12 @@ public class FsSession extends ASRSession {
             && playback_id.equals(_currentPlaybackId.get()) ) {
             _currentPlaybackId.set(null);
             _idleStartInMs.set(System.currentTimeMillis());
-            log.info("current playback_id matched:{}, clear current PlaybackId", playback_id);
+            log.info("[{}]: notifyFSPlaybackStopped: current playback_id matched:{}, clear current PlaybackId", _sessionId, playback_id);
+            log.info("[{}]: notifyFSPlaybackStopped: lastReply: {}", _sessionId, _lastReply);
+            if (_lastReply != null && _lastReply.getHangup() == 1) {
+                // hangup call
+                _sendEvent.accept("FSHangup", new PayloadFSHangup(_uuid, _sessionId));
+            }
         } else {
             log.warn("!NOT! current playback_id:{}, ignored", playback_id);
         }
