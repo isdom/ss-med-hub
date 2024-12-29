@@ -14,6 +14,8 @@ import lombok.extern.slf4j.Slf4j;
 import java.nio.ByteBuffer;
 import java.util.UUID;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -87,14 +89,12 @@ public class FsSession extends ASRSession {
     }
 
     public void checkIdle() {
-        /*
-        final long idleTime = System.currentTimeMillis() - Math.max(_idleStartInMs.get(), _playback.get() != null ? _playback.get().idleStartInMs() : 0);
-        boolean isAiSpeaking = _playback.get() != null && _playback.get().isPlaying();
+        final long idleTime = System.currentTimeMillis() - _idleStartInMs.get();
+        boolean isAiSpeaking = _currentPlaybackId.get() != null;
         if (_sessionId != null      // user answered
-                && _playback.get() != null
-                && !_isUserSpeak.get()  // user not speak
-                && !isAiSpeaking        // AI not speak
-                && _aiSetting != null
+            && !_isUserSpeak.get()  // user not speak
+            && !isAiSpeaking        // AI not speak
+            // && _aiSetting != null
         ) {
             if (idleTime > CHECK_IDLE_TIMEOUT) {
                 log.info("[{}]: checkIdle: idle duration: {} ms >=: [{}] ms\n", _sessionId, idleTime, CHECK_IDLE_TIMEOUT);
@@ -115,7 +115,6 @@ public class FsSession extends ASRSession {
         }
         log.info("[{}]: checkIdle: is_speaking: {}/is_playing: {}/idle duration: {} ms",
                 _sessionId, _isUserSpeak.get(), isAiSpeaking, idleTime);
-         */
     }
 
     @Override
@@ -143,6 +142,7 @@ public class FsSession extends ASRSession {
             && playback_id != null
             && playback_id.equals(_currentPlaybackId.get()) ) {
             _currentPlaybackId.set(null);
+            _idleStartInMs.set(System.currentTimeMillis());
             log.info("current playback_id matched:{}, clear current PlaybackId", playback_id);
         } else {
             log.warn("!NOT! current playback_id:{}, ignored", playback_id);
@@ -218,8 +218,8 @@ public class FsSession extends ASRSession {
     @Override
     public void notifySentenceBegin(final PayloadSentenceBegin payload) {
         super.notifySentenceBegin(payload);
-        /*
         _isUserSpeak.set(true);
+        /*
         if (null != _sessionId) {
             log.info("[{}]: notifySentenceBegin: {}", _sessionId, payload);
         }
@@ -245,10 +245,10 @@ public class FsSession extends ASRSession {
     public void notifySentenceEnd(final PayloadSentenceEnd payload) {
         super.notifySentenceEnd(payload);
 
-        /*
         _isUserSpeak.set(false);
         _idleStartInMs.set(System.currentTimeMillis());
 
+        /*
         if (null != _sessionId) {
             log.info("[{}]: notifySentenceEnd: {}", _sessionId, payload);
         }
@@ -294,6 +294,8 @@ public class FsSession extends ASRSession {
 
     private final AtomicReference<String> _currentPlaybackId = new AtomicReference<>(null);
     private final AtomicReference<String> _currentAIContentId = new AtomicReference<>(null);
+    private final AtomicLong _idleStartInMs = new AtomicLong(System.currentTimeMillis());
+    private final AtomicBoolean _isUserSpeak = new AtomicBoolean(false);
 
     private ScheduledExecutorService _delayExecutor = null;
     private long _testDelayMs = 0;
