@@ -165,7 +165,7 @@ public class FsSession extends ASRSession {
         if (file != null) {
             final String prevPlaybackId = _currentPlaybackId.getAndSet(null);
             if (prevPlaybackId != null) {
-                _sendEvent.accept("FSPlaybackStop", new PayloadFSPlaybackOperation(_uuid, prevPlaybackId));
+                _sendEvent.accept("FSStopPlayback", new PayloadFSPlaybackOperation(_uuid, prevPlaybackId));
             }
 
             _currentAIContentId.set(ai_content_id);
@@ -235,7 +235,7 @@ public class FsSession extends ASRSession {
         super.notifyTranscriptionResultChanged(payload);
         if (_currentPlaybackId.get() != null) {
             if (payload.getResult().length() >= 3) {
-                _sendEvent.accept("FSPlaybackPause", new PayloadFSPlaybackOperation(_uuid, _currentPlaybackId.get()));
+                _sendEvent.accept("FSPausePlayback", new PayloadFSPlaybackOperation(_uuid, _currentPlaybackId.get()));
                 log.info("notifyTranscriptionResultChanged: pause current for result {} text >= 3", payload.getResult());
             }
         }
@@ -269,7 +269,7 @@ public class FsSession extends ASRSession {
                         _lastReply = response.getData();
                     } else {
                         if (_currentPlaybackId.get() != null) {
-                            _sendEvent.accept("FSPlaybackResume", new PayloadFSPlaybackOperation(_uuid, _currentPlaybackId.get()));
+                            _sendEvent.accept("FSResumePlayback", new PayloadFSPlaybackOperation(_uuid, _currentPlaybackId.get()));
                             log.info("notifySentenceEnd: resume current for ai_reply {} do nothing", payload.getResult());
                         }
                     }
