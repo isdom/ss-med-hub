@@ -241,7 +241,7 @@ public class CallSession extends ASRSession {
                     if (response.getData().getUser_content_id() != null) {
                         userContentId = response.getData().getUser_content_id().toString();
                     }
-                    if (doPlayback(response.getData())) {
+                    if (response.getData().getAi_content_id() != null && doPlayback(response.getData())) {
                         _lastReply = response.getData();
                     } else {
                         if (_playback.get() != null) {
@@ -434,7 +434,7 @@ public class CallSession extends ASRSession {
 
     private boolean doPlayback(final AIReplyVO replyVO) {
         log.info("[{}]: doPlayback: {}", _sessionId, replyVO);
-        final String aiContentId = Long.toString(replyVO.getAi_content_id());
+        final String aiContentId = replyVO.getAi_content_id() != null ? Long.toString(replyVO.getAi_content_id()) : null;
         if ("cp".equals(replyVO.getVoiceMode())) {
             _playbackOn.accept(String.format("type=cp,%s", JSON.toJSONString(replyVO.getCps())), aiContentId);
         } else if ("wav".equals(replyVO.getVoiceMode())) {
