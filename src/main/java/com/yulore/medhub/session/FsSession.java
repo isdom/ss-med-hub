@@ -78,9 +78,19 @@ public class FsSession extends ASRSession {
 
         if (transmitter != null) {
             if (_delayExecutor == null) {
+                if (_asrStartedInMs.get() == -1) {
+                    // ref: https://help.aliyun.com/zh/isi/developer-reference/websocket#sectiondiv-iry-g6n-uqt
+                    _asrStartedInMs.set(System.currentTimeMillis());
+                }
                 transmitter.accept(bytes);
             } else {
-                _delayExecutor.schedule(()->transmitter.accept(bytes), _testDelayMs, TimeUnit.MILLISECONDS);
+                _delayExecutor.schedule(()->{
+                    if (_asrStartedInMs.get() == -1) {
+                        // ref: https://help.aliyun.com/zh/isi/developer-reference/websocket#sectiondiv-iry-g6n-uqt
+                        _asrStartedInMs.set(System.currentTimeMillis());
+                    }
+                    transmitter.accept(bytes);
+                }, _testDelayMs, TimeUnit.MILLISECONDS);
             }
             _transmitCount.incrementAndGet();
             return true;
@@ -129,8 +139,6 @@ public class FsSession extends ASRSession {
     @Override
     public boolean transcriptionStarted() {
         if (super.transcriptionStarted()) {
-            _asrStartedInMs = System.currentTimeMillis();
-
             try {
                 final ApiResponse<AIReplyVO> response =
                         _scriptApi.ai_reply(_sessionId, _welcome, null, 0);
@@ -303,9 +311,9 @@ public class FsSession extends ASRSession {
         {
             // report USER speak timing
             // ASR-Sentence-Begin-Time in Milliseconds
-            final long start_speak_timestamp = _asrStartedInMs + payload.getBegin_time(); // Long.parseLong(headers.getOrDefault("ASR-Sentence-Begin-Time", "0"));
+            final long start_speak_timestamp = _asrStartedInMs.get() + payload.getBegin_time(); // Long.parseLong(headers.getOrDefault("ASR-Sentence-Begin-Time", "0"));
             // ASR-Sentence-End-Time in Milliseconds
-            final long stop_speak_timestamp = _asrStartedInMs + payload.getTime(); // Long.parseLong(headers.getOrDefault("ASR-Sentence-End-Time", "0"));
+            final long stop_speak_timestamp = _asrStartedInMs.get() + payload.getTime(); // Long.parseLong(headers.getOrDefault("ASR-Sentence-End-Time", "0"));
             final long user_speak_duration = stop_speak_timestamp - start_speak_timestamp;
 
             final ApiResponse<Void> resp = _scriptApi.report_content(
@@ -322,10 +330,10 @@ public class FsSession extends ASRSession {
         {
             // report ASR event timing
             // sentence_begin_event_time in Milliseconds
-            final long begin_event_time = _currentSentenceBeginInMs.get() - _asrStartedInMs;
+            final long begin_event_time = _currentSentenceBeginInMs.get() - _asrStartedInMs.get();
 
             // sentence_end_event_time in Milliseconds
-            final long end_event_time = sentenceEndInMs - _asrStartedInMs;
+            final long end_event_time = sentenceEndInMs - _asrStartedInMs.get();
 
             final ApiResponse<Void> resp = _scriptApi.report_asrtime(
                     _sessionId,
@@ -363,7 +371,7 @@ public class FsSession extends ASRSession {
     private final AtomicReference<String> _currentAIContentId = new AtomicReference<>(null);
     private final AtomicLong _idleStartInMs = new AtomicLong(System.currentTimeMillis());
     private final AtomicBoolean _isUserSpeak = new AtomicBoolean(false);
-    private long _asrStartedInMs = -1;
+    private final AtomicLong _asrStartedInMs = new AtomicLong(-1);
     private final AtomicLong _recordStartInMs = new AtomicLong(-1);
     private final AtomicLong _currentSentenceBeginInMs = new AtomicLong(-1);
 
