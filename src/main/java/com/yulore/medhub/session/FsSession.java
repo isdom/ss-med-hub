@@ -78,14 +78,14 @@ public class FsSession extends ASRSession {
 
         if (transmitter != null) {
             if (_delayExecutor == null) {
-                if (_asrStartedInMs.get() == -1) {
+                if (_asrStartedInMs.compareAndSet(0, 1)) {
                     // ref: https://help.aliyun.com/zh/isi/developer-reference/websocket#sectiondiv-iry-g6n-uqt
                     _asrStartedInMs.set(System.currentTimeMillis());
                 }
                 transmitter.accept(bytes);
             } else {
                 _delayExecutor.schedule(()->{
-                    if (_asrStartedInMs.get() == -1) {
+                    if (_asrStartedInMs.compareAndSet(0, 1)) {
                         // ref: https://help.aliyun.com/zh/isi/developer-reference/websocket#sectiondiv-iry-g6n-uqt
                         _asrStartedInMs.set(System.currentTimeMillis());
                     }
@@ -371,7 +371,7 @@ public class FsSession extends ASRSession {
     private final AtomicReference<String> _currentAIContentId = new AtomicReference<>(null);
     private final AtomicLong _idleStartInMs = new AtomicLong(System.currentTimeMillis());
     private final AtomicBoolean _isUserSpeak = new AtomicBoolean(false);
-    private final AtomicLong _asrStartedInMs = new AtomicLong(-1);
+    private final AtomicLong _asrStartedInMs = new AtomicLong(0);
     private final AtomicLong _recordStartInMs = new AtomicLong(-1);
     private final AtomicLong _currentSentenceBeginInMs = new AtomicLong(-1);
 

@@ -26,6 +26,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 @ToString
@@ -133,15 +134,15 @@ public class CallSession extends ASRSession {
 
         final byte[] srcBytes = new byte[bytes.remaining()];
         bytes.get(srcBytes, 0, srcBytes.length);
-        if (_recordStartTimestamp.compareAndSet(0, 1)) {
-            _recordStartTimestamp.set(System.currentTimeMillis());
+        if (_recordStartInMs.compareAndSet(0, 1)) {
+            _recordStartInMs.set(System.currentTimeMillis());
         }
         _usBufs.add(srcBytes);
 
         return result;
     }
 
-    public void notifyPlaybackSendStart(final long startTimestamp) {
+    public void notifyPlaybackSendStart(final String contentId, final long startTimestamp) {
         if (!_currentPS.compareAndSet(null, new PlaybackSegment(startTimestamp))) {
             log.warn("[{}]: notifyPlaybackSendStart: current PlaybackSegment is !NOT! null", _sessionId);
         } else {
@@ -149,11 +150,27 @@ public class CallSession extends ASRSession {
         }
     }
 
-    public void notifyPlaybackSendStop(final long stopTimestamp) {
+    public void notifyPlaybackSendStop(final String contentId, final long stopTimestamp) {
         final PlaybackSegment ps = _currentPS.getAndSet(null);
         if (ps != null) {
             _dsBufs.add(ps);
             log.info("[{}]: notifyPlaybackSendStop: move current PlaybackSegment to _dsBufs", _sessionId);
+            {
+                // report AI speak timing
+                final long start_speak_timestamp = ps.timestamp;
+                final long user_speak_duration = stopTimestamp - start_speak_timestamp;
+
+                final ApiResponse<Void> resp = _scriptApi.report_content(
+                        _sessionId,
+                        contentId,
+                        _dsBufs.size(),
+                        "AI",
+                        _recordStartInMs.get(),
+                        start_speak_timestamp,
+                        stopTimestamp,
+                        user_speak_duration);
+                log.info("[{}]: ai report_content({})'s resp: {}", _sessionId, contentId, resp);
+            }
         } else {
             log.warn("[{}]: notifyPlaybackSendStop: current PlaybackSegment is null", _sessionId);
         }
@@ -172,44 +189,107 @@ public class CallSession extends ASRSession {
     public void notifySentenceBegin(final PayloadSentenceBegin payload) {
         super.notifySentenceBegin(payload);
         _isUserSpeak.set(true);
+        _currentSentenceBeginInMs.set(System.currentTimeMillis());
         if (null != _sessionId) {
             log.info("[{}]: notifySentenceBegin: {}", _sessionId, payload);
         }
+        /*
         if (_playback.get() != null && _lastReply != null && _lastReply.getPause_on_speak() != null && _lastReply.getPause_on_speak()) {
             _playback.get().pauseCurrent();
             log.info("[{}]: pauseCurrent: {}", _sessionId, _playback.get());
+        }
+         */
+    }
+
+    @Override
+    public void notifyTranscriptionResultChanged(final PayloadTranscriptionResultChanged payload) {
+        super.notifyTranscriptionResultChanged(payload);
+        if (_playback.get() != null) {
+            if (payload.getResult().length() >= 3) {
+                _playback.get().pauseCurrent();
+                log.info("[{}]: pauseCurrent: {}", _sessionId, _playback.get());
+            }
         }
     }
 
     @Override
     public void notifySentenceEnd(final PayloadSentenceEnd payload) {
         super.notifySentenceEnd(payload);
+
+        final long sentenceEndInMs = System.currentTimeMillis();
         _isUserSpeak.set(false);
-        _idleStartInMs.set(System.currentTimeMillis());
+        _idleStartInMs.set(sentenceEndInMs);
 
         if (null != _sessionId) {
             log.info("[{}]: notifySentenceEnd: {}", _sessionId, payload);
         }
 
+        /*
         if (_playback.get() != null && _lastReply != null && _lastReply.getPause_on_speak() != null && _lastReply.getPause_on_speak()) {
             _playback.get().resumeCurrent();
             log.info("[{}]: resumeCurrent: {}", _sessionId, _playback.get());
         }
+         */
 
         if (_sessionId != null) {
-            boolean isAiSpeaking = _playback.get() != null && _playback.get().isPlaying();
+            final boolean isAiSpeaking = _playback.get() != null && _playback.get().isPlaying();
+            String userContentId = null;
             try {
                 final ApiResponse<AIReplyVO> response =
                         _scriptApi.ai_reply(_sessionId, payload.getResult(),null, isAiSpeaking ? 1 : 0);
                 if (response.getData() != null) {
+                    if (response.getData().getUser_content_id() != null) {
+                        userContentId = response.getData().getUser_content_id().toString();
+                    }
                     if (doPlayback(response.getData())) {
                         _lastReply = response.getData();
+                    } else {
+                        if (_playback.get() != null) {
+                            _playback.get().resumeCurrent();
+                            log.info("[{}]: resumeCurrent: {}", _sessionId, _playback.get());
+                        }
                     }
                 } else {
                     log.info("[{}]: notifySentenceEnd: ai_reply {}, do nothing\n", _sessionId, response);
                 }
             } catch (Exception ex) {
                 log.warn("[{}]: notifySentenceEnd: ai_reply error, detail: {}", _sessionId, ex.toString());
+            }
+
+            {
+                // report USER speak timing
+                // ASR-Sentence-Begin-Time in Milliseconds
+                final long start_speak_timestamp = _recordStartInMs.get() + payload.getBegin_time();
+                // ASR-Sentence-End-Time in Milliseconds
+                final long stop_speak_timestamp = _recordStartInMs.get() + payload.getTime();
+                final long user_speak_duration = stop_speak_timestamp - start_speak_timestamp;
+
+                final ApiResponse<Void> resp = _scriptApi.report_content(
+                        _sessionId,
+                        userContentId,
+                        payload.getIndex(),
+                        "USER",
+                        _recordStartInMs.get(),
+                        start_speak_timestamp,
+                        stop_speak_timestamp,
+                        user_speak_duration);
+                log.info("[{}]: user report_content({})'s resp: {}", _sessionId, userContentId, resp);
+            }
+            {
+                // report ASR event timing
+                // sentence_begin_event_time in Milliseconds
+                final long begin_event_time = _currentSentenceBeginInMs.get() - _recordStartInMs.get();
+
+                // sentence_end_event_time in Milliseconds
+                final long end_event_time = sentenceEndInMs - _recordStartInMs.get();
+
+                final ApiResponse<Void> resp = _scriptApi.report_asrtime(
+                        _sessionId,
+                        userContentId,
+                        payload.getIndex(),
+                        begin_event_time,
+                        end_event_time);
+                log.info("[{}]: user report_asrtime({})'s resp: {}", _sessionId, userContentId, resp);
             }
         }
     }
@@ -269,7 +349,7 @@ public class CallSession extends ASRSession {
             // output wave header with 16K sample rate and 2 channels
             bos.write(WaveUtil.genWaveHeader(16000, 2));
 
-            long currentInMs = _recordStartTimestamp.get();
+            long currentInMs = _recordStartInMs.get();
             final AtomicReference<PlaybackSegment> ps = new AtomicReference<>(null), next_ps = new AtomicReference<>(null);
 
             int sample_count = 0;
@@ -346,7 +426,7 @@ public class CallSession extends ASRSession {
         }
     }
 
-    public void attach(final PlaybackSession playback, final Consumer<String> playbackOn) {
+    public void attach(final PlaybackSession playback, final BiConsumer<String, String> playbackOn) {
         _playback.set(playback);
         _playbackOn = playbackOn;
         doPlayback(_lastReply);
@@ -354,13 +434,14 @@ public class CallSession extends ASRSession {
 
     private boolean doPlayback(final AIReplyVO replyVO) {
         log.info("[{}]: doPlayback: {}", _sessionId, replyVO);
+        final String aiContentId = Long.toString(replyVO.getAi_content_id());
         if ("cp".equals(replyVO.getVoiceMode())) {
-            _playbackOn.accept(String.format("type=cp,%s", JSON.toJSONString(replyVO.getCps())));
+            _playbackOn.accept(String.format("type=cp,%s", JSON.toJSONString(replyVO.getCps())), aiContentId);
         } else if ("wav".equals(replyVO.getVoiceMode())) {
-            _playbackOn.accept(String.format("{bucket=%s}%s%s", _bucket, _wavPath, replyVO.getAi_speech_file()));
+            _playbackOn.accept(String.format("{bucket=%s}%s%s", _bucket, _wavPath, replyVO.getAi_speech_file()), aiContentId);
         } else if ("tts".equals(replyVO.getVoiceMode())) {
             _playbackOn.accept(String.format("{type=tts,text=%s}tts.wav",
-                    StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(replyVO.getReply_content())));
+                    StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(replyVO.getReply_content())), aiContentId);
         } else {
             log.info("[{}]: doPlayback: unknown reply: {}, ignore", _sessionId, replyVO);
             return false;
@@ -382,10 +463,11 @@ public class CallSession extends ASRSession {
     private AIReplyVO _lastReply;
     private AiSettingVO _aiSetting;
 
-    private Consumer<String> _playbackOn;
+    private BiConsumer<String, String> _playbackOn;
     private final AtomicReference<PlaybackSession> _playback = new AtomicReference<>(null);
     private final AtomicLong _idleStartInMs = new AtomicLong(System.currentTimeMillis());
     private final AtomicBoolean _isUserSpeak = new AtomicBoolean(false);
+    private final AtomicLong _currentSentenceBeginInMs = new AtomicLong(-1);
 
     private static final ConcurrentMap<String, CallSession> _callSessions = new ConcurrentHashMap<>();
 
@@ -399,6 +481,6 @@ public class CallSession extends ASRSession {
     private final AtomicReference<PlaybackSegment> _currentPS = new AtomicReference<>(null);
     private final List<PlaybackSegment> _dsBufs = new ArrayList<>();
 
-    private final AtomicLong _recordStartTimestamp = new AtomicLong(0);
+    private final AtomicLong _recordStartInMs = new AtomicLong(0);
     private final Consumer<RecordContext> _doRecord;
 }

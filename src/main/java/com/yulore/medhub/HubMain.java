@@ -259,7 +259,7 @@ public class HubMain {
                                 log.info("can't find callSession by sessionId: {}, ignore", sessionId);
                                 return;
                             }
-                            callSession.attach(playbackSession, (_path) -> playbackOn(_path, callSession, playbackSession, webSocket));
+                            callSession.attach(playbackSession, (_path, _content_id) -> playbackOn(_path, _content_id, callSession, playbackSession, webSocket));
                         } else if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_preview)) {
                             // init PreviewSession attach with webSocket
                             final PreviewSession previewSession = new PreviewSession();
@@ -352,7 +352,7 @@ public class HubMain {
         _wsServer.start();
     }
 
-    private void playbackOn(final String path, final CallSession callSession, final PlaybackSession playbackSession, final WebSocket webSocket) {
+    private void playbackOn(final String path, final String contentId, final CallSession callSession, final PlaybackSession playbackSession, final WebSocket webSocket) {
         // interval = 20 ms
         int interval = 20;
         log.info("[{}]: playbackOn: {} => sample rate: {}/interval: {}/channels: {}", callSession.sessionId(), path, 16000, interval, 1);
@@ -361,8 +361,8 @@ public class HubMain {
                 path,
                 _scheduledExecutor,
                 new SampleInfo(16000, interval, 16, 1),
-                callSession::notifyPlaybackSendStart,
-                callSession::notifyPlaybackSendStop,
+                (timestamp) -> callSession.notifyPlaybackSendStart(contentId, timestamp),
+                (timestamp) -> callSession.notifyPlaybackSendStop(contentId, timestamp),
                 (bytes) -> {
                     webSocket.send(bytes);
                     callSession.notifyPlaybackSendData(bytes);
