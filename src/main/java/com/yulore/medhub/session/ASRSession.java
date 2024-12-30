@@ -56,8 +56,8 @@ public class ASRSession {
         return _isStartTranscription.compareAndSet(false, true);
     }
 
-    public void transcriptionStarted() {
-        _isTranscriptionStarted.compareAndSet(false, true);
+    public boolean transcriptionStarted() {
+        return _isTranscriptionStarted.compareAndSet(false, true);
     }
 
     public boolean isTranscriptionStarted() {

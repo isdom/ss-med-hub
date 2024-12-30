@@ -196,12 +196,14 @@ public class HubMain {
                             final String uuid = clientHandshake.getFieldValue("x-uuid");
                             final String sessionId = clientHandshake.getFieldValue("x-sessionid");
                             final String welcome = clientHandshake.getFieldValue("x-welcome");
+                            final String recordStartTimestamp = clientHandshake.getFieldValue("x-rst");
                             final FsSession session = new FsSession(
                                     uuid,
                                     sessionId,
                                     (event,payload)->HubEventVO.sendEvent(webSocket, event, payload),
                                     _scriptApi,
                                     welcome,
+                                    recordStartTimestamp,
                                     _rms_cp_prefix,
                                     _rms_tts_prefix,
                                     _rms_wav_prefix,
@@ -523,6 +525,8 @@ public class HubMain {
             _sessionExecutor.submit(()-> handleStopTranscriptionCommand(cmd, webSocket));
         } else if ("FSPlaybackStopped".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handleFSPlaybackStoppedCommand(cmd, webSocket));
+        } else if ("FSRecordStarted".equals(cmd.getHeader().get("name"))) {
+            _sessionExecutor.submit(()-> handleFSRecordStartedCommand(cmd, webSocket));
         } /* else if ("Playback".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handlePlaybackCommand(cmd, webSocket));
         } else if ("PlayTTS".equals(cmd.getHeader().get("name"))) {
@@ -549,6 +553,13 @@ public class HubMain {
             _sessionExecutor.submit(()-> handlePreviewCommand(cmd, webSocket));
         } else {
             log.warn("handleHubCommand: Unknown Command: {}", cmd);
+        }
+    }
+
+    private void handleFSRecordStartedCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        final Object attachment = webSocket.getAttachment();
+        if (attachment instanceof FsSession session) {
+            session.notifyFSRecordStarted(cmd);
         }
     }
 

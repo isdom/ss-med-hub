@@ -32,6 +32,7 @@ public class FsSession extends ASRSession {
                      final BiConsumer<String, Object> sendEvent,
                      final ScriptApi scriptApi,
                      final String welcome,
+                     final String recordStartTimestamp,
                      final String rms_cp_prefix,
                      final String rms_tts_prefix,
                      final String rms_wav_prefix,
@@ -45,6 +46,14 @@ public class FsSession extends ASRSession {
         _sendEvent = sendEvent;
         _scriptApi = scriptApi;
         _welcome = welcome;
+        if (recordStartTimestamp != null && !recordStartTimestamp.isEmpty()) {
+            final long rst = Long.parseLong(recordStartTimestamp);
+            if (rst > 0) {
+                // Microseconds -> Milliseconds
+                _recordStartInMs.set(rst / 1000L);
+                log.info("[{}]: FsSession: recordStartTimestamp: {} ms", _sessionId, _recordStartInMs.get());
+            }
+        }
         _rms_cp_prefix = rms_cp_prefix;
         _rms_tts_prefix = rms_tts_prefix;
         _rms_wav_prefix = rms_wav_prefix;
@@ -118,21 +127,29 @@ public class FsSession extends ASRSession {
     }
 
     @Override
-    public void transcriptionStarted() {
-        super.transcriptionStarted();
+    public boolean transcriptionStarted() {
+        if (super.transcriptionStarted()) {
+            _asrStartedInMs = System.currentTimeMillis();
 
-        try {
-            final ApiResponse<AIReplyVO> response =
-                    _scriptApi.ai_reply(_sessionId, _welcome, null,0);
-            if (response.getData() != null) {
-                if (doPlayback(response.getData())) {
-                    _lastReply = response.getData();
+            try {
+                final ApiResponse<AIReplyVO> response =
+                        _scriptApi.ai_reply(_sessionId, _welcome, null, 0);
+                if (response.getData() != null) {
+                    if (doPlayback(response.getData())) {
+                        _lastReply = response.getData();
+                    }
+                } else {
+                    _sendEvent.accept("FSHangup", new PayloadFSHangup(_uuid, _sessionId));
+                    log.info("[{}]: transcriptionStarted: ai_reply {}, hangup\n", _sessionId, response);
                 }
-            } else {
-                log.info("[{}]: transcriptionStarted: ai_reply {}, do nothing\n", _sessionId, response);
+            } catch (Exception ex) {
+                _sendEvent.accept("FSHangup", new PayloadFSHangup(_uuid, _sessionId));
+                log.warn("[{}]: transcriptionStarted: ai_reply error, hangup, detail: {}", _sessionId, ex.toString());
             }
-        } catch (Exception ex) {
-            log.warn("[{}]: transcriptionStarted: ai_reply error, detail: {}", _sessionId, ex.toString());
+            return true;
+        } else {
+            log.warn("[{}]: transcriptionStarted called already, ignore", _sessionId);
+            return false;
         }
     }
 
@@ -224,10 +241,8 @@ public class FsSession extends ASRSession {
     public void notifySentenceBegin(final PayloadSentenceBegin payload) {
         super.notifySentenceBegin(payload);
         _isUserSpeak.set(true);
+        _currentSentenceBeginInMs.set(System.currentTimeMillis());
         /*
-        if (null != _sessionId) {
-            log.info("[{}]: notifySentenceBegin: {}", _sessionId, payload);
-        }
         if (_playback.get() != null && _lastReply != null && _lastReply.getPause_on_speak() != null && _lastReply.getPause_on_speak()) {
             _playback.get().pauseCurrent();
             log.info("[{}]: pauseCurrent: {}", _sessionId, _playback.get());
@@ -250,41 +265,88 @@ public class FsSession extends ASRSession {
     public void notifySentenceEnd(final PayloadSentenceEnd payload) {
         super.notifySentenceEnd(payload);
 
+        final long sentenceEndInMs = System.currentTimeMillis();
         _isUserSpeak.set(false);
-        _idleStartInMs.set(System.currentTimeMillis());
+        _idleStartInMs.set(sentenceEndInMs);
 
         /*
-        if (null != _sessionId) {
-            log.info("[{}]: notifySentenceEnd: {}", _sessionId, payload);
-        }
-
         if (_playback.get() != null && _lastReply != null && _lastReply.getPause_on_speak() != null && _lastReply.getPause_on_speak()) {
             _playback.get().resumeCurrent();
             log.info("[{}]: resumeCurrent: {}", _sessionId, _playback.get());
         }
-
-        if (_sessionId != null) {
         */
-            boolean isAiSpeaking = _currentPlaybackId.get() != null;
-            try {
-                final ApiResponse<AIReplyVO> response =
-                        _scriptApi.ai_reply(_sessionId, payload.getResult(), null, isAiSpeaking ? 1 : 0);
-                if (response.getData() != null) {
-                    if (doPlayback(response.getData())) {
-                        _lastReply = response.getData();
-                    } else {
-                        if (_currentPlaybackId.get() != null) {
-                            _sendEvent.accept("FSResumePlayback", new PayloadFSChangePlayback(_uuid, _currentPlaybackId.get()));
-                            log.info("notifySentenceEnd: resume current for ai_reply {} do nothing", payload.getResult());
-                        }
-                    }
-                } else {
-                    log.info("[{}]: notifySentenceEnd: ai_reply {}, do nothing\n", _sessionId, response);
+
+        final boolean isAiSpeaking = _currentPlaybackId.get() != null;
+        String userContentId = null;
+        try {
+            final ApiResponse<AIReplyVO> response =
+                    _scriptApi.ai_reply(_sessionId, payload.getResult(), null, isAiSpeaking ? 1 : 0);
+            if (response.getData() != null) {
+                if (response.getData().getUser_content_id() != null) {
+                    userContentId = response.getData().getUser_content_id().toString();
                 }
-            } catch (Exception ex) {
-                log.warn("[{}]: notifySentenceEnd: ai_reply error, detail: {}", _sessionId, ex.toString());
+                if (doPlayback(response.getData())) {
+                    _lastReply = response.getData();
+                } else {
+                    if (_currentPlaybackId.get() != null) {
+                        _sendEvent.accept("FSResumePlayback", new PayloadFSChangePlayback(_uuid, _currentPlaybackId.get()));
+                        log.info("notifySentenceEnd: resume current for ai_reply {} do nothing", payload.getResult());
+                    }
+                }
+            } else {
+                log.info("[{}]: notifySentenceEnd: ai_reply {}, do nothing\n", _sessionId, response);
             }
-        // }
+        } catch (Exception ex) {
+            log.warn("[{}]: notifySentenceEnd: ai_reply error, detail: {}", _sessionId, ex.toString());
+        }
+
+        {
+            // report USER speak timing
+            // ASR-Sentence-Begin-Time in Milliseconds
+            final long start_speak_timestamp = _asrStartedInMs + payload.getBegin_time(); // Long.parseLong(headers.getOrDefault("ASR-Sentence-Begin-Time", "0"));
+            // ASR-Sentence-End-Time in Milliseconds
+            final long stop_speak_timestamp = _asrStartedInMs + payload.getTime(); // Long.parseLong(headers.getOrDefault("ASR-Sentence-End-Time", "0"));
+            final long user_speak_duration = stop_speak_timestamp - start_speak_timestamp;
+
+            final ApiResponse<Void> resp = _scriptApi.report_content(
+                    _sessionId,
+                    userContentId,
+                    payload.getIndex(),
+                    "USER",
+                    _recordStartInMs.get(),
+                    start_speak_timestamp,
+                    stop_speak_timestamp,
+                    user_speak_duration);
+            log.info("[{}]: user report_content({})'s resp: {}", _sessionId, userContentId, resp);
+        }
+        {
+            // report ASR event timing
+            // sentence_begin_event_time in Milliseconds
+            final long begin_event_time = _currentSentenceBeginInMs.get() - _asrStartedInMs;
+
+            // sentence_end_event_time in Milliseconds
+            final long end_event_time = sentenceEndInMs - _asrStartedInMs;
+
+            final ApiResponse<Void> resp = _scriptApi.report_asrtime(
+                    _sessionId,
+                    userContentId,
+                    payload.getIndex(),
+                    begin_event_time,
+                    end_event_time);
+            log.info("[{}]: user report_asrtime({})'s resp: {}", _sessionId, userContentId, resp);
+        }
+    }
+
+    public void notifyFSRecordStarted(final HubCommandVO cmd) {
+        final String recordStartTimestamp = cmd.getPayload().get("record_start_timestamp");
+        if (recordStartTimestamp != null && !recordStartTimestamp.isEmpty()) {
+            final long rst = Long.parseLong(recordStartTimestamp);
+            if (rst > 0) {
+                // Microseconds -> Milliseconds
+                _recordStartInMs.set(rst / 1000L);
+                log.info("[{}]: notifyFSRecordStarted: recordStartTimestamp: {} ms", _sessionId, _recordStartInMs.get());
+            }
+        }
     }
 
     private final String _uuid;
@@ -301,6 +363,9 @@ public class FsSession extends ASRSession {
     private final AtomicReference<String> _currentAIContentId = new AtomicReference<>(null);
     private final AtomicLong _idleStartInMs = new AtomicLong(System.currentTimeMillis());
     private final AtomicBoolean _isUserSpeak = new AtomicBoolean(false);
+    private long _asrStartedInMs = -1;
+    private final AtomicLong _recordStartInMs = new AtomicLong(-1);
+    private final AtomicLong _currentSentenceBeginInMs = new AtomicLong(-1);
 
     private ScheduledExecutorService _delayExecutor = null;
     private long _testDelayMs = 0;
