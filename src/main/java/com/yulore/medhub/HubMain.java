@@ -229,8 +229,12 @@ public class HubMain {
                             final CallSession session = new CallSession(_callApi, _scriptApi,
                                     (_session)->{
                                         // webSocket.close(1000, "hangup");
-                                        HubEventVO.sendEvent(webSocket, "CallEnded", new PayloadCallEnded(_session.sessionId()));
-                                        log.info("[{}]: sendback CallEnded event", _session.sessionId());
+                                        try {
+                                            HubEventVO.sendEvent(webSocket, "CallEnded", new PayloadCallEnded(_session.sessionId()));
+                                            log.info("[{}]: sendback CallEnded event", _session.sessionId());
+                                        } catch (Exception ex) {
+                                            log.warn("[{}]: sendback CallEnded event failed, detail: {}", _session.sessionId(), ex.toString());
+                                        }
                                     },
                                     _oss_bucket,
                                     _oss_path,
