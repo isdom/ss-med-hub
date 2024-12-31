@@ -132,8 +132,8 @@ public class ASRSession {
     String _sessionId;
     final Lock _lock = new ReentrantLock();
 
-    AtomicReference<Runnable> _stopASR = new AtomicReference<>(null);
-    AtomicReference<Consumer<ByteBuffer>> _transmitData = new AtomicReference<>(null);
+    final AtomicReference<Runnable> _stopASR = new AtomicReference<>(null);
+    final AtomicReference<Consumer<ByteBuffer>> _transmitData = new AtomicReference<>(null);
 
     final AtomicBoolean _isStartTranscription = new AtomicBoolean(false);
     final AtomicBoolean _isTranscriptionStarted = new AtomicBoolean(false);

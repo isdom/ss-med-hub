@@ -71,6 +71,9 @@ public class FsSession extends ASRSession {
     @Override
     public boolean transmit(final ByteBuffer bytes) {
         if ( !_isTranscriptionStarted.get() || _isTranscriptionFailed.get()) {
+            if (_recvFirstAudioDataInMs.compareAndSet(0, 1)) {
+                _recvFirstAudioDataInMs.set(System.currentTimeMillis());
+            }
             return false;
         }
 
@@ -82,6 +85,7 @@ public class FsSession extends ASRSession {
                     if (_asrStartedInMs.compareAndSet(0, 1)) {
                         // ref: https://help.aliyun.com/zh/isi/developer-reference/websocket#sectiondiv-iry-g6n-uqt
                         _asrStartedInMs.set(System.currentTimeMillis());
+                        log.info("[{}]: start_asr_from_recv_first_audio_data: {} ms", _sessionId, _asrStartedInMs.get() - _recvFirstAudioDataInMs.get());
                     }
                     transmitter.accept(bytes);
                 } else {
@@ -89,6 +93,7 @@ public class FsSession extends ASRSession {
                         if (_asrStartedInMs.compareAndSet(0, 1)) {
                             // ref: https://help.aliyun.com/zh/isi/developer-reference/websocket#sectiondiv-iry-g6n-uqt
                             _asrStartedInMs.set(System.currentTimeMillis());
+                            log.info("[{}]: start_asr_from_recv_first_audio_data: {} ms", _sessionId, _asrStartedInMs.get() - _recvFirstAudioDataInMs.get());
                         }
                         transmitter.accept(bytes);
                     }, _testDelayMs, TimeUnit.MILLISECONDS);
@@ -152,7 +157,7 @@ public class FsSession extends ASRSession {
                     }
                 } else {
                     _sendEvent.accept("FSHangup", new PayloadFSHangup(_uuid, _sessionId));
-                    log.info("[{}]: transcriptionStarted: ai_reply {}, hangup\n", _sessionId, response);
+                    log.warn("[{}]: transcriptionStarted: ai_reply {}, hangup\n", _sessionId, response);
                 }
             } catch (Exception ex) {
                 _sendEvent.accept("FSHangup", new PayloadFSHangup(_uuid, _sessionId));
@@ -179,7 +184,7 @@ public class FsSession extends ASRSession {
                 _sendEvent.accept("FSHangup", new PayloadFSHangup(_uuid, _sessionId));
             }
         } else {
-            log.warn("!NOT! current playback_id:{}, ignored", playback_id);
+            log.info("!NOT! current playback_id:{}, ignored", playback_id);
         }
     }
 
@@ -378,6 +383,8 @@ public class FsSession extends ASRSession {
     private final AtomicLong _asrStartedInMs = new AtomicLong(0);
     private final AtomicLong _recordStartInMs = new AtomicLong(-1);
     private final AtomicLong _currentSentenceBeginInMs = new AtomicLong(-1);
+
+    private final AtomicLong _recvFirstAudioDataInMs = new AtomicLong(0);
 
     private ScheduledExecutorService _delayExecutor = null;
     private long _testDelayMs = 0;
