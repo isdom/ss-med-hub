@@ -197,24 +197,31 @@ public class HubMain {
                             final String sessionId = clientHandshake.getFieldValue("x-sessionid");
                             final String welcome = clientHandshake.getFieldValue("x-welcome");
                             final String recordStartTimestamp = clientHandshake.getFieldValue("x-rst");
-                            final FsSession session = new FsSession(
-                                    uuid,
-                                    sessionId,
-                                    (event,payload)->HubEventVO.sendEvent(webSocket, event, payload),
-                                    _scriptApi,
-                                    welcome,
-                                    recordStartTimestamp,
-                                    _rms_cp_prefix,
-                                    _rms_tts_prefix,
-                                    _rms_wav_prefix,
-                                    _test_enable_delay,
-                                    _test_delay_ms,
-                                    _test_enable_disconnect,
-                                    _test_disconnect_probability,
-                                    ()->webSocket.close(1006, "test_disconnect"));
-                            webSocket.setAttachment(session);
-                            session.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms, session::checkIdle);
-                            log.info("ws path match: {}, using ws as FsSession {}", _match_fs, sessionId);
+                            final String role = clientHandshake.getFieldValue("x-role");
+                            if ("asr".equals(role)) {
+                                final FsSession session = new FsSession(
+                                        uuid,
+                                        sessionId,
+                                        _scriptApi,
+                                        welcome,
+                                        recordStartTimestamp,
+                                        _rms_cp_prefix,
+                                        _rms_tts_prefix,
+                                        _rms_wav_prefix,
+                                        _test_enable_delay,
+                                        _test_delay_ms,
+                                        _test_enable_disconnect,
+                                        _test_disconnect_probability,
+                                        ()->webSocket.close(1006, "test_disconnect"));
+                                webSocket.setAttachment(session);
+                                session.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms, session::checkIdle);
+                                log.info("ws path match: {}, role: {}. using ws as FsSession {}", _match_fs, role, sessionId);
+                            } else {
+                                final FsSession fs = FsSession.findBy(sessionId);
+                                webSocket.setAttachment(fs);
+                                fs.attachPlaybackWs((event,payload)->HubEventVO.sendEvent(webSocket, event, payload));
+                                log.info("ws path match: {}, role: {}, attach exist FsSession {}", _match_fs, role, sessionId);
+                            }
                         } else if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_media)) {
                             // init MediaSession attach with webSocket
                             final String sessionId = clientHandshake.getFieldValue("x-sessionid");

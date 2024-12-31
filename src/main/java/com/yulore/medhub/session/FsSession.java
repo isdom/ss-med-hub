@@ -27,9 +27,12 @@ public class FsSession extends ASRSession {
     static final long CHECK_IDLE_TIMEOUT = 5000L; // 5 seconds to report check idle to script engine
     final static String PLAYBACK_ID_NAME="vars_playback_id";
 
+    static public FsSession findBy(final String sessionId) {
+        return _fsSessions.get(sessionId);
+    }
+
     public FsSession(final String uuid,
                      final String sessionId,
-                     final BiConsumer<String, Object> sendEvent,
                      final ScriptApi scriptApi,
                      final String welcome,
                      final String recordStartTimestamp,
@@ -43,7 +46,7 @@ public class FsSession extends ASRSession {
                      final Runnable doDisconnect) {
         _uuid = uuid;
         _sessionId = sessionId;
-        _sendEvent = sendEvent;
+        _sendEvent = null;
         _scriptApi = scriptApi;
         _welcome = welcome;
         if (recordStartTimestamp != null && !recordStartTimestamp.isEmpty()) {
@@ -66,6 +69,11 @@ public class FsSession extends ASRSession {
             log.info("[{}]: enable disconnect test feature, timeout: {} ms", sessionId, _testDisconnectTimeout);
         }
         _doDisconnect = doDisconnect;
+        _fsSessions.put(_sessionId, this);
+    }
+
+    public void attachPlaybackWs(final BiConsumer<String, Object> sendEvent) {
+        _sendEvent = sendEvent;
     }
 
     @Override
@@ -112,6 +120,7 @@ public class FsSession extends ASRSession {
     public void close() {
         if (_delayExecutor != null) {
             _delayExecutor.shutdownNow();
+            _delayExecutor = null;
         }
         super.close();
     }
@@ -366,8 +375,9 @@ public class FsSession extends ASRSession {
         }
     }
 
+    private BiConsumer<String, Object> _sendEvent;
+
     private final String _uuid;
-    private final BiConsumer<String, Object> _sendEvent;
     private final ScriptApi _scriptApi;
     private final String _welcome;
     private final String _rms_cp_prefix;
@@ -390,4 +400,6 @@ public class FsSession extends ASRSession {
     private long _testDelayMs = 0;
     private long _testDisconnectTimeout = -1;
     private final Runnable _doDisconnect;
+
+    private static final ConcurrentMap<String, FsSession> _fsSessions = new ConcurrentHashMap<>();
 }
