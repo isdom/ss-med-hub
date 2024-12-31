@@ -193,12 +193,13 @@ public class HubMain {
                                 clientHandshake.getResourceDescriptor());
                         if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_fs)) {
                             // init FsSession attach with webSocket
-                            final String uuid = clientHandshake.getFieldValue("x-uuid");
-                            final String sessionId = clientHandshake.getFieldValue("x-sessionid");
-                            final String welcome = clientHandshake.getFieldValue("x-welcome");
-                            final String recordStartTimestamp = clientHandshake.getFieldValue("x-rst");
                             final String role = clientHandshake.getFieldValue("x-role");
                             if ("asr".equals(role)) {
+                                final String uuid = clientHandshake.getFieldValue("x-uuid");
+                                final String sessionId = clientHandshake.getFieldValue("x-sessionid");
+                                final String welcome = clientHandshake.getFieldValue("x-welcome");
+                                final String recordStartTimestamp = clientHandshake.getFieldValue("x-rst");
+
                                 final FsSession session = new FsSession(
                                         uuid,
                                         sessionId,
@@ -215,12 +216,19 @@ public class HubMain {
                                         ()->webSocket.close(1006, "test_disconnect"));
                                 webSocket.setAttachment(session);
                                 session.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms, session::checkIdle);
+                                HubEventVO.<Void>sendEvent(webSocket, "FSConnected", null);
                                 log.info("ws path match: {}, role: {}. using ws as FsSession {}", _match_fs, role, sessionId);
                             } else {
+                                final String sessionId = clientHandshake.getFieldValue("x-sessionid");
+                                log.info("onOpen: sessionid: {} for ws: {}", sessionId, webSocket.getRemoteSocketAddress());
                                 final FsSession fs = FsSession.findBy(sessionId);
-                                webSocket.setAttachment(fs);
-                                fs.attachPlaybackWs((event,payload)->HubEventVO.sendEvent(webSocket, event, payload));
-                                log.info("ws path match: {}, role: {}, attach exist FsSession {}", _match_fs, role, sessionId);
+                                if (fs != null) {
+                                    webSocket.setAttachment(fs);
+                                    fs.attachPlaybackWs((event, payload) -> HubEventVO.sendEvent(webSocket, event, payload));
+                                    log.info("ws path match: {}, role: {}, attach exist FsSession {}", _match_fs, role, sessionId);
+                                } else {
+                                    log.warn("ws path match: {}, role: {}, !NOT! find FsSession with {}", _match_fs, role, sessionId);
+                                }
                             }
                         } else if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_media)) {
                             // init MediaSession attach with webSocket
