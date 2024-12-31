@@ -77,22 +77,26 @@ public class FsSession extends ASRSession {
         final Consumer<ByteBuffer> transmitter = _transmitData.get();
 
         if (transmitter != null) {
-            if (_delayExecutor == null) {
-                if (_asrStartedInMs.compareAndSet(0, 1)) {
-                    // ref: https://help.aliyun.com/zh/isi/developer-reference/websocket#sectiondiv-iry-g6n-uqt
-                    _asrStartedInMs.set(System.currentTimeMillis());
-                }
-                transmitter.accept(bytes);
-            } else {
-                _delayExecutor.schedule(()->{
+            try {
+                if (_delayExecutor == null) {
                     if (_asrStartedInMs.compareAndSet(0, 1)) {
                         // ref: https://help.aliyun.com/zh/isi/developer-reference/websocket#sectiondiv-iry-g6n-uqt
                         _asrStartedInMs.set(System.currentTimeMillis());
                     }
                     transmitter.accept(bytes);
-                }, _testDelayMs, TimeUnit.MILLISECONDS);
+                } else {
+                    _delayExecutor.schedule(() -> {
+                        if (_asrStartedInMs.compareAndSet(0, 1)) {
+                            // ref: https://help.aliyun.com/zh/isi/developer-reference/websocket#sectiondiv-iry-g6n-uqt
+                            _asrStartedInMs.set(System.currentTimeMillis());
+                        }
+                        transmitter.accept(bytes);
+                    }, _testDelayMs, TimeUnit.MILLISECONDS);
+                }
+                _transmitCount.incrementAndGet();
+            } catch (Exception ex) {
+                log.warn("[{}]: transmit error, detail: {}", _sessionId, ex.toString());
             }
-            _transmitCount.incrementAndGet();
             return true;
         } else {
             return false;
