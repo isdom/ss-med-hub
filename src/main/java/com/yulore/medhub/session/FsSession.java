@@ -293,13 +293,6 @@ public class FsSession extends ASRSession {
         _isUserSpeak.set(false);
         _idleStartInMs.set(sentenceEndInMs);
 
-        /*
-        if (_playback.get() != null && _lastReply != null && _lastReply.getPause_on_speak() != null && _lastReply.getPause_on_speak()) {
-            _playback.get().resumeCurrent();
-            log.info("[{}]: resumeCurrent: {}", _sessionId, _playback.get());
-        }
-        */
-
         String userContentId = null;
         try {
             final ApiResponse<AIReplyVO> response =
