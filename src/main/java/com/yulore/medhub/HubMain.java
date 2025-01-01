@@ -200,7 +200,7 @@ public class HubMain {
                                 final String welcome = clientHandshake.getFieldValue("x-welcome");
                                 final String recordStartTimestamp = clientHandshake.getFieldValue("x-rst");
 
-                                final FsSession session = new FsSession(
+                                final FsActor session = new FsActor(
                                         uuid,
                                         sessionId,
                                         _scriptApi,
@@ -221,7 +221,7 @@ public class HubMain {
                             } else {
                                 final String sessionId = clientHandshake.getFieldValue("x-sessionid");
                                 log.info("onOpen: sessionid: {} for ws: {}", sessionId, webSocket.getRemoteSocketAddress());
-                                final FsSession fs = FsSession.findBy(sessionId);
+                                final FsActor fs = FsActor.findBy(sessionId);
                                 if (fs != null) {
                                     webSocket.setAttachment(fs);
                                     fs.attachPlaybackWs((event, payload) -> HubEventVO.sendEvent(webSocket, event, payload));
@@ -241,7 +241,7 @@ public class HubMain {
                             log.info("ws path match: {}, using ws as MediaSession {}", _match_media, sessionId);
                         } else if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_call)) {
                             // init CallSession attach with webSocket
-                            final CallSession session = new CallSession(_callApi, _scriptApi,
+                            final PoActor session = new PoActor(_callApi, _scriptApi,
                                     (_session)->{
                                         // webSocket.close(1000, "hangup");
                                         try {
@@ -273,7 +273,7 @@ public class HubMain {
                             final PlaybackSession playbackSession = new PlaybackSession(sessionId);
                             webSocket.setAttachment(playbackSession);
                             log.info("ws path match: {}, using ws as PlaybackSession: [{}]", _match_playback, playbackSession.sessionId());
-                            final CallSession callSession = CallSession.findBy(sessionId);
+                            final PoActor callSession = PoActor.findBy(sessionId);
                             if (callSession == null) {
                                 log.info("can't find callSession by sessionId: {}, ignore", sessionId);
                                 return;
@@ -293,7 +293,7 @@ public class HubMain {
                     @Override
                     public void onClose(final WebSocket webSocket, final int code, final String reason, final boolean remote) {
                         final Object attachment = webSocket.getAttachment();
-                        if (attachment instanceof FsSession session) {
+                        if (attachment instanceof FsActor session) {
                             stopAndCloseTranscriber(webSocket);
                             session.close();
                             log.info("wscount/{}: closed {} with exit code {} additional info: {}, FsSession-id {}",
@@ -305,7 +305,7 @@ public class HubMain {
                             log.info("wscount/{}: closed {} with exit code {} additional info: {}, MediaSession-id {}",
                                     _currentWSConnection.decrementAndGet(),
                                     webSocket.getRemoteSocketAddress(), code, reason, session.sessionId());
-                        } else if (attachment instanceof CallSession session) {
+                        } else if (attachment instanceof PoActor session) {
                             stopAndCloseTranscriber(webSocket);
                             session.close();
                             log.info("wscount/{}: closed {} with exit code {} additional info: {}, CallSession-id: {}",
@@ -345,7 +345,7 @@ public class HubMain {
                     @Override
                     public void onMessage(final WebSocket webSocket, final ByteBuffer bytes) {
                         final Object attachment = webSocket.getAttachment();
-                        if (attachment instanceof ASRSession session) {
+                        if (attachment instanceof ASRActor session) {
                             handleASRData(bytes, session);
                             return;
                         } else if (attachment instanceof StreamSession session) {
@@ -371,7 +371,7 @@ public class HubMain {
         _wsServer.start();
     }
 
-    private void playbackOn(final String path, final String contentId, final CallSession callSession, final PlaybackSession playbackSession, final WebSocket webSocket) {
+    private void playbackOn(final String path, final String contentId, final PoActor callSession, final PlaybackSession playbackSession, final WebSocket webSocket) {
         // interval = 20 ms
         int interval = 20;
         log.info("[{}]: playbackOn: {} => sample rate: {}/interval: {}/channels: {}", callSession.sessionId(), path, 16000, interval, 1);
@@ -528,7 +528,7 @@ public class HubMain {
         }
     }
 
-    private void handleASRData(final ByteBuffer bytes, final ASRSession session) {
+    private void handleASRData(final ByteBuffer bytes, final ASRActor session) {
         if (session.transmit(bytes)) {
             // transmit success
             if ((session.transmitCount() % 50) == 0) {
@@ -577,14 +577,14 @@ public class HubMain {
 
     private void handleFSRecordStartedCommand(final HubCommandVO cmd, final WebSocket webSocket) {
         final Object attachment = webSocket.getAttachment();
-        if (attachment instanceof FsSession session) {
+        if (attachment instanceof FsActor session) {
             session.notifyFSRecordStarted(cmd);
         }
     }
 
     private void handleFSPlaybackStoppedCommand(final HubCommandVO cmd, final WebSocket webSocket) {
         final Object attachment = webSocket.getAttachment();
-        if (attachment instanceof FsSession session) {
+        if (attachment instanceof FsActor session) {
             session.notifyFSPlaybackStopped(cmd);
         }
     }
@@ -631,7 +631,7 @@ public class HubMain {
     }
 
     private void handleUserAnswerCommand(final HubCommandVO cmd, final WebSocket webSocket) {
-        final CallSession session = webSocket.getAttachment();
+        final PoActor session = webSocket.getAttachment();
         if (session == null) {
             log.error("UserAnswer: {} without CallSession, abort", webSocket.getRemoteSocketAddress());
             return;
@@ -1112,7 +1112,7 @@ public class HubMain {
 
     private void handleStartTranscriptionCommand(final HubCommandVO cmd, final WebSocket webSocket) {
         final String provider = cmd.getPayload() != null ? cmd.getPayload().get("provider") : null;
-        final ASRSession session = webSocket.getAttachment();
+        final ASRActor session = webSocket.getAttachment();
         if (session == null) {
             log.error("StartTranscription: {} without ASRSession, abort", webSocket.getRemoteSocketAddress());
             return;
@@ -1129,7 +1129,7 @@ public class HubMain {
             if ("tx".equals(provider)) {
                 startWithTxasr(webSocket, session, cmd);
             } else {
-                startWithAliasr(webSocket, session);
+                startWithAliasr(webSocket, session, cmd);
             }
         } catch (Exception ex) {
             // TODO: close websocket?
@@ -1140,7 +1140,7 @@ public class HubMain {
         }
     }
 
-    private void startWithTxasr(final WebSocket webSocket, final ASRSession session, final HubCommandVO cmd) throws Exception {
+    private void startWithTxasr(final WebSocket webSocket, final ASRActor session, final HubCommandVO cmd) throws Exception {
         final long startConnectingInMs = System.currentTimeMillis();
         final TxASRAgent agent = selectTxASRAgent();
 
@@ -1201,7 +1201,7 @@ public class HubMain {
         return recognizer;
     }
 
-    private SpeechRecognizerListener buildRecognizerListener(final ASRSession session,
+    private SpeechRecognizerListener buildRecognizerListener(final ASRActor session,
                                                              final WebSocket webSocket,
                                                              final TxASRAgent account,
                                                              final String sessionId,
@@ -1280,12 +1280,17 @@ public class HubMain {
         };
     }
 
-    private void startWithAliasr(final WebSocket webSocket, final ASRSession session) throws Exception {
+    private void startWithAliasr(final WebSocket webSocket, final ASRActor session, final HubCommandVO cmd) throws Exception {
         final long startConnectingInMs = System.currentTimeMillis();
         final ASRAgent agent = selectASRAgent();
 
         final SpeechTranscriber speechTranscriber = session.onSpeechTranscriberCreated(
                 buildSpeechTranscriber(agent, buildTranscriberListener(session, webSocket, agent, session.sessionId(), startConnectingInMs)));
+
+        if (cmd.getPayload().get("speech_noise_threshold") != null) {
+            // ref: https://help.aliyun.com/zh/isi/developer-reference/websocket#sectiondiv-rz2-i36-2gv
+            speechTranscriber.addCustomedParam("speech_noise_threshold", Float.parseFloat(cmd.getPayload().get("speech_noise_threshold")));
+        }
 
         session.setASR(()-> {
             try {
@@ -1356,7 +1361,7 @@ public class HubMain {
         return transcriber;
     }
 
-    private SpeechTranscriberListener buildTranscriberListener(final ASRSession session,
+    private SpeechTranscriberListener buildTranscriberListener(final ASRActor session,
                                                                final WebSocket webSocket,
                                                                final ASRAgent account,
                                                                final String sessionId,
@@ -1443,7 +1448,7 @@ public class HubMain {
 
     private void notifyTranscriptionStarted(final WebSocket webSocket) {
         try {
-            if (webSocket.getAttachment() instanceof ASRSession session) {
+            if (webSocket.getAttachment() instanceof ASRActor session) {
                 session.transcriptionStarted();
             }
             HubEventVO.sendEvent(webSocket, "TranscriptionStarted", (Void) null);
@@ -1454,7 +1459,7 @@ public class HubMain {
 
     private void notifySentenceBegin(final WebSocket webSocket, final PayloadSentenceBegin payload) {
         try {
-            if (webSocket.getAttachment() instanceof ASRSession session) {
+            if (webSocket.getAttachment() instanceof ASRActor session) {
                 session.notifySentenceBegin(payload);
             }
             HubEventVO.sendEvent(webSocket, "SentenceBegin", payload);
@@ -1465,7 +1470,7 @@ public class HubMain {
 
     private void notifySentenceEnd(final WebSocket webSocket, final PayloadSentenceEnd payload) {
         try {
-            if (webSocket.getAttachment() instanceof ASRSession session) {
+            if (webSocket.getAttachment() instanceof ASRActor session) {
                 session.notifySentenceEnd(payload);
             }
             HubEventVO.sendEvent(webSocket, "SentenceEnd", payload);
@@ -1476,7 +1481,7 @@ public class HubMain {
 
     private void notifyTranscriptionResultChanged(final WebSocket webSocket, final PayloadTranscriptionResultChanged payload) {
         try {
-            if (webSocket.getAttachment() instanceof ASRSession session) {
+            if (webSocket.getAttachment() instanceof ASRActor session) {
                 session.notifyTranscriptionResultChanged(payload);
             }
             HubEventVO.sendEvent(webSocket, "TranscriptionResultChanged", payload);
@@ -1500,7 +1505,7 @@ public class HubMain {
     }
 
     private static void stopAndCloseTranscriber(final WebSocket webSocket) {
-        final ASRSession session = webSocket.getAttachment();
+        final ASRActor session = webSocket.getAttachment();
         if (session == null) {
             log.error("stopAndCloseTranscriber: {} without ASRSession, abort", webSocket.getRemoteSocketAddress());
             return;

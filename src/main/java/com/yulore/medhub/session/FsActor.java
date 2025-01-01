@@ -23,27 +23,27 @@ import java.util.function.Supplier;
 
 @ToString
 @Slf4j
-public class FsSession extends ASRSession {
+public class FsActor extends ASRActor {
     static final long CHECK_IDLE_TIMEOUT = 5000L; // 5 seconds to report check idle to script engine
     final static String PLAYBACK_ID_NAME="vars_playback_id";
 
-    static public FsSession findBy(final String sessionId) {
+    static public FsActor findBy(final String sessionId) {
         return _fsSessions.get(sessionId);
     }
 
-    public FsSession(final String uuid,
-                     final String sessionId,
-                     final ScriptApi scriptApi,
-                     final String welcome,
-                     final String recordStartTimestamp,
-                     final String rms_cp_prefix,
-                     final String rms_tts_prefix,
-                     final String rms_wav_prefix,
-                     final boolean testEnableDelay,
-                     final long testDelayMs,
-                     final boolean testEnableDisconnect,
-                     final float testDisconnectProbability,
-                     final Runnable doDisconnect) {
+    public FsActor(final String uuid,
+                   final String sessionId,
+                   final ScriptApi scriptApi,
+                   final String welcome,
+                   final String recordStartTimestamp,
+                   final String rms_cp_prefix,
+                   final String rms_tts_prefix,
+                   final String rms_wav_prefix,
+                   final boolean testEnableDelay,
+                   final long testDelayMs,
+                   final boolean testEnableDisconnect,
+                   final float testDisconnectProbability,
+                   final Runnable doDisconnect) {
         _uuid = uuid;
         _sessionId = sessionId;
         _sendEvent = null;
@@ -393,5 +393,5 @@ public class FsSession extends ASRSession {
     private long _testDisconnectTimeout = -1;
     private final Runnable _doDisconnect;
 
-    private static final ConcurrentMap<String, FsSession> _fsSessions = new ConcurrentHashMap<>();
+    private static final ConcurrentMap<String, FsActor> _fsSessions = new ConcurrentHashMap<>();
 }

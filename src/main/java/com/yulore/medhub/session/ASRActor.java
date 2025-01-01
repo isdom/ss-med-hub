@@ -21,8 +21,8 @@ import java.util.function.Consumer;
 
 @ToString
 @Slf4j
-public class ASRSession {
-    public ASRSession() {
+public class ASRActor {
+    public ASRActor() {
         _sessionBeginInMs = System.currentTimeMillis();
     }
 

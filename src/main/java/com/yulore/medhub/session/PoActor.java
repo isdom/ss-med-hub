@@ -29,9 +29,12 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
+/**
+ * Phone Operator Actor
+ */
 @ToString
 @Slf4j
-public class CallSession extends ASRSession {
+public class PoActor extends ASRActor {
 
     @AllArgsConstructor
     static public class RecordContext {
@@ -43,12 +46,12 @@ public class CallSession extends ASRSession {
 
     static final long CHECK_IDLE_TIMEOUT = 5000L; // 5 seconds to report check idle to script engine
 
-    public CallSession(final CallApi callApi,
-                       final ScriptApi scriptApi,
-                       final Consumer<CallSession> doHangup,
-                       final String bucket,
-                       final String wavPath,
-                       final Consumer<RecordContext> saveRecord) {
+    public PoActor(final CallApi callApi,
+                   final ScriptApi scriptApi,
+                   final Consumer<PoActor> doHangup,
+                   final String bucket,
+                   final String wavPath,
+                   final Consumer<RecordContext> saveRecord) {
         _sessionId = null;
         _scriptApi = scriptApi;
         _callApi = callApi;
@@ -441,7 +444,7 @@ public class CallSession extends ASRSession {
         return true;
     }
 
-    static public CallSession findBy(final String sessionId) {
+    static public PoActor findBy(final String sessionId) {
         return _callSessions.get(sessionId);
     }
 
@@ -449,7 +452,7 @@ public class CallSession extends ASRSession {
 
     private final CallApi _callApi;
     private final ScriptApi _scriptApi;
-    private final Consumer<CallSession> _doHangup;
+    private final Consumer<PoActor> _doHangup;
     private final String _bucket;
     private final String _wavPath;
     private AIReplyVO _lastReply;
@@ -461,7 +464,7 @@ public class CallSession extends ASRSession {
     private final AtomicBoolean _isUserSpeak = new AtomicBoolean(false);
     private final AtomicLong _currentSentenceBeginInMs = new AtomicLong(-1);
 
-    private static final ConcurrentMap<String, CallSession> _callSessions = new ConcurrentHashMap<>();
+    private static final ConcurrentMap<String, PoActor> _callSessions = new ConcurrentHashMap<>();
 
     private final List<byte[]> _usBufs = new ArrayList<>();
 

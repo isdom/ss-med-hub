@@ -14,7 +14,7 @@ import java.util.function.Consumer;
 
 @ToString
 @Slf4j
-public class MediaSession extends ASRSession {
+public class MediaSession extends ASRActor {
     public MediaSession(final String sessionId, final boolean testEnableDelay, final long testDelayMs, final boolean testEnableDisconnect, final float testDisconnectProbability, final Runnable doDisconnect) {
         if (testEnableDelay) {
             _delayExecutor = Executors.newSingleThreadScheduledExecutor(new DefaultThreadFactory("delayExecutor"));
