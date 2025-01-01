@@ -127,10 +127,9 @@ public class FsSession extends ASRSession {
 
     public void checkIdle() {
         final long idleTime = System.currentTimeMillis() - _idleStartInMs.get();
-        boolean isAiSpeaking = _currentPlaybackId.get() != null;
         if (_sessionId != null      // user answered
             && !_isUserSpeak.get()  // user not speak
-            && !isAiSpeaking        // AI not speak
+            && !isAiSpeaking()      // AI not speak
             // && _aiSetting != null
         ) {
             if (idleTime > CHECK_IDLE_TIMEOUT) {
@@ -151,7 +150,7 @@ public class FsSession extends ASRSession {
             }
         }
         log.info("[{}]: checkIdle: is_speaking: {}/is_playing: {}/idle duration: {} ms",
-                _sessionId, _isUserSpeak.get(), isAiSpeaking, idleTime);
+                _sessionId, _isUserSpeak.get(), isAiSpeaking(), idleTime);
     }
 
     @Override
@@ -268,18 +267,17 @@ public class FsSession extends ASRSession {
         super.notifySentenceBegin(payload);
         _isUserSpeak.set(true);
         _currentSentenceBeginInMs.set(System.currentTimeMillis());
-        /*
-        if (_playback.get() != null && _lastReply != null && _lastReply.getPause_on_speak() != null && _lastReply.getPause_on_speak()) {
-            _playback.get().pauseCurrent();
-            log.info("[{}]: pauseCurrent: {}", _sessionId, _playback.get());
+        if (isAiSpeaking() && _lastReply != null && _lastReply.getCancel_on_speak() != null && _lastReply.getCancel_on_speak()) {
+            final String playback_id = _currentPlaybackId.get();
+            _sendEvent.accept("FSStopPlayback", new PayloadFSChangePlayback(_uuid, playback_id));
+            log.info("[{}]: stop current playing (id:{}) for cancel_on_speak: {}", _sessionId, playback_id, _lastReply);
         }
-         */
     }
 
     @Override
     public void notifyTranscriptionResultChanged(final PayloadTranscriptionResultChanged payload) {
         super.notifyTranscriptionResultChanged(payload);
-        if (_currentPlaybackId.get() != null) {
+        if (isAiSpeaking()) {
             if (payload.getResult().length() >= 3) {
                 _sendEvent.accept("FSPausePlayback", new PayloadFSChangePlayback(_uuid, _currentPlaybackId.get()));
                 log.info("notifyTranscriptionResultChanged: pause current for result {} text >= 3", payload.getResult());
@@ -302,11 +300,10 @@ public class FsSession extends ASRSession {
         }
         */
 
-        final boolean isAiSpeaking = _currentPlaybackId.get() != null;
         String userContentId = null;
         try {
             final ApiResponse<AIReplyVO> response =
-                    _scriptApi.ai_reply(_sessionId, payload.getResult(), null, isAiSpeaking ? 1 : 0);
+                    _scriptApi.ai_reply(_sessionId, payload.getResult(), null, isAiSpeaking() ? 1 : 0);
             if (response.getData() != null) {
                 if (response.getData().getUser_content_id() != null) {
                     userContentId = response.getData().getUser_content_id().toString();
@@ -314,7 +311,7 @@ public class FsSession extends ASRSession {
                 if (doPlayback(response.getData())) {
                     _lastReply = response.getData();
                 } else {
-                    if (_currentPlaybackId.get() != null) {
+                    if (isAiSpeaking()) {
                         _sendEvent.accept("FSResumePlayback", new PayloadFSChangePlayback(_uuid, _currentPlaybackId.get()));
                         log.info("notifySentenceEnd: resume current for ai_reply {} do nothing", payload.getResult());
                     }
@@ -328,10 +325,8 @@ public class FsSession extends ASRSession {
 
         {
             // report USER speak timing
-            // ASR-Sentence-Begin-Time in Milliseconds
-            final long start_speak_timestamp = _asrStartedInMs.get() + payload.getBegin_time(); // Long.parseLong(headers.getOrDefault("ASR-Sentence-Begin-Time", "0"));
-            // ASR-Sentence-End-Time in Milliseconds
-            final long stop_speak_timestamp = _asrStartedInMs.get() + payload.getTime(); // Long.parseLong(headers.getOrDefault("ASR-Sentence-End-Time", "0"));
+            final long start_speak_timestamp = _asrStartedInMs.get() + payload.getBegin_time();
+            final long stop_speak_timestamp = _asrStartedInMs.get() + payload.getTime();
             final long user_speak_duration = stop_speak_timestamp - start_speak_timestamp;
 
             final ApiResponse<Void> resp = _scriptApi.report_content(
@@ -361,6 +356,10 @@ public class FsSession extends ASRSession {
                     end_event_time);
             log.info("[{}]: user report_asrtime({})'s resp: {}", _sessionId, userContentId, resp);
         }
+    }
+
+    private boolean isAiSpeaking() {
+        return _currentPlaybackId.get() != null;
     }
 
     public void notifyFSRecordStarted(final HubCommandVO cmd) {
