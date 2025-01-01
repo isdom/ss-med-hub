@@ -48,14 +48,14 @@ public class CallSession extends ASRSession {
                        final Consumer<CallSession> doHangup,
                        final String bucket,
                        final String wavPath,
-                       final Consumer<RecordContext> doRecord) {
+                       final Consumer<RecordContext> saveRecord) {
         _sessionId = null;
         _scriptApi = scriptApi;
         _callApi = callApi;
         _doHangup = doHangup;
         _bucket = bucket;
         _wavPath = wavPath;
-        _doRecord = doRecord;
+        _doSaveRecord = saveRecord;
     }
 
     @Override
@@ -193,12 +193,11 @@ public class CallSession extends ASRSession {
         if (null != _sessionId) {
             log.info("[{}]: notifySentenceBegin: {}", _sessionId, payload);
         }
-        /*
-        if (_playback.get() != null && _lastReply != null && _lastReply.getPause_on_speak() != null && _lastReply.getPause_on_speak()) {
-            _playback.get().pauseCurrent();
-            log.info("[{}]: pauseCurrent: {}", _sessionId, _playback.get());
+        if (_playback.get() != null && _playback.get().isPlaying()
+                && _lastReply != null && _lastReply.getCancel_on_speak() != null && _lastReply.getCancel_on_speak()) {
+            log.info("[{}]: stop current playing ({}) for cancel_on_speak: {}", _sessionId, _playback.get(), _lastReply);
+            _playback.get().stopCurrent();;
         }
-         */
     }
 
     @Override
@@ -223,13 +222,6 @@ public class CallSession extends ASRSession {
         if (null != _sessionId) {
             log.info("[{}]: notifySentenceEnd: {}", _sessionId, payload);
         }
-
-        /*
-        if (_playback.get() != null && _lastReply != null && _lastReply.getPause_on_speak() != null && _lastReply.getPause_on_speak()) {
-            _playback.get().resumeCurrent();
-            log.info("[{}]: resumeCurrent: {}", _sessionId, _playback.get());
-        }
-         */
 
         if (_sessionId != null) {
             final boolean isAiSpeaking = _playback.get() != null && _playback.get().isPlaying();
@@ -401,7 +393,7 @@ public class CallSession extends ASRSession {
             log.info("total written {} samples, {} seconds", sample_count, (float)sample_count / 16000);
 
             bos.flush();
-            _doRecord.accept(new RecordContext(_sessionId, bucketName, objectName, new ByteArrayInputStream(bos.toByteArray())));
+            _doSaveRecord.accept(new RecordContext(_sessionId, bucketName, objectName, new ByteArrayInputStream(bos.toByteArray())));
         } catch (IOException ex) {
             log.warn("[{}] close: generate record stream error, detail: {}", _sessionId, ex.toString());
             throw new RuntimeException(ex);
@@ -482,5 +474,5 @@ public class CallSession extends ASRSession {
     private final List<PlaybackSegment> _dsBufs = new ArrayList<>();
 
     private final AtomicLong _recordStartInMs = new AtomicLong(0);
-    private final Consumer<RecordContext> _doRecord;
+    private final Consumer<RecordContext> _doSaveRecord;
 }
