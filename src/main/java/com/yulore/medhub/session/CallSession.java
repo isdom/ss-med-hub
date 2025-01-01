@@ -196,7 +196,7 @@ public class CallSession extends ASRSession {
         if (_playback.get() != null && _playback.get().isPlaying()
                 && _lastReply != null && _lastReply.getCancel_on_speak() != null && _lastReply.getCancel_on_speak()) {
             log.info("[{}]: stop current playing ({}) for cancel_on_speak: {}", _sessionId, _playback.get(), _lastReply);
-            _playback.get().stopCurrent();;
+            _playback.get().stopCurrent();
         }
     }
 
