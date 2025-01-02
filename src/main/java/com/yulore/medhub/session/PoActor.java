@@ -394,7 +394,7 @@ public class PoActor extends ASRActor {
                 }
             }
 
-            log.info("total written {} samples, {} seconds", sample_count, (float)sample_count / 16000);
+            log.info("[{}]: total written {} samples, {} seconds", _sessionId, sample_count, (float)sample_count / 16000);
 
             bos.flush();
             _doSaveRecord.accept(new RecordContext(_sessionId, bucketName, objectName, new ByteArrayInputStream(bos.toByteArray())));
