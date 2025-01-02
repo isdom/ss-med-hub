@@ -9,6 +9,7 @@ import com.yulore.medhub.stream.VarsUtil;
 import com.yulore.medhub.task.PlayStreamPCMTask;
 import com.yulore.medhub.vo.*;
 import com.yulore.util.ByteArrayListInputStream;
+import com.yulore.util.ExceptionUtil;
 import com.yulore.util.WaveUtil;
 import lombok.AllArgsConstructor;
 import lombok.RequiredArgsConstructor;
@@ -227,7 +228,8 @@ public class PoActor extends ASRActor {
             log.info("[{}]: notifySentenceEnd: {}", _sessionId, payload);
         }
 
-        if (_sessionId != null) {
+        if (_sessionId != null && _playbackOn != null) {
+            // _playbackOn != null means playback ws has connected
             final boolean isAiSpeaking = _playback.get() != null && _playback.get().isPlaying();
             String userContentId = null;
             try {
@@ -249,7 +251,7 @@ public class PoActor extends ASRActor {
                     log.info("[{}]: notifySentenceEnd: ai_reply {}, do nothing\n", _sessionId, response);
                 }
             } catch (Exception ex) {
-                log.warn("[{}]: notifySentenceEnd: ai_reply error, detail: {}", _sessionId, ex.toString());
+                log.warn("[{}]: notifySentenceEnd: ai_reply error, detail: {}", _sessionId, ExceptionUtil.exception2detail(ex));
             }
 
             {
@@ -287,6 +289,8 @@ public class PoActor extends ASRActor {
                         end_event_time);
                 log.info("[{}]: user report_asrtime({})'s resp: {}", _sessionId, userContentId, resp);
             }
+        } else {
+            log.warn("[{}]: notifySentenceEnd but sessionId is null or playback not ready => _playbackOn {}", _sessionId, _playbackOn);
         }
     }
 
