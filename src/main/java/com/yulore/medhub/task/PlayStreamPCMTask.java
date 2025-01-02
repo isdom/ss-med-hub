@@ -201,7 +201,7 @@ public class PlayStreamPCMTask {
             log.info("[{}]: pcm task ({}) change to paused state", _sessionId, this);
             return true;
         } else {
-            log.warn("[{}]: pcm task ({}) paused already, ignore pause request", _sessionId, this);
+            log.info("[{}]: pcm task ({}) paused already, ignore pause request", _sessionId, this);
             return false;
         }
     }
@@ -215,7 +215,7 @@ public class PlayStreamPCMTask {
         if (_paused.compareAndSet(true, false)) {
             log.info("[{}]: pcm task ({}) resume to playback", _sessionId, this);
         } else {
-            log.warn("[{}]: pcm task ({}) !NOT! paused, ignore resume request", _sessionId, this);
+            log.info("[{}]: pcm task ({}) !NOT! paused, ignore resume request", _sessionId, this);
         }
     }
 

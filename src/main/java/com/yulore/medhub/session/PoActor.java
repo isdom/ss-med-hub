@@ -364,7 +364,7 @@ public class PoActor extends ASRActor {
                 if (next_ps.get() != null && next_ps.get().timestamp == currentInMs) {
                     // current ps & next_ps overlapped
                     // ignore the rest of current ps, and using next_ps as new ps for recording
-                    log.warn("current ps overlapped with next ps at timestamp: {}, using_next_ps_as_current", next_ps.get().timestamp);
+                    log.info("current ps overlapped with next ps at timestamp: {}, using_next_ps_as_current", next_ps.get().timestamp);
                     fetchPS(ps, next_ps, currentInMs);
                     downsample_is = null;
                 }
