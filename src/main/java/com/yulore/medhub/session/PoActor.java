@@ -209,7 +209,7 @@ public class PoActor extends ASRActor {
         if (_playback.get() != null) {
             if (payload.getResult().length() >= 3) {
                 _playback.get().pauseCurrent();
-                log.info("[{}]: pauseCurrent: {}", _sessionId, _playback.get());
+                log.info("[{}]: pauseCurrent: {}, for result {} text >= 3", _sessionId, _playback.get(), payload.getResult());
             }
         }
     }
