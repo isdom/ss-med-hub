@@ -305,12 +305,16 @@ public class PoActor extends ASRActor {
     @Override
     public void close() {
         super.close();
-        _callSessions.remove(_sessionId);
-        if (_playback.get() != null) {
-            // stop current playback when call close()
-            _playback.get().stopCurrent();
+        if (_sessionId != null) {
+            _callSessions.remove(_sessionId);
+            if (_playback.get() != null) {
+                // stop current playback when call close()
+                _playback.get().stopCurrent();
+            }
+            generateRecordAndUpload();
+        } else {
+            log.warn("PoActor: close_without_valid_sessionId");
         }
-        generateRecordAndUpload();
     }
 
     private void generateRecordAndUpload() {
