@@ -64,6 +64,7 @@ public class PoActor extends ASRActor {
     @Override
     public SpeechTranscriber onSpeechTranscriberCreated(final SpeechTranscriber speechTranscriber) {
         speechTranscriber.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
+        speechTranscriber.addCustomedParam("speech_noise_threshold", 0.9);
 
         return super.onSpeechTranscriberCreated(speechTranscriber);
     }
