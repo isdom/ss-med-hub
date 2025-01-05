@@ -90,7 +90,7 @@ public class PlaybackActor {
             if (current.pause()) {
                 log.info("task {} paused success", current);
             } else {
-                log.warn("task {} paused failed", current);
+                log.info("task {} paused failed", current);
             }
         }
     }

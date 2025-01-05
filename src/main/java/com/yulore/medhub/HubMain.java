@@ -1287,7 +1287,7 @@ public class HubMain {
         final SpeechTranscriber speechTranscriber = session.onSpeechTranscriberCreated(
                 buildSpeechTranscriber(agent, buildTranscriberListener(session, webSocket, agent, session.sessionId(), startConnectingInMs)));
 
-        if (cmd.getPayload().get("speech_noise_threshold") != null) {
+        if (cmd.getPayload() != null && cmd.getPayload().get("speech_noise_threshold") != null) {
             // ref: https://help.aliyun.com/zh/isi/developer-reference/websocket#sectiondiv-rz2-i36-2gv
             speechTranscriber.addCustomedParam("speech_noise_threshold", Float.parseFloat(cmd.getPayload().get("speech_noise_threshold")));
         }

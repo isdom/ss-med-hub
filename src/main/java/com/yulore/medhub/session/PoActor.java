@@ -9,6 +9,7 @@ import com.yulore.medhub.stream.VarsUtil;
 import com.yulore.medhub.task.PlayStreamPCMTask;
 import com.yulore.medhub.vo.*;
 import com.yulore.util.ByteArrayListInputStream;
+import com.yulore.util.ExceptionUtil;
 import com.yulore.util.WaveUtil;
 import lombok.AllArgsConstructor;
 import lombok.RequiredArgsConstructor;
@@ -64,6 +65,7 @@ public class PoActor extends ASRActor {
     @Override
     public SpeechTranscriber onSpeechTranscriberCreated(final SpeechTranscriber speechTranscriber) {
         speechTranscriber.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
+        speechTranscriber.addCustomedParam("speech_noise_threshold", 0.9);
 
         return super.onSpeechTranscriberCreated(speechTranscriber);
     }
@@ -209,7 +211,7 @@ public class PoActor extends ASRActor {
         if (_playback.get() != null) {
             if (payload.getResult().length() >= 3) {
                 _playback.get().pauseCurrent();
-                log.info("[{}]: pauseCurrent: {}", _sessionId, _playback.get());
+                log.info("[{}]: pauseCurrent: {}, for result {} text >= 3", _sessionId, _playback.get(), payload.getResult());
             }
         }
     }
@@ -226,7 +228,8 @@ public class PoActor extends ASRActor {
             log.info("[{}]: notifySentenceEnd: {}", _sessionId, payload);
         }
 
-        if (_sessionId != null) {
+        if (_sessionId != null && _playbackOn != null) {
+            // _playbackOn != null means playback ws has connected
             final boolean isAiSpeaking = _playback.get() != null && _playback.get().isPlaying();
             String userContentId = null;
             try {
@@ -248,7 +251,7 @@ public class PoActor extends ASRActor {
                     log.info("[{}]: notifySentenceEnd: ai_reply {}, do nothing\n", _sessionId, response);
                 }
             } catch (Exception ex) {
-                log.warn("[{}]: notifySentenceEnd: ai_reply error, detail: {}", _sessionId, ex.toString());
+                log.warn("[{}]: notifySentenceEnd: ai_reply error, detail: {}", _sessionId, ExceptionUtil.exception2detail(ex));
             }
 
             {
@@ -286,6 +289,8 @@ public class PoActor extends ASRActor {
                         end_event_time);
                 log.info("[{}]: user report_asrtime({})'s resp: {}", _sessionId, userContentId, resp);
             }
+        } else {
+            log.warn("[{}]: notifySentenceEnd but sessionId is null or playback not ready => _playbackOn {}", _sessionId, _playbackOn);
         }
     }
 
@@ -304,12 +309,16 @@ public class PoActor extends ASRActor {
     @Override
     public void close() {
         super.close();
-        _callSessions.remove(_sessionId);
-        if (_playback.get() != null) {
-            // stop current playback when call close()
-            _playback.get().stopCurrent();
+        if (_sessionId != null) {
+            _callSessions.remove(_sessionId);
+            if (_playback.get() != null) {
+                // stop current playback when call close()
+                _playback.get().stopCurrent();
+            }
+            generateRecordAndUpload();
+        } else {
+            log.warn("PoActor: close_without_valid_sessionId");
         }
-        generateRecordAndUpload();
     }
 
     private void generateRecordAndUpload() {
@@ -359,7 +368,7 @@ public class PoActor extends ASRActor {
                 if (next_ps.get() != null && next_ps.get().timestamp == currentInMs) {
                     // current ps & next_ps overlapped
                     // ignore the rest of current ps, and using next_ps as new ps for recording
-                    log.warn("current ps overlapped with next ps at timestamp: {}, using_next_ps_as_current", next_ps.get().timestamp);
+                    log.info("current ps overlapped with next ps at timestamp: {}, using_next_ps_as_current", next_ps.get().timestamp);
                     fetchPS(ps, next_ps, currentInMs);
                     downsample_is = null;
                 }
@@ -393,7 +402,7 @@ public class PoActor extends ASRActor {
                 }
             }
 
-            log.info("total written {} samples, {} seconds", sample_count, (float)sample_count / 16000);
+            log.info("[{}]: total written {} samples, {} seconds", _sessionId, sample_count, (float)sample_count / 16000);
 
             bos.flush();
             _doSaveRecord.accept(new RecordContext(_sessionId, bucketName, objectName, new ByteArrayInputStream(bos.toByteArray())));
