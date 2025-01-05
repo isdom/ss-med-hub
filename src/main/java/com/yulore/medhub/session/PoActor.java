@@ -421,7 +421,7 @@ public class PoActor extends ASRActor {
         }
     }
 
-    public void attach(final PlaybackSession playback, final BiConsumer<String, String> playbackOn) {
+    public void attach(final PlaybackActor playback, final BiConsumer<String, String> playbackOn) {
         _playback.set(playback);
         _playbackOn = playbackOn;
         doPlayback(_lastReply);
@@ -459,7 +459,7 @@ public class PoActor extends ASRActor {
     private AiSettingVO _aiSetting;
 
     private BiConsumer<String, String> _playbackOn;
-    private final AtomicReference<PlaybackSession> _playback = new AtomicReference<>(null);
+    private final AtomicReference<PlaybackActor> _playback = new AtomicReference<>(null);
     private final AtomicLong _idleStartInMs = new AtomicLong(System.currentTimeMillis());
     private final AtomicBoolean _isUserSpeak = new AtomicBoolean(false);
     private final AtomicLong _currentSentenceBeginInMs = new AtomicLong(-1);

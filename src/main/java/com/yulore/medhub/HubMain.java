@@ -270,7 +270,7 @@ public class HubMain {
                             final String path = clientHandshake.getResourceDescriptor();
                             final int varsBegin = path.indexOf('?');
                             final String sessionId = varsBegin > 0 ? VarsUtil.extractValue(path.substring(varsBegin + 1), "sessionId") : "unknown";
-                            final PlaybackSession playbackSession = new PlaybackSession(sessionId);
+                            final PlaybackActor playbackSession = new PlaybackActor(sessionId);
                             webSocket.setAttachment(playbackSession);
                             log.info("ws path match: {}, using ws as PlaybackSession: [{}]", _match_playback, playbackSession.sessionId());
                             final PoActor callSession = PoActor.findBy(sessionId);
@@ -311,7 +311,7 @@ public class HubMain {
                             log.info("wscount/{}: closed {} with exit code {} additional info: {}, CallSession-id: {}",
                                     _currentWSConnection.decrementAndGet(),
                                     webSocket.getRemoteSocketAddress(), code, reason, session.sessionId());
-                        } else if (attachment instanceof PlaybackSession session) {
+                        } else if (attachment instanceof PlaybackActor session) {
                             log.info("wscount/{}: closed {} with exit code {} additional info: {}, PlaybackSession-id: {}",
                                     _currentWSConnection.decrementAndGet(),
                                     webSocket.getRemoteSocketAddress(), code, reason, session.sessionId());
@@ -371,7 +371,7 @@ public class HubMain {
         _wsServer.start();
     }
 
-    private void playbackOn(final String path, final String contentId, final PoActor callSession, final PlaybackSession playbackSession, final WebSocket webSocket) {
+    private void playbackOn(final String path, final String contentId, final PoActor callSession, final PlaybackActor playbackSession, final WebSocket webSocket) {
         // interval = 20 ms
         int interval = 20;
         log.info("[{}]: playbackOn: {} => sample rate: {}/interval: {}/channels: {}", callSession.sessionId(), path, 16000, interval, 1);

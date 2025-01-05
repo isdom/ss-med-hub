@@ -12,8 +12,8 @@ import java.util.concurrent.locks.ReentrantLock;
 
 @ToString
 @Slf4j
-public class PlaybackSession {
-    public PlaybackSession(final String sessionId) {
+public class PlaybackActor {
+    public PlaybackActor(final String sessionId) {
         _sessionId = sessionId;
         _sessionBeginInMs = System.currentTimeMillis();
     }
