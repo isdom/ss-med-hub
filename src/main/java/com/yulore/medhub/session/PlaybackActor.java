@@ -1,6 +1,7 @@
 package com.yulore.medhub.session;
 
 import com.yulore.medhub.task.PlayStreamPCMTask;
+import com.yulore.medhub.task.PlayTask;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 
@@ -30,7 +31,7 @@ public class PlaybackActor {
         _lock.unlock();
     }
 
-    public void notifyPlaybackStart(final PlayStreamPCMTask task) {
+    public void notifyPlaybackStart(final PlayTask task) {
         if (_playingTask.get() == task) {
             _isPlaying.set(true);
         } else {
@@ -39,7 +40,7 @@ public class PlaybackActor {
         }
     }
 
-    public void notifyPlaybackStop(final PlayStreamPCMTask task) {
+    public void notifyPlaybackStop(final PlayTask task) {
         if (_playingTask.compareAndSet(task, null)) {
             _isPlaying.set(false);
             _idleStartInMs.set(System.currentTimeMillis());
@@ -57,8 +58,8 @@ public class PlaybackActor {
         return _idleStartInMs.get();
     }
 
-    public void attach(final PlayStreamPCMTask current) {
-        final PlayStreamPCMTask previous = _playingTask.getAndSet(null);
+    public void attach(final PlayTask current) {
+        final PlayTask previous = _playingTask.getAndSet(null);
         if (previous != null) {
             previous.stop();
         }
@@ -78,14 +79,14 @@ public class PlaybackActor {
     */
 
     public void stopCurrent() {
-        final PlayStreamPCMTask current = _playingTask.getAndSet(null);
+        final PlayTask current = _playingTask.getAndSet(null);
         if (current != null) {
             current.stop();
         }
     }
 
     public void pauseCurrent() {
-        final PlayStreamPCMTask current = _playingTask.get();
+        final PlayTask current = _playingTask.get();
         if (current != null) {
             if (current.pause()) {
                 log.info("task {} paused success", current);
@@ -96,7 +97,7 @@ public class PlaybackActor {
     }
 
     public void resumeCurrent() {
-        final PlayStreamPCMTask current = _playingTask.get();
+        final PlayTask current = _playingTask.get();
         if (current != null && current.isPaused()) {
             current.resume();
             log.info("task {} resumed", current);
@@ -108,6 +109,6 @@ public class PlaybackActor {
 
     final AtomicBoolean _isPlaying = new AtomicBoolean(false);
     final AtomicLong _idleStartInMs = new AtomicLong(System.currentTimeMillis());
-    final AtomicReference<PlayStreamPCMTask> _playingTask = new AtomicReference<>(null);
+    final AtomicReference<PlayTask> _playingTask = new AtomicReference<>(null);
     final long _sessionBeginInMs;
 }

@@ -25,6 +25,7 @@ import com.yulore.medhub.stream.*;
 import com.yulore.medhub.stream.StreamCacheService;
 import com.yulore.medhub.task.PlayPCMTask;
 import com.yulore.medhub.task.PlayStreamPCMTask;
+import com.yulore.medhub.task.PlayStreamPCMTask2;
 import com.yulore.medhub.task.SampleInfo;
 import com.yulore.medhub.vo.*;
 import com.yulore.util.ByteArrayListInputStream;
@@ -278,7 +279,7 @@ public class HubMain {
                                 log.info("can't find callSession by sessionId: {}, ignore", sessionId);
                                 return;
                             }
-                            callSession.attach(playbackSession, (_path, _content_id) -> playbackOn(_path, _content_id, callSession, playbackSession, webSocket));
+                            callSession.attach(playbackSession, (_path, _content_id) -> playbackOn2(_path, _content_id, callSession, playbackSession, webSocket));
                         } else if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_preview)) {
                             // init PreviewSession attach with webSocket
                             final PreviewSession previewSession = new PreviewSession();
@@ -388,6 +389,36 @@ public class HubMain {
                 },
                 (_task) -> {
                     log.info("[{}]: PlayStreamPCMTask {} stopped with completed: {}", callSession.sessionId(), _task, _task.isCompleted());
+                    callSession.notifyPlaybackStop(_task);
+                    playbackSession.notifyPlaybackStop(_task);
+                }
+        );
+        final BuildStreamTask bst = getTaskOf(path, true, 16000);
+        if (bst != null) {
+            playbackSession.attach(task);
+            callSession.notifyPlaybackStart(task);
+            playbackSession.notifyPlaybackStart(task);
+            bst.buildStream(task::appendData, (ignore)->task.appendCompleted());
+        }
+    }
+
+    private void playbackOn2(final String path, final String contentId, final PoActor callSession, final PlaybackActor playbackSession, final WebSocket webSocket) {
+        // interval = 20 ms
+        int interval = 20;
+        log.info("[{}]: playbackOn2: {} => sample rate: {}/interval: {}/channels: {}", callSession.sessionId(), path, 16000, interval, 1);
+        final PlayStreamPCMTask2 task = new PlayStreamPCMTask2(
+                callSession.sessionId(),
+                path,
+                _scheduledExecutor,
+                new SampleInfo(16000, interval, 16, 1),
+                (timestamp) -> callSession.notifyPlaybackSendStart(contentId, timestamp),
+                (timestamp) -> callSession.notifyPlaybackSendStop(contentId, timestamp),
+                (bytes) -> {
+                    webSocket.send(bytes);
+                    callSession.notifyPlaybackSendData(bytes);
+                },
+                (_task) -> {
+                    log.info("[{}]: PlayStreamPCMTask2 {} stopped with completed: {}", callSession.sessionId(), _task, _task.isCompleted());
                     callSession.notifyPlaybackStop(_task);
                     playbackSession.notifyPlaybackStop(_task);
                 }

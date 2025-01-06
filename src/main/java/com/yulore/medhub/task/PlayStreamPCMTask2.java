@@ -24,7 +24,7 @@ import java.util.function.Consumer;
 @RequiredArgsConstructor
 @ToString(of={"_taskId", "_path", "_started", "_stopped", "_paused", "_completed"})
 @Slf4j
-public class PlayStreamPCMTask implements PlayTask {
+public class PlayStreamPCMTask2 implements PlayTask {
     private final String _taskId = UUID.randomUUID().toString();
     final String _sessionId;
     final String _path;
@@ -35,7 +35,7 @@ public class PlayStreamPCMTask implements PlayTask {
     private final Consumer<byte[]> _doSendData;
     private final AtomicLong _startSendTimestamp = new AtomicLong(0);
 
-    private final Consumer<PlayStreamPCMTask> _onEnd;
+    private final Consumer<PlayStreamPCMTask2> _onEnd;
     private final AtomicBoolean _completed = new AtomicBoolean(false);
 
     int _interval_bytes;
@@ -118,7 +118,11 @@ public class PlayStreamPCMTask implements PlayTask {
         }
     }
 
+    final static int PACKAGE_NUM = 50;
+
     private void playAndSchedule(final int intervalCount) {
+        int batchSize = _interval_bytes * PACKAGE_NUM;
+
         ScheduledFuture<?> next = null;
         try {
             _lock.lock();
@@ -127,20 +131,26 @@ public class PlayStreamPCMTask implements PlayTask {
                 log.warn("[{}]: pcm task ({}) has stopped, abort playAndSchedule", _sessionId, this);
                 return;
             }
-            if (_pos + _interval_bytes > _length && _streaming) {
+            if (_pos + batchSize > _length && _streaming) {
                 // need more data
-                final long delay = _startTimestamp + (long) _sampleInfo.interval() * intervalCount - System.currentTimeMillis();
-                next = _executor.schedule(() -> playAndSchedule(intervalCount + 1), delay, TimeUnit.MILLISECONDS);
+                final long delay = 100; // 100 ms // _startTimestamp + (long) _sampleInfo.interval() * intervalCount - System.currentTimeMillis();
                 log.warn("[{}]: pcm task ({}) need_more_data, delay_playback_to_next", _sessionId, this);
+                next = _executor.schedule(() -> playAndSchedule(intervalCount + 1), delay, TimeUnit.MILLISECONDS);
             } else {
-                final byte[] bytes = new byte[_interval_bytes];
+                final byte[] bytes = new byte[batchSize];
                 final int read_size = fillIntervalData(bytes);
-                if (read_size == _interval_bytes) {
+                if (read_size >= _interval_bytes) {
                     fireStartSendOnce();
-                    _doSendData.accept(bytes);
+                    if (read_size == batchSize) {
+                        _doSendData.accept(bytes);
+                    } else {
+                        final byte[] send_bytes = new byte[read_size];
+                        System.arraycopy(bytes, 0, send_bytes, 0, read_size);
+                        _doSendData.accept(send_bytes);
+                    }
                     final int send_count = _sendDataCounter.incrementAndGet();
                     final long now = System.currentTimeMillis();
-                    final long delay = _startTimestamp + (long) _sampleInfo.interval() * intervalCount - now;
+                    final long delay = 1; // 1ms // _startTimestamp + (long) _sampleInfo.interval() * intervalCount - now;
                     next = _executor.schedule(() -> playAndSchedule(intervalCount + 1), delay, TimeUnit.MILLISECONDS);
                     final int interval_in_ms = (int)(now - _sendDataLastTimestamp.get());
                     _sendDataLastTimestamp.set(now);
@@ -171,17 +181,17 @@ public class PlayStreamPCMTask implements PlayTask {
     }
 
     private int fillIntervalData(final byte[] bytes) throws IOException {
-        if (_paused.get()) {
+        //if (_paused.get()) {
             // playback in paused state, so send silent data
-            return bytes.length;
-        } else {
+        //    return bytes.length;
+        //} else {
             try (final InputStream is = new ByteArrayListInputStream(_bufs)) {
                 is.skip(_pos);
                 final int read_size = is.read(bytes);
                 _pos += read_size;
                 return read_size;
             }
-        }
+        //}
     }
 
     private void fireStartSendOnce() {

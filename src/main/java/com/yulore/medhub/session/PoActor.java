@@ -7,6 +7,7 @@ import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.medhub.api.*;
 import com.yulore.medhub.stream.VarsUtil;
 import com.yulore.medhub.task.PlayStreamPCMTask;
+import com.yulore.medhub.task.PlayTask;
 import com.yulore.medhub.vo.*;
 import com.yulore.util.ByteArrayListInputStream;
 import com.yulore.util.ExceptionUtil;
@@ -294,11 +295,11 @@ public class PoActor extends ASRActor {
         }
     }
 
-    public void notifyPlaybackStart(final PlayStreamPCMTask task) {
+    public void notifyPlaybackStart(final PlayTask task) {
         log.info("[{}]: notifyPlaybackStart => task: {}", _sessionId, task);
     }
 
-    public void notifyPlaybackStop(final PlayStreamPCMTask task) {
+    public void notifyPlaybackStop(final PlayTask task) {
         log.info("[{}]: notifyPlaybackStop => task: {} / lastReply: {}", _sessionId, task, _lastReply);
         if (_lastReply != null && _lastReply.getHangup() == 1) {
             // hangup call
