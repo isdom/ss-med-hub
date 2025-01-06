@@ -295,12 +295,12 @@ public class PoActor extends ASRActor {
         }
     }
 
-    public void notifyPlaybackStart(final PlayTask task) {
-        log.info("[{}]: notifyPlaybackStart => task: {}", _sessionId, task);
+    public void notifyPlaybackStart(final String playbackId) {
+        log.info("[{}]: notifyPlaybackStart => task: {}", _sessionId, playbackId);
     }
 
-    public void notifyPlaybackStop(final PlayTask task) {
-        log.info("[{}]: notifyPlaybackStop => task: {} / lastReply: {}", _sessionId, task, _lastReply);
+    public void notifyPlaybackStop(final String playbackId) {
+        log.info("[{}]: notifyPlaybackStop => task: {} / lastReply: {}", _sessionId, playbackId, _lastReply);
         if (_lastReply != null && _lastReply.getHangup() == 1) {
             // hangup call
             _doHangup.accept(this);

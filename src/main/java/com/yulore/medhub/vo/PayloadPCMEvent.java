@@ -9,4 +9,5 @@ import lombok.ToString;
 @ToString
 public class PayloadPCMEvent {
     String playback_id;
+    String content_id;
 }

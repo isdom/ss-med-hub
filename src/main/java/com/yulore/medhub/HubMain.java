@@ -23,10 +23,7 @@ import com.yulore.medhub.nls.*;
 import com.yulore.medhub.session.*;
 import com.yulore.medhub.stream.*;
 import com.yulore.medhub.stream.StreamCacheService;
-import com.yulore.medhub.task.PlayPCMTask;
-import com.yulore.medhub.task.PlayStreamPCMTask;
-import com.yulore.medhub.task.PlayStreamPCMTask2;
-import com.yulore.medhub.task.SampleInfo;
+import com.yulore.medhub.task.*;
 import com.yulore.medhub.vo.*;
 import com.yulore.util.ByteArrayListInputStream;
 import io.netty.util.NettyRuntime;
@@ -389,52 +386,76 @@ public class HubMain {
                 },
                 (_task) -> {
                     log.info("[{}]: PlayStreamPCMTask {} stopped with completed: {}", callSession.sessionId(), _task, _task.isCompleted());
-                    callSession.notifyPlaybackStop(_task);
+                    callSession.notifyPlaybackStop(_task.taskId());
                     playbackSession.notifyPlaybackStop(_task);
                 }
         );
         final BuildStreamTask bst = getTaskOf(path, true, 16000);
         if (bst != null) {
             playbackSession.attach(task);
-            callSession.notifyPlaybackStart(task);
+            callSession.notifyPlaybackStart(task.taskId());
             playbackSession.notifyPlaybackStart(task);
             bst.buildStream(task::appendData, (ignore)->task.appendCompleted());
         }
     }
 
-    private void playbackOn2(final String path, final String contentId, final PoActor callSession, final PlaybackActor playbackSession, final WebSocket webSocket) {
+    private void handlePCMPlaybackStoppedCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        final String contentId = cmd.getPayload() != null ? cmd.getPayload().get("content_id") : null;
+        final String playbackId = cmd.getPayload() != null ? cmd.getPayload().get("playback_id") : null;
+        final Object attachment = webSocket.getAttachment();
+        if (attachment instanceof PlaybackActor actor) {
+            PoActor poActor = PoActor.findBy(actor.sessionId());
+            log.info("[{}]: handlePCMPlaybackStoppedCommand: {}/PoActor: {}", actor.sessionId(), cmd.getPayload().get("playback_id"), poActor);
+            if (poActor != null) {
+                poActor.notifyPlaybackSendStop(contentId, System.currentTimeMillis());
+                poActor.notifyPlaybackStop(playbackId);
+                if (null != playbackId) {
+                    final PlayTask task = PlayTask._tasks.get(playbackId);
+                    PlayTask._tasks.remove(playbackId);
+                    if (task != null) {
+                        actor.notifyPlaybackStop(task);
+                    }
+                }
+
+            }
+        }
+    }
+
+    private void playbackOn2(final String path, final String contentId, final PoActor poActor, final PlaybackActor playbackSession, final WebSocket webSocket) {
         // interval = 20 ms
         int interval = 20;
-        log.info("[{}]: playbackOn2: {} => sample rate: {}/interval: {}/channels: {}", callSession.sessionId(), path, 16000, interval, 1);
+        log.info("[{}]: playbackOn2: {} => sample rate: {}/interval: {}/channels: {}", poActor.sessionId(), path, 16000, interval, 1);
         final String taskId = UUID.randomUUID().toString();
         final PlayStreamPCMTask2 task = new PlayStreamPCMTask2(
                 taskId,
-                callSession.sessionId(),
+                poActor.sessionId(),
                 path,
                 _scheduledExecutor,
                 new SampleInfo(16000, interval, 16, 1),
                 (timestamp) -> {
-                    callSession.notifyPlaybackSendStart(contentId, timestamp);
-                    HubEventVO.sendEvent(webSocket, "PCMBegin", new PayloadPCMEvent(taskId));
+                    poActor.notifyPlaybackSendStart(contentId, timestamp);
+                    HubEventVO.sendEvent(webSocket, "PCMBegin", new PayloadPCMEvent(taskId, contentId));
                 },
                 (timestamp) -> {
-                    HubEventVO.sendEvent(webSocket, "PCMEnd", new PayloadPCMEvent(taskId));
-                    callSession.notifyPlaybackSendStop(contentId, timestamp);
+                    HubEventVO.sendEvent(webSocket, "PCMEnd", new PayloadPCMEvent(taskId, contentId));
+                    //poActor.notifyPlaybackSendStop(contentId, timestamp);
                 },
                 (bytes) -> {
                     webSocket.send(bytes);
-                    callSession.notifyPlaybackSendData(bytes);
+                    poActor.notifyPlaybackSendData(bytes);
                 },
                 (_task) -> {
-                    log.info("[{}]: PlayStreamPCMTask2 {} stopped with completed: {}", callSession.sessionId(), _task, _task.isCompleted());
-                    callSession.notifyPlaybackStop(_task);
-                    playbackSession.notifyPlaybackStop(_task);
+                    log.info("[{}]: PlayStreamPCMTask2 {} send data stopped with completed: {}", poActor.sessionId(), _task, _task.isCompleted());
                 }
         );
+
+        // TODO:
+        PlayTask._tasks.put(taskId, task);
+
         final BuildStreamTask bst = getTaskOf(path, true, 16000);
         if (bst != null) {
             playbackSession.attach(task);
-            callSession.notifyPlaybackStart(task);
+            poActor.notifyPlaybackStart(task.taskId());
             playbackSession.notifyPlaybackStart(task);
             bst.buildStream(task::appendData, (ignore)->task.appendCompleted());
         }
@@ -613,13 +634,6 @@ public class HubMain {
             _sessionExecutor.submit(()-> handlePreviewCommand(cmd, webSocket));
         } else {
             log.warn("handleHubCommand: Unknown Command: {}", cmd);
-        }
-    }
-
-    private void handlePCMPlaybackStoppedCommand(final HubCommandVO cmd, final WebSocket webSocket) {
-        final Object attachment = webSocket.getAttachment();
-        if (attachment instanceof PlaybackActor actor) {
-            log.info("[{}]: handlePCMPlaybackStoppedCommand: {}", actor.sessionId(), cmd.getPayload().get("playback_id"));
         }
     }
 
