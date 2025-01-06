@@ -25,7 +25,7 @@ import java.util.function.Consumer;
 @ToString(of={"_taskId", "_path", "_started", "_stopped", "_paused", "_completed"})
 @Slf4j
 public class PlayStreamPCMTask2 implements PlayTask {
-    private final String _taskId = UUID.randomUUID().toString();
+    private final String _taskId;
     final String _sessionId;
     final String _path;
     final ScheduledExecutorService _executor;

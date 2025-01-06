@@ -406,13 +406,21 @@ public class HubMain {
         // interval = 20 ms
         int interval = 20;
         log.info("[{}]: playbackOn2: {} => sample rate: {}/interval: {}/channels: {}", callSession.sessionId(), path, 16000, interval, 1);
+        final String taskId = UUID.randomUUID().toString();
         final PlayStreamPCMTask2 task = new PlayStreamPCMTask2(
+                taskId,
                 callSession.sessionId(),
                 path,
                 _scheduledExecutor,
                 new SampleInfo(16000, interval, 16, 1),
-                (timestamp) -> callSession.notifyPlaybackSendStart(contentId, timestamp),
-                (timestamp) -> callSession.notifyPlaybackSendStop(contentId, timestamp),
+                (timestamp) -> {
+                    callSession.notifyPlaybackSendStart(contentId, timestamp);
+                    HubEventVO.sendEvent(webSocket, "PCMBegin", new PayloadPCMEvent(taskId));
+                },
+                (timestamp) -> {
+                    HubEventVO.sendEvent(webSocket, "PCMEnd", new PayloadPCMEvent(taskId));
+                    callSession.notifyPlaybackSendStop(contentId, timestamp);
+                },
                 (bytes) -> {
                     webSocket.send(bytes);
                     callSession.notifyPlaybackSendData(bytes);
@@ -577,6 +585,8 @@ public class HubMain {
             _sessionExecutor.submit(()-> handleFSPlaybackStoppedCommand(cmd, webSocket));
         } else if ("FSRecordStarted".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handleFSRecordStartedCommand(cmd, webSocket));
+        } else if ("PCMPlaybackStopped".equals(cmd.getHeader().get("name"))) {
+            _sessionExecutor.submit(()-> handlePCMPlaybackStoppedCommand(cmd, webSocket));
         } /* else if ("Playback".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handlePlaybackCommand(cmd, webSocket));
         } else if ("PlayTTS".equals(cmd.getHeader().get("name"))) {
@@ -603,6 +613,13 @@ public class HubMain {
             _sessionExecutor.submit(()-> handlePreviewCommand(cmd, webSocket));
         } else {
             log.warn("handleHubCommand: Unknown Command: {}", cmd);
+        }
+    }
+
+    private void handlePCMPlaybackStoppedCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        final Object attachment = webSocket.getAttachment();
+        if (attachment instanceof PlaybackActor actor) {
+            log.info("[{}]: handlePCMPlaybackStoppedCommand: {}", actor.sessionId(), cmd.getPayload().get("playback_id"));
         }
     }
 
