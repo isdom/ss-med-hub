@@ -222,7 +222,13 @@ public class HubMain {
                                 final FsActor fs = FsActor.findBy(sessionId);
                                 if (fs != null) {
                                     webSocket.setAttachment(fs);
-                                    fs.attachPlaybackWs((event, payload) -> HubEventVO.sendEvent(webSocket, event, payload));
+                                    fs.attachPlaybackWs((event, payload) -> {
+                                        try {
+                                            HubEventVO.sendEvent(webSocket, event, payload);
+                                        } catch (Exception ex) {
+                                            log.warn("[{}]: FsActor sendback {}/{} failed, detail: {}", fs.sessionId(), event, payload, ex.toString());
+                                        }
+                                    });
                                     log.info("ws path match: {}, role: {}, attach exist FsSession {}", _match_fs, role, sessionId);
                                 } else {
                                     log.warn("ws path match: {}, role: {}, !NOT! find FsSession with {}", _match_fs, role, sessionId);
@@ -276,9 +282,15 @@ public class HubMain {
                                 log.info("can't find callSession by sessionId: {}, ignore", sessionId);
                                 return;
                             }
-                            poActor.attachPlaybackWs(playbackSession,
+                            poActor.attachPlaybackWs(/*playbackSession, */
                                     (_path, _content_id) -> playbackOn2(_path, _content_id, poActor, playbackSession, webSocket),
-                                    (event, payload) -> HubEventVO.sendEvent(webSocket, event, payload));
+                                    (event, payload) -> {
+                                        try {
+                                            HubEventVO.sendEvent(webSocket, event, payload);
+                                        } catch (Exception ex) {
+                                            log.warn("[{}]: PoActor sendback {}/{} failed, detail: {}", poActor.sessionId(), event, payload, ex.toString());
+                                        }
+                                    });
                         } else if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_preview)) {
                             // init PreviewSession attach with webSocket
                             final PreviewSession previewSession = new PreviewSession();
