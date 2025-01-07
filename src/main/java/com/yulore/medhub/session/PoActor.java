@@ -6,8 +6,6 @@ import com.alibaba.nls.client.protocol.asr.SpeechTranscriber;
 import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.medhub.api.*;
 import com.yulore.medhub.stream.VarsUtil;
-import com.yulore.medhub.task.PlayStreamPCMTask;
-import com.yulore.medhub.task.PlayTask;
 import com.yulore.medhub.vo.*;
 import com.yulore.util.ByteArrayListInputStream;
 import com.yulore.util.ExceptionUtil;
@@ -209,10 +207,12 @@ public class PoActor extends ASRActor {
     @Override
     public void notifyTranscriptionResultChanged(final PayloadTranscriptionResultChanged payload) {
         super.notifyTranscriptionResultChanged(payload);
-        if (_playback.get() != null) {
+        if (_currentPlaybackId.get() != null) {
             if (payload.getResult().length() >= 3) {
-                _playback.get().pauseCurrent();
-                log.info("[{}]: pauseCurrent: {}, for result {} text >= 3", _sessionId, _playback.get(), payload.getResult());
+                _sendEvent.accept("PCMPausePlayback", new PayloadPCMEvent(_currentPlaybackId.get(), ""));
+                log.info("[{}]: notifyTranscriptionResultChanged: pause current for result {} text >= 3", _sessionId, payload.getResult());
+                // _playback.get().pauseCurrent();
+                // log.info("[{}]: pauseCurrent: {}, for result {} text >= 3", _sessionId, _playback.get(), payload.getResult());
             }
         }
     }
@@ -243,10 +243,14 @@ public class PoActor extends ASRActor {
                     if (response.getData().getAi_content_id() != null && doPlayback(response.getData())) {
                         _lastReply = response.getData();
                     } else {
-                        if (_playback.get() != null) {
-                            _playback.get().resumeCurrent();
-                            log.info("[{}]: resumeCurrent: {}", _sessionId, _playback.get());
+                        if (_currentPlaybackId.get() != null) {
+                            _sendEvent.accept("PCMResumePlayback", new PayloadPCMEvent(_currentPlaybackId.get(), ""));
+                            log.info("[{}]: notifySentenceEnd: resume current for ai_reply {} do nothing", _sessionId, payload.getResult());
                         }
+//                        if (_playback.get() != null) {
+//                            _playback.get().resumeCurrent();
+//                            log.info("[{}]: resumeCurrent: {}", _sessionId, _playback.get());
+//                        }
                     }
                 } else {
                     log.info("[{}]: notifySentenceEnd: ai_reply {}, do nothing\n", _sessionId, response);
@@ -442,10 +446,11 @@ public class PoActor extends ASRActor {
         }
     }
 
-    public void attach(final PlaybackActor playback, final BiConsumer<String, String> playbackOn) {
+    public void attachPlaybackWs(final PlaybackActor playback, final BiConsumer<String, String> playbackOn, final BiConsumer<String, Object> sendEvent) {
         _playback.set(playback);
         _playbackOn = playbackOn;
         doPlayback(_lastReply);
+        _sendEvent = sendEvent;
     }
 
     private boolean doPlayback(final AIReplyVO replyVO) {
@@ -468,6 +473,8 @@ public class PoActor extends ASRActor {
     static public PoActor findBy(final String sessionId) {
         return _callSessions.get(sessionId);
     }
+
+    private BiConsumer<String, Object> _sendEvent;
 
     private final AtomicBoolean _isUserAnswered = new AtomicBoolean(false);
 

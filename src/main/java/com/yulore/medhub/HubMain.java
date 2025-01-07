@@ -271,12 +271,14 @@ public class HubMain {
                             final PlaybackActor playbackSession = new PlaybackActor(sessionId);
                             webSocket.setAttachment(playbackSession);
                             log.info("ws path match: {}, using ws as PlaybackSession: [{}]", _match_playback, playbackSession.sessionId());
-                            final PoActor callSession = PoActor.findBy(sessionId);
-                            if (callSession == null) {
+                            final PoActor poActor = PoActor.findBy(sessionId);
+                            if (poActor == null) {
                                 log.info("can't find callSession by sessionId: {}, ignore", sessionId);
                                 return;
                             }
-                            callSession.attach(playbackSession, (_path, _content_id) -> playbackOn2(_path, _content_id, callSession, playbackSession, webSocket));
+                            poActor.attachPlaybackWs(playbackSession,
+                                    (_path, _content_id) -> playbackOn2(_path, _content_id, poActor, playbackSession, webSocket),
+                                    (event, payload) -> HubEventVO.sendEvent(webSocket, event, payload));
                         } else if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_preview)) {
                             // init PreviewSession attach with webSocket
                             final PreviewSession previewSession = new PreviewSession();

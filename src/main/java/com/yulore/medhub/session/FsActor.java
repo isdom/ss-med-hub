@@ -280,7 +280,7 @@ public class FsActor extends ASRActor {
         if (isAiSpeaking()) {
             if (payload.getResult().length() >= 3) {
                 _sendEvent.accept("FSPausePlayback", new PayloadFSChangePlayback(_uuid, _currentPlaybackId.get()));
-                log.info("notifyTranscriptionResultChanged: pause current for result {} text >= 3", payload.getResult());
+                log.info("[{}]: notifyTranscriptionResultChanged: pause current for result {} text >= 3", _sessionId, payload.getResult());
             }
         }
     }
@@ -306,7 +306,7 @@ public class FsActor extends ASRActor {
                 } else {
                     if (isAiSpeaking()) {
                         _sendEvent.accept("FSResumePlayback", new PayloadFSChangePlayback(_uuid, _currentPlaybackId.get()));
-                        log.info("notifySentenceEnd: resume current for ai_reply {} do nothing", payload.getResult());
+                        log.info("[{}]: notifySentenceEnd: resume current for ai_reply {} do nothing", _sessionId, payload.getResult());
                     }
                 }
             } else {
