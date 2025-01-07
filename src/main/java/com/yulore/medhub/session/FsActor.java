@@ -136,7 +136,7 @@ public class FsActor extends ASRActor {
                 log.info("[{}]: checkIdle: idle duration: {} ms >=: [{}] ms\n", _sessionId, idleTime, CHECK_IDLE_TIMEOUT);
                 try {
                     final ApiResponse<AIReplyVO> response =
-                            _scriptApi.ai_reply(_sessionId, null, idleTime, 0);
+                            _scriptApi.ai_reply(_sessionId, null, idleTime, 0, null, 0);
                     if (response.getData() != null) {
                         if (doPlayback(response.getData())) {
                             _lastReply = response.getData();
@@ -158,7 +158,7 @@ public class FsActor extends ASRActor {
         if (super.transcriptionStarted()) {
             try {
                 final ApiResponse<AIReplyVO> response =
-                        _scriptApi.ai_reply(_sessionId, _welcome, null, 0);
+                        _scriptApi.ai_reply(_sessionId, _welcome, null, 0, null, 0);
                 if (response.getData() != null) {
                     if (doPlayback(response.getData())) {
                         _lastReply = response.getData();
@@ -296,7 +296,7 @@ public class FsActor extends ASRActor {
         String userContentId = null;
         try {
             final ApiResponse<AIReplyVO> response =
-                    _scriptApi.ai_reply(_sessionId, payload.getResult(), null, isAiSpeaking() ? 1 : 0);
+                    _scriptApi.ai_reply(_sessionId, payload.getResult(), null, isAiSpeaking() ? 1 : 0, null, 0);
             if (response.getData() != null) {
                 if (response.getData().getUser_content_id() != null) {
                     userContentId = response.getData().getUser_content_id().toString();

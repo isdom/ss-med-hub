@@ -12,7 +12,9 @@ public interface ScriptApi {
             @RequestParam("ccs_call_id")            String sessionId,
             @RequestParam("user_speech_text")       String userSpeechText,
             @RequestParam("idle_time")              Long idle_time, // in ms
-            @RequestParam("is_speaking")            int is_speaking
+            @RequestParam("is_speaking")            int is_speaking,
+            @RequestParam("speaking_content_id")    String speaking_content_id,
+            @RequestParam("speaking_duration_ms")   int speaking_duration_ms
             );
 
     @RequestMapping(value = "${script.api.content_report:unknown_report_content}", method = RequestMethod.GET)
