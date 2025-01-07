@@ -274,16 +274,16 @@ public class HubMain {
                             final String path = clientHandshake.getResourceDescriptor();
                             final int varsBegin = path.indexOf('?');
                             final String sessionId = varsBegin > 0 ? VarsUtil.extractValue(path.substring(varsBegin + 1), "sessionId") : "unknown";
-                            final PlaybackActor playbackSession = new PlaybackActor(sessionId);
-                            webSocket.setAttachment(playbackSession);
-                            log.info("ws path match: {}, using ws as PlaybackSession: [{}]", _match_playback, playbackSession.sessionId());
+                            // final PlaybackActor playbackSession = new PlaybackActor(sessionId);
+                            webSocket.setAttachment(sessionId);
+                            log.info("ws path match: {}, using ws as PoActor's playback ws: [{}]", _match_playback, sessionId);
                             final PoActor poActor = PoActor.findBy(sessionId);
                             if (poActor == null) {
                                 log.info("can't find callSession by sessionId: {}, ignore", sessionId);
                                 return;
                             }
-                            poActor.attachPlaybackWs(/*playbackSession, */
-                                    (_path, _content_id) -> playbackOn2(_path, _content_id, poActor, playbackSession, webSocket),
+                            poActor.attachPlaybackWs(
+                                    (_path, _content_id) -> playbackOn2(_path, _content_id, poActor, webSocket),
                                     (event, payload) -> {
                                         try {
                                             HubEventVO.sendEvent(webSocket, event, payload);
@@ -323,10 +323,10 @@ public class HubMain {
                             log.info("wscount/{}: closed {} with exit code {} additional info: {}, CallSession-id: {}",
                                     _currentWSConnection.decrementAndGet(),
                                     webSocket.getRemoteSocketAddress(), code, reason, session.sessionId());
-                        } else if (attachment instanceof PlaybackActor session) {
-                            log.info("wscount/{}: closed {} with exit code {} additional info: {}, PlaybackSession-id: {}",
+                        } else if (attachment instanceof String sessionId) {
+                            log.info("wscount/{}: closed {} with exit code {} additional info: {}, ws's peer PoActor-id: {}",
                                     _currentWSConnection.decrementAndGet(),
-                                    webSocket.getRemoteSocketAddress(), code, reason, session.sessionId());
+                                    webSocket.getRemoteSocketAddress(), code, reason, sessionId);
                         } else if (attachment instanceof PreviewSession session) {
                             log.info("wscount/{}: closed {} with exit code {} additional info: {}, PreviewSession",
                                     _currentWSConnection.decrementAndGet(),
@@ -417,25 +417,17 @@ public class HubMain {
         final String contentId = cmd.getPayload() != null ? cmd.getPayload().get("content_id") : null;
         final String playbackId = cmd.getPayload() != null ? cmd.getPayload().get("playback_id") : null;
         final Object attachment = webSocket.getAttachment();
-        if (attachment instanceof PlaybackActor actor) {
-            PoActor poActor = PoActor.findBy(actor.sessionId());
-            log.info("[{}]: handlePCMPlaybackStoppedCommand: {}/has PoActor: {}", actor.sessionId(), cmd.getPayload().get("playback_id"), poActor != null);
+        if (attachment instanceof String sessionId) {
+            PoActor poActor = PoActor.findBy(sessionId);
+            log.info("[{}]: handlePCMPlaybackStoppedCommand: {}/has PoActor: {}", sessionId, cmd.getPayload().get("playback_id"), poActor != null);
             if (poActor != null) {
                 poActor.notifyPlaybackSendStop(contentId, System.currentTimeMillis());
                 poActor.notifyPlaybackStop(playbackId);
-                if (null != playbackId) {
-                    final PlayTask task = PlayTask._tasks.get(playbackId);
-                    PlayTask._tasks.remove(playbackId);
-                    if (task != null) {
-                        actor.notifyPlaybackStop(task);
-                    }
-                }
-
             }
         }
     }
 
-    private void playbackOn2(final String path, final String contentId, final PoActor poActor, final PlaybackActor playbackSession, final WebSocket webSocket) {
+    private void playbackOn2(final String path, final String contentId, final PoActor poActor, final WebSocket webSocket) {
         // interval = 20 ms
         int interval = 20;
         log.info("[{}]: playbackOn2: {} => sample rate: {}/interval: {}/channels: {}", poActor.sessionId(), path, 16000, interval, 1);
@@ -463,14 +455,9 @@ public class HubMain {
                 }
         );
 
-        // TODO:
-        PlayTask._tasks.put(taskId, task);
-
         final BuildStreamTask bst = getTaskOf(path, true, 16000);
         if (bst != null) {
-            playbackSession.attach(task);
-            poActor.notifyPlaybackStart(task.taskId());
-            playbackSession.notifyPlaybackStart(task);
+            poActor.notifyPlaybackStart(taskId);
             bst.buildStream(task::appendData, (ignore)->task.appendCompleted());
         }
     }
