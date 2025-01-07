@@ -240,8 +240,8 @@ public class PoActor extends ASRActor {
                 final String userSpeechText = payload.getResult();
                 final String aiContentId = currentAiContentId();
                 final int speakingDuration = currentSpeakingDuration();
-                log.info("[{}]: ai_reply: speech:{}/is_speaking:{}/content_id:{}/speaking_duration:{}",
-                        _sessionId, userSpeechText, isAiSpeaking, aiContentId, speakingDuration);
+                log.info("[{}]: ai_reply: speech:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
+                        _sessionId, userSpeechText, isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
                 final ApiResponse<AIReplyVO> response =
                         _scriptApi.ai_reply(_sessionId, userSpeechText,null, isAiSpeaking ? 1 : 0, aiContentId, speakingDuration);
 
