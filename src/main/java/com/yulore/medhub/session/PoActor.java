@@ -106,7 +106,7 @@ public class PoActor extends ASRActor {
 
     public void checkIdle() {
         final long idleTime = System.currentTimeMillis() - Math.max(_idleStartInMs.get(), _playback.get() != null ? _playback.get().idleStartInMs() : 0);
-        boolean isAiSpeaking = _playback.get() != null && _playback.get().isPlaying();
+        boolean isAiSpeaking = _currentPlaybackId.get() != null;
         if (_sessionId != null      // user answered
             && _playback.get() != null
             && !_isUserSpeak.get()  // user not speak
@@ -231,7 +231,7 @@ public class PoActor extends ASRActor {
 
         if (_sessionId != null && _playbackOn != null) {
             // _playbackOn != null means playback ws has connected
-            final boolean isAiSpeaking = _playback.get() != null && _playback.get().isPlaying();
+            final boolean isAiSpeaking = _currentPlaybackId.get() != null;;
             String userContentId = null;
             try {
                 final ApiResponse<AIReplyVO> response =
@@ -297,13 +297,24 @@ public class PoActor extends ASRActor {
 
     public void notifyPlaybackStart(final String playbackId) {
         log.info("[{}]: notifyPlaybackStart => task: {}", _sessionId, playbackId);
+        _currentPlaybackId.set(playbackId);
     }
 
     public void notifyPlaybackStop(final String playbackId) {
-        log.info("[{}]: notifyPlaybackStop => task: {} / lastReply: {}", _sessionId, playbackId, _lastReply);
-        if (_lastReply != null && _lastReply.getHangup() == 1) {
-            // hangup call
-            _doHangup.accept(this);
+        final String currentPlaybackId = _currentPlaybackId.get();
+        if (currentPlaybackId != null) {
+            if (currentPlaybackId.equals(playbackId)) {
+                _currentPlaybackId.set(null);
+                log.info("[{}]: notifyPlaybackStop => current playbackid: {} Matched / lastReply: {}", _sessionId, playbackId, _lastReply);
+                if (_lastReply != null && _lastReply.getHangup() == 1) {
+                    // hangup call
+                    _doHangup.accept(this);
+                }
+            } else {
+                log.info("[{}]: notifyPlaybackStop => current playbackid: {} mismatch stopped playbackid: {}, ignore", _sessionId, currentPlaybackId, playbackId);
+            }
+        } else {
+            log.warn("currentPlaybackId is null BUT notifyPlaybackStop with: {}", playbackId);
         }
     }
 
@@ -470,6 +481,9 @@ public class PoActor extends ASRActor {
 
     private BiConsumer<String, String> _playbackOn;
     private final AtomicReference<PlaybackActor> _playback = new AtomicReference<>(null);
+
+    private final AtomicReference<String> _currentPlaybackId = new AtomicReference<>(null);
+
     private final AtomicLong _idleStartInMs = new AtomicLong(System.currentTimeMillis());
     private final AtomicBoolean _isUserSpeak = new AtomicBoolean(false);
     private final AtomicLong _currentSentenceBeginInMs = new AtomicLong(-1);

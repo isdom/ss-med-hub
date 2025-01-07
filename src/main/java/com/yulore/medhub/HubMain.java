@@ -405,7 +405,7 @@ public class HubMain {
         final Object attachment = webSocket.getAttachment();
         if (attachment instanceof PlaybackActor actor) {
             PoActor poActor = PoActor.findBy(actor.sessionId());
-            log.info("[{}]: handlePCMPlaybackStoppedCommand: {}/PoActor: {}", actor.sessionId(), cmd.getPayload().get("playback_id"), poActor);
+            log.info("[{}]: handlePCMPlaybackStoppedCommand: {}/has PoActor: {}", actor.sessionId(), cmd.getPayload().get("playback_id"), poActor != null);
             if (poActor != null) {
                 poActor.notifyPlaybackSendStop(contentId, System.currentTimeMillis());
                 poActor.notifyPlaybackStop(playbackId);
