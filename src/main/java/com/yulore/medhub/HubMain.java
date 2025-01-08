@@ -260,9 +260,9 @@ public class HubMain {
                                     (ctx) -> {
                                         final long startUploadInMs = System.currentTimeMillis();
                                         _ossAccessExecutor.submit(()->{
-                                            _ossClient.putObject(ctx.bucketName, ctx.objectName, ctx.content);
+                                            _ossClient.putObject(ctx.bucketName(), ctx.objectName(), ctx.content());
                                             log.info("[{}]: upload record to oss => bucket:{}/object:{}, cost {} ms",
-                                                    ctx.sessionId, ctx.bucketName, ctx.objectName, System.currentTimeMillis() - startUploadInMs);
+                                                    ctx.sessionId(), ctx.bucketName(), ctx.objectName(), System.currentTimeMillis() - startUploadInMs);
                                         });
                                     });
                             webSocket.setAttachment(session);
@@ -283,7 +283,10 @@ public class HubMain {
                                 return;
                             }
                             poActor.attachPlaybackWs(
-                                    (_path, _content_id) -> playbackOn2(_path, _content_id, poActor, webSocket),
+                                    (playbackContext) ->
+                                            playbackOn2(playbackContext,
+                                                    poActor,
+                                                    webSocket),
                                     (event, payload) -> {
                                         try {
                                             HubEventVO.sendEvent(webSocket, event, payload);
@@ -427,23 +430,26 @@ public class HubMain {
         }
     }
 
-    private Runnable playbackOn2(final String path, final String contentId, final PoActor poActor, final WebSocket webSocket) {
+    private Runnable playbackOn2(final PoActor.PlaybackContext playbackContext, final PoActor poActor, final WebSocket webSocket) {
         // interval = 20 ms
         int interval = 20;
-        log.info("[{}]: playbackOn2: {} => sample rate: {}/interval: {}/channels: {}", poActor.sessionId(), path, 16000, interval, 1);
-        final String taskId = UUID.randomUUID().toString();
+        log.info("[{}]: playbackOn2: {} => sample rate: {}/interval: {}/channels: {} as {}",
+                poActor.sessionId(), playbackContext.path(), 16000, interval, 1, playbackContext.playbackId());
+        // final String taskId = UUID.randomUUID().toString();
         final PlayStreamPCMTask2 task = new PlayStreamPCMTask2(
-                taskId,
+                playbackContext.playbackId(),
                 poActor.sessionId(),
-                path,
+                playbackContext.path(),
                 _scheduledExecutor,
                 new SampleInfo(16000, interval, 16, 1),
                 (timestamp) -> {
-                    poActor.notifyPlaybackSendStart(contentId, timestamp);
-                    HubEventVO.sendEvent(webSocket, "PCMBegin", new PayloadPCMEvent(taskId, contentId));
+                    poActor.notifyPlaybackSendStart(playbackContext.contentId(), timestamp);
+                    HubEventVO.sendEvent(webSocket, "PCMBegin",
+                            new PayloadPCMEvent(playbackContext.playbackId(), playbackContext.contentId()));
                 },
                 (timestamp) -> {
-                    HubEventVO.sendEvent(webSocket, "PCMEnd", new PayloadPCMEvent(taskId, contentId));
+                    HubEventVO.sendEvent(webSocket, "PCMEnd",
+                            new PayloadPCMEvent(playbackContext.playbackId(), playbackContext.contentId()));
                     //poActor.notifyPlaybackSendStop(contentId, timestamp);
                 },
                 (bytes) -> {
@@ -451,13 +457,14 @@ public class HubMain {
                     poActor.notifyPlaybackSendData(bytes);
                 },
                 (_task) -> {
-                    log.info("[{}]: PlayStreamPCMTask2 {} send data stopped with completed: {}", poActor.sessionId(), _task, _task.isCompleted());
+                    log.info("[{}]: PlayStreamPCMTask2 {} send data stopped with completed: {}",
+                            poActor.sessionId(), _task, _task.isCompleted());
                 }
         );
 
-        final BuildStreamTask bst = getTaskOf(path, true, 16000);
+        final BuildStreamTask bst = getTaskOf(playbackContext.path(), true, 16000);
         if (bst != null) {
-            poActor.notifyPlaybackStart(taskId);
+            poActor.notifyPlaybackStart(playbackContext.playbackId());
             bst.buildStream(task::appendData, (ignore)->task.appendCompleted());
         }
         return task::stop;

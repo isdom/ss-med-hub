@@ -10,7 +10,6 @@ import com.yulore.medhub.vo.*;
 import com.yulore.util.ByteArrayListInputStream;
 import com.yulore.util.ExceptionUtil;
 import com.yulore.util.WaveUtil;
-import lombok.AllArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
@@ -21,15 +20,13 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
-import java.util.function.Consumer;
-import java.util.function.Supplier;
+import java.util.function.*;
 
 /**
  * Phone Operator Actor
@@ -38,15 +35,11 @@ import java.util.function.Supplier;
 @Slf4j
 public class PoActor extends ASRActor {
 
-    @AllArgsConstructor
-    static public class RecordContext {
-        public String sessionId;
-        public String bucketName;
-        public String objectName;
-        public InputStream content;
+    public record RecordContext(String sessionId, String bucketName, String objectName, InputStream content) {
     }
 
-    static final long CHECK_IDLE_TIMEOUT = 5000L; // 5 seconds to report check idle to script engine
+    public record PlaybackContext(String playbackId, String path, String contentId) {
+    }
 
     public PoActor(final CallApi callApi,
                    final ScriptApi scriptApi,
@@ -117,7 +110,7 @@ public class PoActor extends ASRActor {
             && _aiSetting != null
             ) {
             if (idleTime > _aiSetting.getIdle_timeout()) {
-                log.info("[{}]: checkIdle: idle duration: {} ms >=: [{}] ms\n", _sessionId, idleTime, CHECK_IDLE_TIMEOUT);
+                log.info("[{}]: checkIdle: idle duration: {} ms >=: [{}] ms\n", _sessionId, idleTime, _aiSetting.getIdle_timeout());
                 try {
                     final ApiResponse<AIReplyVO> response =
                             _scriptApi.ai_reply(_sessionId, null, idleTime, 0, null, 0);
@@ -311,8 +304,8 @@ public class PoActor extends ASRActor {
     }
 
     public void notifyPlaybackStart(final String playbackId) {
-        log.info("[{}]: notifyPlaybackStart => task: {}", _sessionId, playbackId);
-        _currentPlaybackId.set(playbackId);
+        log.info("[{}]: notifyPlaybackStart => task: {} while currentPlaybackId: {}",
+                _sessionId, playbackId, _currentPlaybackId.get());
     }
 
     public void notifyPlaybackStop(final String playbackId) {
@@ -463,15 +456,16 @@ public class PoActor extends ASRActor {
         }
     }
 
-    public void attachPlaybackWs(final BiFunction<String, String, Runnable> playbackOn, final BiConsumer<String, Object> sendEvent) {
+    public void attachPlaybackWs(final Function<PlaybackContext, Runnable> playbackOn, final BiConsumer<String, Object> sendEvent) {
         _playbackOn = playbackOn;
         doPlayback(_lastReply);
         _sendEvent = sendEvent;
     }
 
     private boolean doPlayback(final AIReplyVO replyVO) {
+        final String newPlaybackId = UUID.randomUUID().toString();
         log.info("[{}]: doPlayback: {}", _sessionId, replyVO);
-        final Supplier<Runnable> playback = reply2playback(replyVO);
+        final Supplier<Runnable> playback = reply2playback(newPlaybackId, replyVO);
         if (playback == null) {
             log.info("[{}]: doPlayback: unknown reply: {}, ignore", _sessionId, replyVO);
             return false;
@@ -480,22 +474,30 @@ public class PoActor extends ASRActor {
             if (stopPlayback != null) {
                 stopPlayback.run();
             }
+            _currentPlaybackId.set(newPlaybackId);
             _currentStopPlayback.set(playback.get());
             return true;
         }
     }
 
-    private Supplier<Runnable> reply2playback(final AIReplyVO replyVO) {
+    private Supplier<Runnable> reply2playback(final String playbackId, final AIReplyVO replyVO) {
         final String aiContentId = replyVO.getAi_content_id() != null ? Long.toString(replyVO.getAi_content_id()) : null;
         if ("cp".equals(replyVO.getVoiceMode())) {
-            return ()->_playbackOn.apply(String.format("type=cp,%s", JSON.toJSONString(replyVO.getCps())),
-                    aiContentId);
+            return ()->_playbackOn.apply(new PlaybackContext(
+                    playbackId,
+                    String.format("type=cp,%s", JSON.toJSONString(replyVO.getCps())),
+                    aiContentId));
         } else if ("wav".equals(replyVO.getVoiceMode())) {
-            return ()->_playbackOn.apply(String.format("{bucket=%s}%s%s", _bucket, _wavPath, replyVO.getAi_speech_file()),
-                    aiContentId);
+            return ()->_playbackOn.apply(new PlaybackContext(
+                    playbackId,
+                    String.format("{bucket=%s}%s%s", _bucket, _wavPath, replyVO.getAi_speech_file()),
+                    aiContentId));
         } else if ("tts".equals(replyVO.getVoiceMode())) {
-            return ()->_playbackOn.apply(String.format("{type=tts,text=%s}tts.wav",
-                    StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(replyVO.getReply_content())), aiContentId);
+            return ()->_playbackOn.apply(new PlaybackContext(
+                    playbackId,
+                    String.format("{type=tts,text=%s}tts.wav",
+                            StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(replyVO.getReply_content())),
+                    aiContentId));
         } else {
             return null;
         }
@@ -517,7 +519,7 @@ public class PoActor extends ASRActor {
     private AIReplyVO _lastReply;
     private AiSettingVO _aiSetting;
 
-    private BiFunction<String, String, Runnable> _playbackOn;
+    private Function<PlaybackContext, Runnable> _playbackOn;
     private final AtomicReference<Runnable> _currentStopPlayback = new AtomicReference<>(null);
     private final AtomicReference<String> _currentPlaybackId = new AtomicReference<>(null);
     private final AtomicLong _currentPlaybackBeginInMs = new AtomicLong(-1);
