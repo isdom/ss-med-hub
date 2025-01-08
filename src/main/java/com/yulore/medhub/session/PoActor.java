@@ -133,16 +133,23 @@ public class PoActor extends ASRActor {
 
     @Override
     public boolean transmit(final ByteBuffer bytes) {
-        final boolean result = super.transmit(bytes);
+        try {
+            final boolean result = super.transmit(bytes);
 
-        final byte[] srcBytes = new byte[bytes.remaining()];
-        bytes.get(srcBytes, 0, srcBytes.length);
-        if (_recordStartInMs.compareAndSet(0, 1)) {
-            _recordStartInMs.set(System.currentTimeMillis());
+            if (result) {
+                final byte[] srcBytes = new byte[bytes.remaining()];
+                bytes.get(srcBytes, 0, srcBytes.length);
+                if (_recordStartInMs.compareAndSet(0, 1)) {
+                    _recordStartInMs.set(System.currentTimeMillis());
+                }
+                _usBufs.add(srcBytes);
+            }
+
+            return result;
+        } catch (Exception ex) {
+            log.warn("[{}]: transmit_asr_failed, detail: {}", _sessionId, ex.toString());
+            return false;
         }
-        _usBufs.add(srcBytes);
-
-        return result;
     }
 
     private String currentAiContentId() {

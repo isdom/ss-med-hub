@@ -373,7 +373,7 @@ public class HubMain {
 
                     @Override
                     public void onError(WebSocket webSocket, Exception ex) {
-                        log.info("an error occurred on connection {}:{}", webSocket.getRemoteSocketAddress(), ex.toString());
+                        log.warn("an error occurred on connection {}:{}", webSocket.getRemoteSocketAddress(), ex.toString());
 
                     }
 
