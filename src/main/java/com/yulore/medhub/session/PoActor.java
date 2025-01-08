@@ -154,7 +154,7 @@ public class PoActor extends ASRActor {
     }
 
     public void notifyPlaybackSendStart(final String playbackId, final long startTimestamp) {
-        _id2info.put(playbackId, new PlaybackInfo(startTimestamp, _playbackIdx.incrementAndGet()));
+        _id2info.put(playbackId, new PlaybackMemo(startTimestamp, _playbackIdx.incrementAndGet()));
         _currentPlaybackBeginInMs.set(startTimestamp);
         if (!_currentPS.compareAndSet(null, new PlaybackSegment(startTimestamp))) {
             log.warn("[{}]: notifyPlaybackSendStart: current PlaybackSegment is !NOT! null", _sessionId);
@@ -314,19 +314,19 @@ public class PoActor extends ASRActor {
         }
         {
             // report AI speak timing
-            final PlaybackInfo info = _id2info.get(playbackId);
-            if (info == null) {
-                log.warn("[{}]: notifyPlaybackStop: can't find PlaybackInfo by {}", _sessionId, playbackId);
+            final PlaybackMemo memo = _id2info.get(playbackId);
+            if (memo == null) {
+                log.warn("[{}]: notifyPlaybackStop: can't find PlaybackMemo by {}", _sessionId, playbackId);
                 return;
             }
-            final long start_speak_timestamp = info.beginInMs();
+            final long start_speak_timestamp = memo.beginInMs();
             final long stop_speak_timestamp = System.currentTimeMillis();
             final long user_speak_duration = stop_speak_timestamp - start_speak_timestamp;
 
             final ApiResponse<Void> resp = _scriptApi.report_content(
                     _sessionId,
                     contentId,
-                    info.idx(),
+                    memo.playbackIdx(),
                     "AI",
                     _recordStartInMs.get(),
                     start_speak_timestamp,
@@ -538,9 +538,9 @@ public class PoActor extends ASRActor {
 
     private final AtomicInteger _playbackIdx = new AtomicInteger(0);
 
-    public record PlaybackInfo(long beginInMs, int idx) {
+    public record PlaybackMemo(long beginInMs, int playbackIdx) {
     }
-    private final ConcurrentMap<String, PlaybackInfo> _id2info = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, PlaybackMemo> _id2info = new ConcurrentHashMap<>();
 
     private static final ConcurrentMap<String, PoActor> _callSessions = new ConcurrentHashMap<>();
 
