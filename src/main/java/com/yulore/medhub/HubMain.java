@@ -427,7 +427,7 @@ public class HubMain {
         }
     }
 
-    private void playbackOn2(final String path, final String contentId, final PoActor poActor, final WebSocket webSocket) {
+    private Runnable playbackOn2(final String path, final String contentId, final PoActor poActor, final WebSocket webSocket) {
         // interval = 20 ms
         int interval = 20;
         log.info("[{}]: playbackOn2: {} => sample rate: {}/interval: {}/channels: {}", poActor.sessionId(), path, 16000, interval, 1);
@@ -460,6 +460,7 @@ public class HubMain {
             poActor.notifyPlaybackStart(taskId);
             bst.buildStream(task::appendData, (ignore)->task.appendCompleted());
         }
+        return task::stop;
     }
 
     private void initNlsAgents(final NlsClient client) {

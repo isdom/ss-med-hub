@@ -27,7 +27,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * Phone Operator Actor
@@ -208,6 +210,10 @@ public class PoActor extends ASRActor {
         _isUserSpeak.set(true);
         _currentSentenceBeginInMs.set(System.currentTimeMillis());
         if (isAiSpeaking() && _lastReply != null && _lastReply.getCancel_on_speak() != null && _lastReply.getCancel_on_speak()) {
+            final Runnable stopPlayback = _currentStopPlayback.getAndSet(null);
+            if (stopPlayback != null) {
+                stopPlayback.run();
+            }
             _sendEvent.accept("PCMStopPlayback", new PayloadPCMEvent(_currentPlaybackId.get(), ""));
             log.info("[{}]: stop current playing ({}) for cancel_on_speak: {}", _sessionId, _currentPlaybackId.get(), _lastReply);
         }
@@ -314,6 +320,7 @@ public class PoActor extends ASRActor {
         if (currentPlaybackId != null) {
             if (currentPlaybackId.equals(playbackId)) {
                 _currentPlaybackId.set(null);
+                _currentStopPlayback.set(null);
                 _idleStartInMs.set(System.currentTimeMillis());
                 log.info("[{}]: notifyPlaybackStop => current playbackid: {} Matched / lastReply: {}", _sessionId, playbackId, _lastReply);
                 if (_lastReply != null && _lastReply.getHangup() == 1) {
@@ -335,6 +342,10 @@ public class PoActor extends ASRActor {
             _callSessions.remove(_sessionId);
             if (isAiSpeaking()) {
                 // stop current playback when call close()
+                final Runnable stopPlayback = _currentStopPlayback.getAndSet(null);
+                if (stopPlayback != null) {
+                    stopPlayback.run();
+                }
                 _sendEvent.accept("PCMStopPlayback", new PayloadPCMEvent(_currentPlaybackId.get(), ""));
             }
             generateRecordAndUpload();
@@ -452,7 +463,7 @@ public class PoActor extends ASRActor {
         }
     }
 
-    public void attachPlaybackWs(final BiConsumer<String, String> playbackOn, final BiConsumer<String, Object> sendEvent) {
+    public void attachPlaybackWs(final BiFunction<String, String, Runnable> playbackOn, final BiConsumer<String, Object> sendEvent) {
         _playbackOn = playbackOn;
         doPlayback(_lastReply);
         _sendEvent = sendEvent;
@@ -460,19 +471,34 @@ public class PoActor extends ASRActor {
 
     private boolean doPlayback(final AIReplyVO replyVO) {
         log.info("[{}]: doPlayback: {}", _sessionId, replyVO);
-        final String aiContentId = replyVO.getAi_content_id() != null ? Long.toString(replyVO.getAi_content_id()) : null;
-        if ("cp".equals(replyVO.getVoiceMode())) {
-            _playbackOn.accept(String.format("type=cp,%s", JSON.toJSONString(replyVO.getCps())), aiContentId);
-        } else if ("wav".equals(replyVO.getVoiceMode())) {
-            _playbackOn.accept(String.format("{bucket=%s}%s%s", _bucket, _wavPath, replyVO.getAi_speech_file()), aiContentId);
-        } else if ("tts".equals(replyVO.getVoiceMode())) {
-            _playbackOn.accept(String.format("{type=tts,text=%s}tts.wav",
-                    StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(replyVO.getReply_content())), aiContentId);
-        } else {
+        final Supplier<Runnable> playback = reply2playback(replyVO);
+        if (playback == null) {
             log.info("[{}]: doPlayback: unknown reply: {}, ignore", _sessionId, replyVO);
             return false;
+        } else {
+            final Runnable stopPlayback = _currentStopPlayback.getAndSet(null);
+            if (stopPlayback != null) {
+                stopPlayback.run();
+            }
+            _currentStopPlayback.set(playback.get());
+            return true;
         }
-        return true;
+    }
+
+    private Supplier<Runnable> reply2playback(final AIReplyVO replyVO) {
+        final String aiContentId = replyVO.getAi_content_id() != null ? Long.toString(replyVO.getAi_content_id()) : null;
+        if ("cp".equals(replyVO.getVoiceMode())) {
+            return ()->_playbackOn.apply(String.format("type=cp,%s", JSON.toJSONString(replyVO.getCps())),
+                    aiContentId);
+        } else if ("wav".equals(replyVO.getVoiceMode())) {
+            return ()->_playbackOn.apply(String.format("{bucket=%s}%s%s", _bucket, _wavPath, replyVO.getAi_speech_file()),
+                    aiContentId);
+        } else if ("tts".equals(replyVO.getVoiceMode())) {
+            return ()->_playbackOn.apply(String.format("{type=tts,text=%s}tts.wav",
+                    StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(replyVO.getReply_content())), aiContentId);
+        } else {
+            return null;
+        }
     }
 
     static public PoActor findBy(final String sessionId) {
@@ -491,7 +517,8 @@ public class PoActor extends ASRActor {
     private AIReplyVO _lastReply;
     private AiSettingVO _aiSetting;
 
-    private BiConsumer<String, String> _playbackOn;
+    private BiFunction<String, String, Runnable> _playbackOn;
+    private final AtomicReference<Runnable> _currentStopPlayback = new AtomicReference<>(null);
     private final AtomicReference<String> _currentPlaybackId = new AtomicReference<>(null);
     private final AtomicLong _currentPlaybackBeginInMs = new AtomicLong(-1);
 

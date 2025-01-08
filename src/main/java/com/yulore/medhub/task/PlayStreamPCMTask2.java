@@ -106,7 +106,6 @@ public class PlayStreamPCMTask2 implements PlayTask {
             _interval_bytes = _sampleInfo.bytesPerInterval();
             if (_started.compareAndSet(false, true)) {
                 log.info("[{}]: pcm task ({}) start to playback", _sessionId, this);
-                // HubEventVO.sendEvent(_webSocket, "PlaybackStart", new PayloadPlaybackStart(0,"pcm", _sampleInfo.sampleRate, _sampleInfo.interval, _sampleInfo.channels));
                 _startTimestamp = System.currentTimeMillis();
                 _sendDataLastTimestamp.set(_startTimestamp);
                 playAndSchedule(1 );
@@ -252,7 +251,6 @@ public class PlayStreamPCMTask2 implements PlayTask {
             _onStopSend.accept(System.currentTimeMillis());
             _onEnd.accept(this);
             outputSendDataIntervalLogsAndReset();
-            // HubEventVO.sendEvent(_webSocket, "PlaybackStop", new PayloadPlaybackStop(0,"pcm", -1, _completed.get()));
         }
     }
 }
