@@ -139,8 +139,8 @@ public class PoActor extends ASRActor {
             if (result) {
                 final byte[] srcBytes = new byte[bytes.remaining()];
                 bytes.get(srcBytes, 0, srcBytes.length);
-                if (_recordStartInMs.compareAndSet(0, 1)) {
-                    _recordStartInMs.set(System.currentTimeMillis());
+                if (_asrStartInMs.compareAndSet(0, 1)) {
+                    _asrStartInMs.set(System.currentTimeMillis());
                 }
                 _usBufs.add(srcBytes);
             }
@@ -259,9 +259,9 @@ public class PoActor extends ASRActor {
             {
                 // report USER speak timing
                 // ASR-Sentence-Begin-Time in Milliseconds
-                final long start_speak_timestamp = _recordStartInMs.get() + payload.getBegin_time();
+                final long start_speak_timestamp = _asrStartInMs.get() + payload.getBegin_time();
                 // ASR-Sentence-End-Time in Milliseconds
-                final long stop_speak_timestamp = _recordStartInMs.get() + payload.getTime();
+                final long stop_speak_timestamp = _asrStartInMs.get() + payload.getTime();
                 final long user_speak_duration = stop_speak_timestamp - start_speak_timestamp;
 
                 final ApiResponse<Void> resp = _scriptApi.report_content(
@@ -269,15 +269,15 @@ public class PoActor extends ASRActor {
                         userContentId,
                         payload.getIndex(),
                         "USER",
-                        _recordStartInMs.get(),
+                        _asrStartInMs.get(),
                         start_speak_timestamp,
                         stop_speak_timestamp,
                         user_speak_duration);
-                log.info("[{}]: user report_content(content_id:{}/idx:{}/record_start:{}/start_speak:{}/stop_speak:{})'s resp: {}",
+                log.info("[{}]: user report_content(content_id:{}/idx:{}/asr_start:{}/start_speak:{}/stop_speak:{})'s resp: {}",
                         _sessionId,
                         userContentId,
                         payload.getIndex(),
-                        _recordStartInMs.get(),
+                        _asrStartInMs.get(),
                         start_speak_timestamp,
                         stop_speak_timestamp,
                         resp);
@@ -285,10 +285,10 @@ public class PoActor extends ASRActor {
             {
                 // report ASR event timing
                 // sentence_begin_event_time in Milliseconds
-                final long begin_event_time = _currentSentenceBeginInMs.get() - _recordStartInMs.get();
+                final long begin_event_time = _currentSentenceBeginInMs.get() - _asrStartInMs.get();
 
                 // sentence_end_event_time in Milliseconds
-                final long end_event_time = sentenceEndInMs - _recordStartInMs.get();
+                final long end_event_time = sentenceEndInMs - _asrStartInMs.get();
 
                 final ApiResponse<Void> resp = _scriptApi.report_asrtime(
                         _sessionId,
@@ -342,15 +342,15 @@ public class PoActor extends ASRActor {
                     contentId,
                     memo.playbackIdx(),
                     "AI",
-                    _recordStartInMs.get(),
+                    _asrStartInMs.get(),
                     start_speak_timestamp,
                     stop_speak_timestamp,
                     user_speak_duration);
-            log.info("[{}]: ai report_content(content_id:{}/idx:{}/record_start:{}/start_speak:{}/stop_speak:{})'s resp: {}",
+            log.info("[{}]: ai report_content(content_id:{}/idx:{}/asr_start:{}/start_speak:{}/stop_speak:{})'s resp: {}",
                     _sessionId,
                     contentId,
                     memo.playbackIdx(),
-                    _recordStartInMs.get(),
+                    _asrStartInMs.get(),
                     start_speak_timestamp,
                     stop_speak_timestamp,
                     resp);
@@ -408,7 +408,7 @@ public class PoActor extends ASRActor {
             // output wave header with 16K sample rate and 2 channels
             bos.write(WaveUtil.genWaveHeader(16000, 2));
 
-            long currentInMs = _recordStartInMs.get();
+            long currentInMs = _asrStartInMs.get();
             final AtomicReference<PlaybackSegment> ps = new AtomicReference<>(null), next_ps = new AtomicReference<>(null);
 
             int sample_count = 0;
@@ -575,6 +575,6 @@ public class PoActor extends ASRActor {
     private final AtomicReference<PlaybackSegment> _currentPS = new AtomicReference<>(null);
     private final List<PlaybackSegment> _dsBufs = new ArrayList<>();
 
-    private final AtomicLong _recordStartInMs = new AtomicLong(0);
+    private final AtomicLong _asrStartInMs = new AtomicLong(0);
     private final Consumer<RecordContext> _doSaveRecord;
 }
