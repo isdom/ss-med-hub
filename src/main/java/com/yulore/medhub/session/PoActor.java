@@ -273,7 +273,14 @@ public class PoActor extends ASRActor {
                         start_speak_timestamp,
                         stop_speak_timestamp,
                         user_speak_duration);
-                log.info("[{}]: user report_content({})'s resp: {}", _sessionId, userContentId, resp);
+                log.info("[{}]: user report_content(content_id:{}/idx:{}/record_start:{}/start_speak:{}/stop_speak:{})'s resp: {}",
+                        _sessionId,
+                        userContentId,
+                        payload.getIndex(),
+                        _recordStartInMs.get(),
+                        start_speak_timestamp,
+                        stop_speak_timestamp,
+                        resp);
             }
             {
                 // report ASR event timing
@@ -339,7 +346,14 @@ public class PoActor extends ASRActor {
                     start_speak_timestamp,
                     stop_speak_timestamp,
                     user_speak_duration);
-            log.info("[{}]: ai report_content({})'s resp: {}", _sessionId, contentId, resp);
+            log.info("[{}]: ai report_content(content_id:{}/idx:{}/record_start:{}/start_speak:{}/stop_speak:{})'s resp: {}",
+                    _sessionId,
+                    contentId,
+                    memo.playbackIdx(),
+                    _recordStartInMs.get(),
+                    start_speak_timestamp,
+                    stop_speak_timestamp,
+                    resp);
         }
     }
 
