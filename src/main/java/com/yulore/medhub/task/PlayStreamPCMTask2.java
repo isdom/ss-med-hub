@@ -117,10 +117,12 @@ public class PlayStreamPCMTask2 implements PlayTask {
         }
     }
 
-    final static int PACKAGE_NUM = 50;
+    final static int MAX_PACKAGE_NUM_ONCE = 50;
 
     private void playAndSchedule(final int intervalCount) {
-        int batchSize = _interval_bytes * PACKAGE_NUM;
+        final int remaining = _length - _pos;
+        final int packageNum = Math.min(Math.max(remaining % _interval_bytes, 1), MAX_PACKAGE_NUM_ONCE);
+        final int batchSize = _interval_bytes * packageNum;
 
         ScheduledFuture<?> next = null;
         try {
@@ -133,7 +135,8 @@ public class PlayStreamPCMTask2 implements PlayTask {
             if (_pos + batchSize > _length && _streaming) {
                 // need more data
                 final long delay = 100; // 100 ms // _startTimestamp + (long) _sampleInfo.interval() * intervalCount - System.currentTimeMillis();
-                log.warn("[{}]: pcm task ({}) need_more_data, delay_playback_to_next", _sessionId, this);
+                log.warn("[{}]: pcm task ({}) need_more_data (remain: {} < batchSize: {}), delay_playback_to_next",
+                        _sessionId, this, remaining, batchSize);
                 next = _executor.schedule(() -> playAndSchedule(intervalCount + 1), delay, TimeUnit.MILLISECONDS);
             } else {
                 final byte[] bytes = new byte[batchSize];

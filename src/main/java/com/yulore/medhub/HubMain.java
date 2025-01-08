@@ -422,7 +422,8 @@ public class HubMain {
         final Object attachment = webSocket.getAttachment();
         if (attachment instanceof String sessionId) {
             PoActor poActor = PoActor.findBy(sessionId);
-            log.info("[{}]: handlePCMPlaybackStoppedCommand: {}/has PoActor: {}", sessionId, cmd.getPayload().get("playback_id"), poActor != null);
+            log.info("[{}]: handlePCMPlaybackStoppedCommand: playbackId: {}/attached PoActor: {}",
+                    sessionId, playbackId, poActor != null);
             if (poActor != null) {
                 poActor.notifyPlaybackSendStop(contentId, System.currentTimeMillis());
                 poActor.notifyPlaybackStop(playbackId);
@@ -435,7 +436,6 @@ public class HubMain {
         int interval = 20;
         log.info("[{}]: playbackOn2: {} => sample rate: {}/interval: {}/channels: {} as {}",
                 poActor.sessionId(), playbackContext.path(), 16000, interval, 1, playbackContext.playbackId());
-        // final String taskId = UUID.randomUUID().toString();
         final PlayStreamPCMTask2 task = new PlayStreamPCMTask2(
                 playbackContext.playbackId(),
                 poActor.sessionId(),
