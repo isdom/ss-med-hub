@@ -403,7 +403,7 @@ public class HubMain {
                 },
                 (_task) -> {
                     log.info("[{}]: PlayStreamPCMTask {} stopped with completed: {}", callSession.sessionId(), _task, _task.isCompleted());
-                    callSession.notifyPlaybackStop(_task.taskId());
+                    callSession.notifyPlaybackStop(_task.taskId(), contentId);
                     playbackSession.notifyPlaybackStop(_task);
                 }
         );
@@ -422,11 +422,9 @@ public class HubMain {
         final Object attachment = webSocket.getAttachment();
         if (attachment instanceof String sessionId) {
             PoActor poActor = PoActor.findBy(sessionId);
-            log.info("[{}]: handlePCMPlaybackStoppedCommand: playbackId: {}/attached PoActor: {}",
-                    sessionId, playbackId, poActor != null);
+            log.info("[{}]: handlePCMPlaybackStoppedCommand: playbackId: {}/attached PoActor: {}", sessionId, playbackId, poActor != null);
             if (poActor != null) {
-                poActor.notifyPlaybackSendStop(contentId, System.currentTimeMillis());
-                poActor.notifyPlaybackStop(playbackId);
+                poActor.notifyPlaybackStop(playbackId, contentId);
             }
         }
     }
@@ -443,14 +441,14 @@ public class HubMain {
                 _scheduledExecutor,
                 new SampleInfo(16000, interval, 16, 1),
                 (timestamp) -> {
-                    poActor.notifyPlaybackSendStart(playbackContext.contentId(), timestamp);
                     HubEventVO.sendEvent(webSocket, "PCMBegin",
                             new PayloadPCMEvent(playbackContext.playbackId(), playbackContext.contentId()));
+                    poActor.notifyPlaybackSendStart(playbackContext.playbackId(), timestamp);
                 },
                 (timestamp) -> {
+                    poActor.notifyPlaybackSendStop(playbackContext.playbackId(), timestamp);
                     HubEventVO.sendEvent(webSocket, "PCMEnd",
                             new PayloadPCMEvent(playbackContext.playbackId(), playbackContext.contentId()));
-                    //poActor.notifyPlaybackSendStop(contentId, timestamp);
                 },
                 (bytes) -> {
                     webSocket.send(bytes);

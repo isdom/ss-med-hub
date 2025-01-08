@@ -24,6 +24,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.*;
@@ -152,7 +153,8 @@ public class PoActor extends ASRActor {
         return isAiSpeaking() ? (int) (System.currentTimeMillis() - _currentPlaybackBeginInMs.get()) : 0;
     }
 
-    public void notifyPlaybackSendStart(final String contentId, final long startTimestamp) {
+    public void notifyPlaybackSendStart(final String playbackId, final long startTimestamp) {
+        _id2info.put(playbackId, new PlaybackInfo(startTimestamp, _playbackIdx.incrementAndGet()));
         _currentPlaybackBeginInMs.set(startTimestamp);
         if (!_currentPS.compareAndSet(null, new PlaybackSegment(startTimestamp))) {
             log.warn("[{}]: notifyPlaybackSendStart: current PlaybackSegment is !NOT! null", _sessionId);
@@ -161,27 +163,11 @@ public class PoActor extends ASRActor {
         }
     }
 
-    public void notifyPlaybackSendStop(final String contentId, final long stopTimestamp) {
+    public void notifyPlaybackSendStop(final String playbackId, final long stopTimestamp) {
         final PlaybackSegment ps = _currentPS.getAndSet(null);
         if (ps != null) {
             _dsBufs.add(ps);
             log.info("[{}]: notifyPlaybackSendStop: move current PlaybackSegment to _dsBufs", _sessionId);
-            {
-                // report AI speak timing
-                final long start_speak_timestamp = ps.timestamp;
-                final long user_speak_duration = stopTimestamp - start_speak_timestamp;
-
-                final ApiResponse<Void> resp = _scriptApi.report_content(
-                        _sessionId,
-                        contentId,
-                        _dsBufs.size(),
-                        "AI",
-                        _recordStartInMs.get(),
-                        start_speak_timestamp,
-                        stopTimestamp,
-                        user_speak_duration);
-                log.info("[{}]: ai report_content({})'s resp: {}", _sessionId, contentId, resp);
-            }
         } else {
             log.warn("[{}]: notifyPlaybackSendStop: current PlaybackSegment is null", _sessionId);
         }
@@ -308,7 +294,7 @@ public class PoActor extends ASRActor {
                 _sessionId, playbackId, _currentPlaybackId.get());
     }
 
-    public void notifyPlaybackStop(final String playbackId) {
+    public void notifyPlaybackStop(final String playbackId, final String contentId) {
         final String currentPlaybackId = _currentPlaybackId.get();
         if (currentPlaybackId != null) {
             if (currentPlaybackId.equals(playbackId)) {
@@ -325,6 +311,28 @@ public class PoActor extends ASRActor {
             }
         } else {
             log.warn("currentPlaybackId is null BUT notifyPlaybackStop with: {}", playbackId);
+        }
+        {
+            // report AI speak timing
+            final PlaybackInfo info = _id2info.get(playbackId);
+            if (info == null) {
+                log.warn("[{}]: notifyPlaybackStop: can't find PlaybackInfo by {}", _sessionId, playbackId);
+                return;
+            }
+            final long start_speak_timestamp = info.beginInMs();
+            final long stop_speak_timestamp = System.currentTimeMillis();
+            final long user_speak_duration = stop_speak_timestamp - start_speak_timestamp;
+
+            final ApiResponse<Void> resp = _scriptApi.report_content(
+                    _sessionId,
+                    contentId,
+                    info.idx(),
+                    "AI",
+                    _recordStartInMs.get(),
+                    start_speak_timestamp,
+                    stop_speak_timestamp,
+                    user_speak_duration);
+            log.info("[{}]: ai report_content({})'s resp: {}", _sessionId, contentId, resp);
         }
     }
 
@@ -527,6 +535,12 @@ public class PoActor extends ASRActor {
     private final AtomicLong _idleStartInMs = new AtomicLong(System.currentTimeMillis());
     private final AtomicBoolean _isUserSpeak = new AtomicBoolean(false);
     private final AtomicLong _currentSentenceBeginInMs = new AtomicLong(-1);
+
+    private final AtomicInteger _playbackIdx = new AtomicInteger(0);
+
+    public record PlaybackInfo(long beginInMs, int idx) {
+    }
+    private final ConcurrentMap<String, PlaybackInfo> _id2info = new ConcurrentHashMap<>();
 
     private static final ConcurrentMap<String, PoActor> _callSessions = new ConcurrentHashMap<>();
 
