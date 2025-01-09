@@ -210,12 +210,12 @@ public class PoActor extends ASRActor {
         super.notifyTranscriptionResultChanged(payload);
         /*
         if (isAiSpeaking()) {
-            if (payload.getResult().length() >= 3) {
+            if (payload.getResult().length() >= 3 && _currentPlaybackPaused.compareAndSet(false, true)) {
                 _sendEvent.accept("PCMPausePlayback", new PayloadPCMEvent(_currentPlaybackId.get(), ""));
                 log.info("[{}]: notifyTranscriptionResultChanged: pause current for result {} text >= 3", _sessionId, payload.getResult());
             }
         }
-         */
+        */
     }
 
     @Override
@@ -562,6 +562,7 @@ public class PoActor extends ASRActor {
     private Function<PlaybackContext, Runnable> _playbackOn;
     private final AtomicReference<Runnable> _currentStopPlayback = new AtomicReference<>(null);
     private final AtomicReference<String> _currentPlaybackId = new AtomicReference<>(null);
+    private final AtomicBoolean _currentPlaybackPaused = new AtomicBoolean(false);
     private final AtomicLong _currentPlaybackBeginInMs = new AtomicLong(-1);
 
     private final AtomicLong _idleStartInMs = new AtomicLong(System.currentTimeMillis());

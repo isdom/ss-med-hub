@@ -26,6 +26,7 @@ import com.yulore.medhub.stream.StreamCacheService;
 import com.yulore.medhub.task.*;
 import com.yulore.medhub.vo.*;
 import com.yulore.util.ByteArrayListInputStream;
+import com.yulore.util.ExceptionUtil;
 import io.netty.util.NettyRuntime;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.extern.slf4j.Slf4j;
@@ -373,8 +374,7 @@ public class HubMain {
 
                     @Override
                     public void onError(WebSocket webSocket, Exception ex) {
-                        log.warn("an error occurred on connection {}:{}", webSocket.getRemoteSocketAddress(), ex.toString());
-
+                        log.warn("an error occurred on connection {}:{}", webSocket.getRemoteSocketAddress(), ExceptionUtil.exception2detail(ex));
                     }
 
                     @Override
