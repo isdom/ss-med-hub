@@ -276,13 +276,14 @@ public class PoActor extends ASRActor {
                         start_speak_timestamp,
                         stop_speak_timestamp,
                         user_speak_duration);
-                log.info("[{}]: user report_content(content_id:{}/idx:{}/asr_start:{}/start_speak:{}/stop_speak:{})'s resp: {}",
+                log.info("[{}]: user report_content(content_id:{}/idx:{}/asr_start:{}/start_speak:{}/stop_speak:{}/speak_duration:{} s)'s resp: {}",
                         _sessionId,
                         userContentId,
                         payload.getIndex(),
                         _asrStartInMs.get(),
                         start_speak_timestamp,
                         stop_speak_timestamp,
+                        user_speak_duration / 1000.0,
                         resp);
             }
             {
@@ -342,7 +343,7 @@ public class PoActor extends ASRActor {
             }
             final long start_speak_timestamp = playback_begin_timestamp != null ? Long.parseLong(playback_begin_timestamp) : memo.beginInMs();
             final long stop_speak_timestamp = playback_end_timestamp != null ? Long.parseLong(playback_end_timestamp) : System.currentTimeMillis();
-            final long user_speak_duration = playback_duration != null
+            final long ai_speak_duration = playback_duration != null
                     ? (long)(Float.parseFloat(playback_duration) * 1000L)
                     : (stop_speak_timestamp - start_speak_timestamp);
 
@@ -354,14 +355,15 @@ public class PoActor extends ASRActor {
                     _asrStartInMs.get(),
                     start_speak_timestamp,
                     stop_speak_timestamp,
-                    user_speak_duration);
-            log.info("[{}]: ai report_content(content_id:{}/idx:{}/asr_start:{}/start_speak:{}/stop_speak:{})'s resp: {}",
+                    ai_speak_duration);
+            log.info("[{}]: ai report_content(content_id:{}/idx:{}/asr_start:{}/start_speak:{}/stop_speak:{}/speak_duration:{} s)'s resp: {}",
                     _sessionId,
                     contentId,
                     memo.playbackIdx(),
                     _asrStartInMs.get(),
                     start_speak_timestamp,
                     stop_speak_timestamp,
+                    ai_speak_duration / 1000.0,
                     resp);
         }
     }
