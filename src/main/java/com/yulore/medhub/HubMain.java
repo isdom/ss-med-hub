@@ -403,7 +403,7 @@ public class HubMain {
                 },
                 (_task) -> {
                     log.info("[{}]: PlayStreamPCMTask {} stopped with completed: {}", callSession.sessionId(), _task, _task.isCompleted());
-                    callSession.notifyPlaybackStop(_task.taskId(), contentId);
+                    callSession.notifyPlaybackStop(_task.taskId(), contentId, null, null, null);
                     playbackSession.notifyPlaybackStop(_task);
                 }
         );
@@ -417,14 +417,18 @@ public class HubMain {
     }
 
     private void handlePCMPlaybackStoppedCommand(final HubCommandVO cmd, final WebSocket webSocket) {
-        final String contentId = cmd.getPayload() != null ? cmd.getPayload().get("content_id") : null;
         final String playbackId = cmd.getPayload() != null ? cmd.getPayload().get("playback_id") : null;
+        final String contentId = cmd.getPayload() != null ? cmd.getPayload().get("content_id") : null;
+        final String playback_begin_timestamp = cmd.getPayload() != null ? cmd.getPayload().get("playback_begin_timestamp") : null;
+        final String playback_end_timestamp  = cmd.getPayload() != null ? cmd.getPayload().get("playback_end_timestamp") : null;//": "1736389958856"
+        final String playback_duration  = cmd.getPayload() != null ? cmd.getPayload().get("playback_duration") : null; //": "3.4506666666666668"}
+
         final Object attachment = webSocket.getAttachment();
         if (attachment instanceof String sessionId) {
             PoActor poActor = PoActor.findBy(sessionId);
             log.info("[{}]: handlePCMPlaybackStoppedCommand: playbackId: {}/attached PoActor: {}", sessionId, playbackId, poActor != null);
             if (poActor != null) {
-                poActor.notifyPlaybackStop(playbackId, contentId);
+                poActor.notifyPlaybackStop(playbackId, contentId, playback_begin_timestamp, playback_end_timestamp, playback_duration);
             }
         }
     }

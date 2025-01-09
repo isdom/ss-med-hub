@@ -208,12 +208,14 @@ public class PoActor extends ASRActor {
     @Override
     public void notifyTranscriptionResultChanged(final PayloadTranscriptionResultChanged payload) {
         super.notifyTranscriptionResultChanged(payload);
+        /*
         if (isAiSpeaking()) {
             if (payload.getResult().length() >= 3) {
                 _sendEvent.accept("PCMPausePlayback", new PayloadPCMEvent(_currentPlaybackId.get(), ""));
                 log.info("[{}]: notifyTranscriptionResultChanged: pause current for result {} text >= 3", _sessionId, payload.getResult());
             }
         }
+         */
     }
 
     @Override
@@ -244,10 +246,11 @@ public class PoActor extends ASRActor {
                     if (response.getData().getAi_content_id() != null && doPlayback(response.getData())) {
                         _lastReply = response.getData();
                     } else {
+                        /*
                         if (isAiSpeaking) {
                             _sendEvent.accept("PCMResumePlayback", new PayloadPCMEvent(_currentPlaybackId.get(), ""));
                             log.info("[{}]: notifySentenceEnd: resume current for ai_reply {} do nothing", _sessionId, payload.getResult());
-                        }
+                        }*/
                     }
                 } else {
                     log.info("[{}]: notifySentenceEnd: ai_reply {}, do nothing\n", _sessionId, response);
@@ -308,7 +311,11 @@ public class PoActor extends ASRActor {
                 _sessionId, playbackId, _currentPlaybackId.get());
     }
 
-    public void notifyPlaybackStop(final String playbackId, final String contentId) {
+    public void notifyPlaybackStop(final String playbackId,
+                                   final String contentId,
+                                   final String playback_begin_timestamp,
+                                   final String playback_end_timestamp,
+                                   final String playback_duration) {
         final String currentPlaybackId = _currentPlaybackId.get();
         if (currentPlaybackId != null) {
             if (currentPlaybackId.equals(playbackId)) {
@@ -333,9 +340,11 @@ public class PoActor extends ASRActor {
                 log.warn("[{}]: notifyPlaybackStop: can't find PlaybackMemo by {}", _sessionId, playbackId);
                 return;
             }
-            final long start_speak_timestamp = memo.beginInMs();
-            final long stop_speak_timestamp = System.currentTimeMillis();
-            final long user_speak_duration = stop_speak_timestamp - start_speak_timestamp;
+            final long start_speak_timestamp = playback_begin_timestamp != null ? Long.parseLong(playback_begin_timestamp) : memo.beginInMs();
+            final long stop_speak_timestamp = playback_end_timestamp != null ? Long.parseLong(playback_end_timestamp) : System.currentTimeMillis();
+            final long user_speak_duration = playback_duration != null
+                    ? (long)(Float.parseFloat(playback_duration) * 1000L)
+                    : (stop_speak_timestamp - start_speak_timestamp);
 
             final ApiResponse<Void> resp = _scriptApi.report_content(
                     _sessionId,
