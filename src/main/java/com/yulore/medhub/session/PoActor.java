@@ -17,10 +17,7 @@ import org.java_websocket.WebSocket;
 
 import java.io.*;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -218,13 +215,34 @@ public class PoActor extends ASRActor {
     @Override
     public void notifyTranscriptionResultChanged(final PayloadTranscriptionResultChanged payload) {
         super.notifyTranscriptionResultChanged(payload);
-        /*
         if (isAiSpeaking()) {
-            if (payload.getResult().length() >= 3 && _currentPlaybackPaused.compareAndSet(false, true)) {
-                _sendEvent.accept("PCMPausePlayback", new PayloadPCMEvent(_currentPlaybackId.get(), ""));
-                log.info("[{}]: notifyTranscriptionResultChanged: pause current for result {} text >= 3", _sessionId, payload.getResult());
+            final int length = payload.getResult().length();
+            if (length >= 10) {
+                if ( (length - countChinesePunctuations(payload.getResult())) >= 10  && _currentPlaybackPaused.compareAndSet(false, true)) {
+                    _sendEvent.accept("PCMPausePlayback", new PayloadPCMEvent(_currentPlaybackId.get(), ""));
+                    log.info("[{}]: notifyTranscriptionResultChanged: pause current for result {} text >= 10", _sessionId, payload.getResult());
+                }
             }
-        }*/
+        }
+    }
+
+    private static int countChinesePunctuations(final String text) {
+        int count = 0;
+        for (char c : text.toCharArray()) {
+            // 判断是否是中文标点
+            if (isChinesePunctuation(c)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private static boolean isChinesePunctuation(final char ch) {
+        // 将需要计算的中文标点放入此数组中
+        final Character[] punctuations = new Character[]{
+                '，', '。', '！', '？', '；', '：', '“', '”'
+        };
+        return Arrays.stream(punctuations).anyMatch(p -> p == ch);
     }
 
     @Override
