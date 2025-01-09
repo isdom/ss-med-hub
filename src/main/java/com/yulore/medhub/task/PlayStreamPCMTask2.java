@@ -121,7 +121,7 @@ public class PlayStreamPCMTask2 implements PlayTask {
 
     private void playAndSchedule(final int intervalCount) {
         final int remaining = _length - _pos;
-        final int packageNum = Math.min(Math.max(remaining % _interval_bytes, 1), MAX_PACKAGE_NUM_ONCE);
+        final int packageNum = Math.min(Math.max(remaining / _interval_bytes, 1), MAX_PACKAGE_NUM_ONCE);
         final int batchSize = _interval_bytes * packageNum;
 
         ScheduledFuture<?> next = null;
