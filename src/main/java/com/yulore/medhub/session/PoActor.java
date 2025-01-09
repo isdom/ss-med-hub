@@ -105,7 +105,8 @@ public class PoActor extends ASRActor {
     public void checkIdle() {
         final long idleTime = System.currentTimeMillis() - _idleStartInMs.get();
         boolean isAiSpeaking = isAiSpeaking();
-        if (_sessionId != null      // user answered
+        if ( _sessionId != null      // user answered
+            && _playbackOn != null   // playback ws has connected
             && !_isUserSpeak.get()  // user not speak
             && !isAiSpeaking        // AI not speak
             && _aiSetting != null
