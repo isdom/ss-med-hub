@@ -135,7 +135,7 @@ public class PlayStreamPCMTask2 implements PlayTask {
             if (_pos + batchSize > _length && _streaming) {
                 // need more data
                 final long delay = 100; // 100 ms // _startTimestamp + (long) _sampleInfo.interval() * intervalCount - System.currentTimeMillis();
-                log.warn("[{}]: pcm task ({}) need_more_data (remain: {} < batchSize: {}), delay_playback_to_next",
+                log.info("[{}]: pcm task ({}) need_more_data (remain: {} < batchSize: {}), delay_playback_to_next",
                         _sessionId, this, remaining, batchSize);
                 next = _executor.schedule(() -> playAndSchedule(intervalCount + 1), delay, TimeUnit.MILLISECONDS);
             } else {
