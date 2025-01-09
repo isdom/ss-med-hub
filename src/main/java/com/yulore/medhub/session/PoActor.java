@@ -119,6 +119,7 @@ public class PoActor extends ASRActor {
                     if (response.getData() != null) {
                         if (doPlayback(response.getData())) {
                             _lastReply = response.getData();
+                            return;
                         }
                     } else {
                         log.info("[{}]: checkIdle: ai_reply {}, do nothing\n", _sessionId, response);
@@ -130,6 +131,14 @@ public class PoActor extends ASRActor {
         }
         log.info("[{}]: checkIdle: is_speaking: {}/is_playing: {}/idle duration: {} ms",
                 _sessionId, _isUserSpeak.get(), isAiSpeaking, idleTime);
+        if (!_isUserSpeak.get() && isAiSpeaking() && _currentPlaybackPaused.get() && idleTime >= 2000) {
+            // user not speaking & ai speaking and paused and user not speak more than 2s
+            if (_currentPlaybackPaused.compareAndSet(true, false)) {
+                _sendEvent.accept("PCMResumePlayback", new PayloadPCMEvent(_currentPlaybackId.get(), ""));
+                log.info("[{}]: checkIdle: resume current {}", _sessionId, _currentPlaybackId.get());
+            }
+        }
+
     }
 
     @Override
@@ -215,8 +224,7 @@ public class PoActor extends ASRActor {
                 _sendEvent.accept("PCMPausePlayback", new PayloadPCMEvent(_currentPlaybackId.get(), ""));
                 log.info("[{}]: notifyTranscriptionResultChanged: pause current for result {} text >= 3", _sessionId, payload.getResult());
             }
-        }
-        */
+        }*/
     }
 
     @Override
@@ -251,7 +259,8 @@ public class PoActor extends ASRActor {
                         if (isAiSpeaking) {
                             _sendEvent.accept("PCMResumePlayback", new PayloadPCMEvent(_currentPlaybackId.get(), ""));
                             log.info("[{}]: notifySentenceEnd: resume current for ai_reply {} do nothing", _sessionId, payload.getResult());
-                        }*/
+                        }
+                        */
                     }
                 } else {
                     log.info("[{}]: notifySentenceEnd: ai_reply {}, do nothing\n", _sessionId, response);
@@ -321,8 +330,10 @@ public class PoActor extends ASRActor {
         final String currentPlaybackId = _currentPlaybackId.get();
         if (currentPlaybackId != null) {
             if (currentPlaybackId.equals(playbackId)) {
+                // reset playback status
                 _currentPlaybackId.set(null);
                 _currentStopPlayback.set(null);
+                _currentPlaybackPaused.set(false);
                 _idleStartInMs.set(System.currentTimeMillis());
                 log.info("[{}]: notifyPlaybackStop => current playbackid: {} Matched / lastReply: {}", _sessionId, playbackId, _lastReply);
                 if (_lastReply != null && _lastReply.getHangup() == 1) {
@@ -516,6 +527,7 @@ public class PoActor extends ASRActor {
                 stopPlayback.run();
             }
             _currentPlaybackId.set(newPlaybackId);
+            _currentPlaybackPaused.set(false);
             _currentStopPlayback.set(playback.get());
             return true;
         }

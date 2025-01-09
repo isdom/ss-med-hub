@@ -248,7 +248,6 @@ public class HubMain {
                             // init CallSession attach with webSocket
                             final PoActor session = new PoActor(_callApi, _scriptApi,
                                     (_session)->{
-                                        // webSocket.close(1000, "hangup");
                                         try {
                                             HubEventVO.sendEvent(webSocket, "CallEnded", new PayloadCallEnded(_session.sessionId()));
                                             log.info("[{}]: sendback CallEnded event", _session.sessionId());
