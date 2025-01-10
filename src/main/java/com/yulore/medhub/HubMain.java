@@ -245,8 +245,16 @@ public class HubMain {
                                     ()->HubEventVO.<Void>sendEvent(webSocket, "CheckIdle", null));
                             log.info("ws path match: {}, using ws as MediaSession {}", _match_media, sessionId);
                         } else if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_call)) {
-                            // init CallSession attach with webSocket
-                            final PoActor session = new PoActor(_callApi, _scriptApi,
+                            // init PoActor attach with webSocket
+                            final String path = clientHandshake.getResourceDescriptor();
+                            final int varsBegin = path.indexOf('?');
+                            final String uuid = varsBegin > 0 ? VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "uuid", '&') : "unknown";
+                            final String tid = varsBegin > 0 ? VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "tid", '&') : "unknown";;
+                            final PoActor session = new PoActor(
+                                    uuid,
+                                    tid,
+                                    _callApi,
+                                    _scriptApi,
                                     (_session)->{
                                         try {
                                             HubEventVO.sendEvent(webSocket, "CallEnded", new PayloadCallEnded(_session.sessionId()));
@@ -264,7 +272,8 @@ public class HubMain {
                                             log.info("[{}]: upload record to oss => bucket:{}/object:{}, cost {} ms",
                                                     ctx.sessionId(), ctx.bucketName(), ctx.objectName(), System.currentTimeMillis() - startUploadInMs);
                                         });
-                                    });
+                                    },
+                                    (sessionId) -> HubEventVO.sendEvent(webSocket, "CallStarted", new PayloadCallStarted(sessionId)));
                             webSocket.setAttachment(session);
                             session.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms, session::checkIdle);
 

@@ -7,10 +7,7 @@ import lombok.ToString;
 
 import java.util.Map;
 
-@EqualsAndHashCode(callSuper = true)
 @Data
-@ToString(callSuper = true)
-public class ApplySessionVO extends AIReplyVO {
+public class ApplySessionVO {
     private String sessionId;
-    private AiSettingVO aiSetting;
 }

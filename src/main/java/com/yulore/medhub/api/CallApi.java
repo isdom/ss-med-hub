@@ -14,6 +14,18 @@ public interface CallApi {
     @Data
     @ToString
     class ApplySessionRequest {
+        private String tid;
+        private String uuid;
+    }
+
+    @RequestMapping(value = "${call.api.apply_session:unknown_apply_session}", method = RequestMethod.POST)
+    ApiResponse<ApplySessionVO> apply_session(@RequestBody ApplySessionRequest request);
+
+    @Builder
+    @Data
+    @ToString
+    class UserAnswerRequest {
+        private String sessionId;
         private String kid;
         private String tid;
         private String realName;
@@ -21,7 +33,6 @@ public interface CallApi {
         private String aesMobile;
         private long answerTime;
     }
-
-    @RequestMapping(value = "${call.api.apply_session:unknown_api}", method = RequestMethod.POST)
-    ApiResponse<ApplySessionVO> apply_session(@RequestBody ApplySessionRequest request);
+    @RequestMapping(value = "${call.api.user_answer:unknown_user_answer}", method = RequestMethod.POST)
+    ApiResponse<UserAnswerVO> user_answer(@RequestBody UserAnswerRequest request);
 }

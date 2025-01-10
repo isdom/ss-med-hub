@@ -39,12 +39,17 @@ public class PoActor extends ASRActor {
     public record PlaybackContext(String playbackId, String path, String contentId) {
     }
 
-    public PoActor(final CallApi callApi,
+    public PoActor(final String uuid,
+                   final String tid,
+                   final CallApi callApi,
                    final ScriptApi scriptApi,
                    final Consumer<PoActor> doHangup,
                    final String bucket,
                    final String wavPath,
-                   final Consumer<RecordContext> saveRecord) {
+                   final Consumer<RecordContext> saveRecord,
+                   final Consumer<String> callStarted) {
+        _uuid = uuid;
+        _tid = tid;
         _sessionId = null;
         _scriptApi = scriptApi;
         _callApi = callApi;
@@ -52,14 +57,18 @@ public class PoActor extends ASRActor {
         _bucket = bucket;
         _wavPath = wavPath;
         _doSaveRecord = saveRecord;
-    }
-
-    @Override
-    public SpeechTranscriber onSpeechTranscriberCreated(final SpeechTranscriber speechTranscriber) {
-        speechTranscriber.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
-        speechTranscriber.addCustomedParam("speech_noise_threshold", 0.9);
-
-        return super.onSpeechTranscriberCreated(speechTranscriber);
+        try {
+            final ApiResponse<ApplySessionVO> response = _callApi.apply_session(CallApi.ApplySessionRequest.builder()
+                            .uuid(_uuid)
+                            .tid(_tid)
+                            .build());
+            _sessionId = response.getData().getSessionId();
+            log.info("[{}]: apply_session => response: {}", _sessionId, response);
+            _callSessions.put(_sessionId, this);
+            callStarted.accept(_sessionId);
+        } catch (Exception ex) {
+            log.warn("failed for callApi.apply_session, detail: {}", ex.toString());
+        }
     }
 
     public void notifyUserAnswer(final HubCommandVO cmd, final WebSocket webSocket) {
@@ -74,25 +83,34 @@ public class PoActor extends ASRActor {
             final String aesMobile = cmd.getPayload() != null ? cmd.getPayload().get("aesMobile") : "";
             final String genderStr = cmd.getPayload() != null ? cmd.getPayload().get("genderStr") : "";
 
-            final ApiResponse<ApplySessionVO> response = _callApi.apply_session(CallApi.ApplySessionRequest.builder()
-                    .kid(kid)
-                    .tid(tid)
-                    .realName(realName)
-                    .genderStr(genderStr)
-                    .aesMobile(aesMobile)
-                    .answerTime(System.currentTimeMillis())
-                    .build());
-            log.info("apply_session => response: {}", response);
-            _sessionId = response.getData().getSessionId();
-            log.info("[{}]: userAnswer: kid:{}/tid:{}/realName:{}/gender:{}/aesMobile:{} => response: {}", _sessionId, kid, tid, realName, genderStr, aesMobile, response);
+            final ApiResponse<UserAnswerVO> response = _callApi.user_answer(CallApi.UserAnswerRequest.builder()
+                            .sessionId(_sessionId)
+                            .kid(kid)
+                            .tid(tid)
+                            .realName(realName)
+                            .genderStr(genderStr)
+                            .aesMobile(aesMobile)
+                            .answerTime(System.currentTimeMillis())
+                            .build());
+            log.info("[{}]: userAnswer: kid:{}/tid:{}/realName:{}/gender:{}/aesMobile:{} => response: {}",
+                    _sessionId, kid, tid, realName, genderStr, aesMobile, response);
 
             _lastReply = response.getData();
             _aiSetting = response.getData().getAiSetting();
-            _callSessions.put(_sessionId, this);
-            HubEventVO.sendEvent(webSocket, "CallStarted", new PayloadCallStarted(response.getData().getSessionId()));
+            doPlayback(_lastReply);
+            // _callSessions.put(_sessionId, this);
+            // HubEventVO.sendEvent(webSocket, "CallStarted", new PayloadCallStarted(response.getData().getSessionId()));
         } catch (Exception ex) {
-            log.warn("failed for callApi.apply_session, detail: {}", ex.toString());
+            log.warn("failed for callApi.user_answer, detail: {}", ex.toString());
         }
+    }
+
+    @Override
+    public SpeechTranscriber onSpeechTranscriberCreated(final SpeechTranscriber speechTranscriber) {
+        speechTranscriber.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
+        speechTranscriber.addCustomedParam("speech_noise_threshold", 0.9);
+
+        return super.onSpeechTranscriberCreated(speechTranscriber);
     }
 
     private boolean isAiSpeaking() {
@@ -102,8 +120,8 @@ public class PoActor extends ASRActor {
     public void checkIdle() {
         final long idleTime = System.currentTimeMillis() - _idleStartInMs.get();
         boolean isAiSpeaking = isAiSpeaking();
-        if ( _sessionId != null      // user answered
-            && _playbackOn != null   // playback ws has connected
+        if ( _isUserAnswered.get()  // user answered
+            && _playbackOn != null  // playback ws has connected
             && !_isUserSpeak.get()  // user not speak
             && !isAiSpeaking        // AI not speak
             && _aiSetting != null
@@ -570,7 +588,6 @@ public class PoActor extends ASRActor {
 
     public void attachPlaybackWs(final Function<PlaybackContext, Runnable> playbackOn, final BiConsumer<String, Object> sendEvent) {
         _playbackOn = playbackOn;
-        doPlayback(_lastReply);
         _sendEvent = sendEvent;
     }
 
@@ -625,6 +642,8 @@ public class PoActor extends ASRActor {
 
     private final AtomicBoolean _isUserAnswered = new AtomicBoolean(false);
 
+    private final String _uuid;
+    private final String _tid;
     private final CallApi _callApi;
     private final ScriptApi _scriptApi;
     private final Consumer<PoActor> _doHangup;
