@@ -128,6 +128,7 @@ public class PoActor extends ASRActor {
         }
         log.info("[{}]: checkIdle: is_speaking: {}/is_playing: {}/idle duration: {} ms",
                 _sessionId, _isUserSpeak.get(), isAiSpeaking, idleTime);
+        /*
         if (!_isUserSpeak.get() && isAiSpeaking() && _currentPlaybackPaused.get() && idleTime >= 2000) {
             // user not speaking & ai speaking and paused and user not speak more than 2s
             if (_currentPlaybackPaused.compareAndSet(true, false)) {
@@ -135,7 +136,7 @@ public class PoActor extends ASRActor {
                 log.info("[{}]: checkIdle: resume current {}", _sessionId, _currentPlaybackId.get());
             }
         }
-
+        */
     }
 
     @Override
@@ -164,12 +165,13 @@ public class PoActor extends ASRActor {
     }
 
     private int currentSpeakingDuration() {
-        return isAiSpeaking() ? (int) (System.currentTimeMillis() - _currentPlaybackBeginInMs.get()) : 0;
+        return isAiSpeaking() ?  _currentPlaybackDuration.get().get().intValue() : 0;
     }
 
     public void notifyPlaybackSendStart(final String playbackId, final long startTimestamp) {
         _id2info.put(playbackId, new PlaybackMemo(startTimestamp, _playbackIdx.incrementAndGet()));
-        _currentPlaybackBeginInMs.set(startTimestamp);
+        // _currentPlaybackBeginInMs.set(startTimestamp);
+        _currentPlaybackDuration.set(()->System.currentTimeMillis() - startTimestamp);
         if (!_currentPS.compareAndSet(null, new PlaybackSegment(startTimestamp))) {
             log.warn("[{}]: notifyPlaybackSendStart: current PlaybackSegment is !NOT! null", _sessionId);
         } else {
@@ -273,12 +275,11 @@ public class PoActor extends ASRActor {
                     if (response.getData().getAi_content_id() != null && doPlayback(response.getData())) {
                         _lastReply = response.getData();
                     } else {
-                        /*
-                        if (isAiSpeaking) {
+                        if (isAiSpeaking && _currentPlaybackPaused.compareAndSet(true, false) ) {
                             _sendEvent.accept("PCMResumePlayback", new PayloadPCMEvent(_currentPlaybackId.get(), ""));
-                            log.info("[{}]: notifySentenceEnd: resume current for ai_reply {} do nothing", _sessionId, payload.getResult());
+                            log.info("[{}]: notifySentenceEnd: resume current ({}) for ai_reply ({}) without new ai playback",
+                                    _sessionId, _currentPlaybackId.get(), payload.getResult());
                         }
-                        */
                     }
                 } else {
                     log.info("[{}]: notifySentenceEnd: ai_reply {}, do nothing\n", _sessionId, response);
@@ -352,6 +353,7 @@ public class PoActor extends ASRActor {
                 _currentPlaybackId.set(null);
                 _currentStopPlayback.set(null);
                 _currentPlaybackPaused.set(false);
+                _currentPlaybackDuration.set(()->0L);
                 _idleStartInMs.set(System.currentTimeMillis());
                 log.info("[{}]: notifyPlaybackStop => current playbackid: {} Matched / lastReply: {}", _sessionId, playbackId, _lastReply);
                 if (_lastReply != null && _lastReply.getHangup() == 1) {
@@ -362,7 +364,7 @@ public class PoActor extends ASRActor {
                 log.info("[{}]: notifyPlaybackStop => current playbackid: {} mismatch stopped playbackid: {}, ignore", _sessionId, currentPlaybackId, playbackId);
             }
         } else {
-            log.warn("currentPlaybackId is null BUT notifyPlaybackStop with: {}", playbackId);
+            log.warn("[{}]: currentPlaybackId is null BUT notifyPlaybackStop with: {}", _sessionId, playbackId);
         }
         {
             // report AI speak timing
@@ -395,6 +397,45 @@ public class PoActor extends ASRActor {
                     stop_speak_timestamp,
                     ai_speak_duration / 1000.0,
                     resp);
+        }
+    }
+
+    public void notifyPlaybackPaused(final String playbackId,
+                                     final String contentId,
+                                     final String playback_duration) {
+        final String currentPlaybackId = _currentPlaybackId.get();
+        if (currentPlaybackId != null) {
+            if (currentPlaybackId.equals(playbackId)) {
+                final long ai_speak_duration = playback_duration != null
+                        ? (long)(Float.parseFloat(playback_duration) * 1000L)
+                        : 0;
+                _currentPlaybackDuration.set(()->ai_speak_duration);
+                log.info("[{}]: notifyPlaybackPaused => current playbackid: {} Matched / playback_duration: {} ms", _sessionId, playbackId, ai_speak_duration);
+            } else {
+                log.info("[{}]: notifyPlaybackPaused => current playbackid: {} mismatch stopped playbackid: {}, ignore", _sessionId, currentPlaybackId, playbackId);
+            }
+        } else {
+            log.warn("[{}]: currentPlaybackId is null BUT notifyPlaybackPaused with: {}", _sessionId, playbackId);
+        }
+    }
+
+    public void notifyPlaybackResumed(final String playbackId,
+                                      final String contentId,
+                                      final String playback_duration) {
+        final String currentPlaybackId = _currentPlaybackId.get();
+        if (currentPlaybackId != null) {
+            if (currentPlaybackId.equals(playbackId)) {
+                final long ai_speak_duration = playback_duration != null
+                        ? (long)(Float.parseFloat(playback_duration) * 1000L)
+                        : 0;
+                final long now = System.currentTimeMillis();
+                _currentPlaybackDuration.set(()->ai_speak_duration + (System.currentTimeMillis() - now));
+                log.info("[{}]: notifyPlaybackResumed => current playbackid: {} Matched / playback_duration: {} ms", _sessionId, playbackId, ai_speak_duration);
+            } else {
+                log.info("[{}]: notifyPlaybackResumed => current playbackid: {} mismatch stopped playbackid: {}, ignore", _sessionId, currentPlaybackId, playbackId);
+            }
+        } else {
+            log.warn("[{}]: currentPlaybackId is null BUT notifyPlaybackResumed with: {}", _sessionId, playbackId);
         }
     }
 
@@ -546,6 +587,7 @@ public class PoActor extends ASRActor {
             }
             _currentPlaybackId.set(newPlaybackId);
             _currentPlaybackPaused.set(false);
+            _currentPlaybackDuration.set(()->0L);
             _currentStopPlayback.set(playback.get());
             return true;
         }
@@ -594,7 +636,8 @@ public class PoActor extends ASRActor {
     private final AtomicReference<Runnable> _currentStopPlayback = new AtomicReference<>(null);
     private final AtomicReference<String> _currentPlaybackId = new AtomicReference<>(null);
     private final AtomicBoolean _currentPlaybackPaused = new AtomicBoolean(false);
-    private final AtomicLong _currentPlaybackBeginInMs = new AtomicLong(-1);
+    // private final AtomicLong _currentPlaybackBeginInMs = new AtomicLong(-1);
+    private final AtomicReference<Supplier<Long>> _currentPlaybackDuration = new AtomicReference<>(()->0L);
 
     private final AtomicLong _idleStartInMs = new AtomicLong(System.currentTimeMillis());
     private final AtomicBoolean _isUserSpeak = new AtomicBoolean(false);

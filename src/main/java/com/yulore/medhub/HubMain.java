@@ -415,6 +415,38 @@ public class HubMain {
         }
     }
 
+    private void handlePCMPlaybackResumedCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        // eg: {"header": {"name": "PCMPlaybackResumed"},"payload": {"playback_id": "ebfafab3-eb5e-454a-9427-187ceff9ff23", "content_id": "2213745", "playback_duration": "4.410666666666666"}}
+        final String playbackId = cmd.getPayload() != null ? cmd.getPayload().get("playback_id") : null;
+        final String contentId = cmd.getPayload() != null ? cmd.getPayload().get("content_id") : null;
+        final String playback_duration  = cmd.getPayload() != null ? cmd.getPayload().get("playback_duration") : null; //"4.410666666666666"
+
+        final Object attachment = webSocket.getAttachment();
+        if (attachment instanceof String sessionId) {
+            PoActor poActor = PoActor.findBy(sessionId);
+            log.info("[{}]: handlePCMPlaybackResumedCommand: playbackId: {}/attached PoActor: {}", sessionId, playbackId, poActor != null);
+            if (poActor != null) {
+                poActor.notifyPlaybackResumed(playbackId, contentId, playback_duration);
+            }
+        }
+    }
+
+    private void handlePCMPlaybackPausedCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        // eg: {"header": {"name": "PCMPlaybackPaused"},"payload": {"playback_id": "ebfafab3-eb5e-454a-9427-187ceff9ff23", "content_id": "2213745", "playback_duration": "4.410666666666666"}}
+        final String playbackId = cmd.getPayload() != null ? cmd.getPayload().get("playback_id") : null;
+        final String contentId = cmd.getPayload() != null ? cmd.getPayload().get("content_id") : null;
+        final String playback_duration  = cmd.getPayload() != null ? cmd.getPayload().get("playback_duration") : null; //"4.410666666666666"
+
+        final Object attachment = webSocket.getAttachment();
+        if (attachment instanceof String sessionId) {
+            PoActor poActor = PoActor.findBy(sessionId);
+            log.info("[{}]: handlePCMPlaybackPausedCommand: playbackId: {}/attached PoActor: {}", sessionId, playbackId, poActor != null);
+            if (poActor != null) {
+                poActor.notifyPlaybackPaused(playbackId, contentId, playback_duration);
+            }
+        }
+    }
+
     private void handlePCMPlaybackStoppedCommand(final HubCommandVO cmd, final WebSocket webSocket) {
         final String playbackId = cmd.getPayload() != null ? cmd.getPayload().get("playback_id") : null;
         final String contentId = cmd.getPayload() != null ? cmd.getPayload().get("content_id") : null;
@@ -618,6 +650,10 @@ public class HubMain {
             _sessionExecutor.submit(()-> handleFSRecordStartedCommand(cmd, webSocket));
         } else if ("PCMPlaybackStopped".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handlePCMPlaybackStoppedCommand(cmd, webSocket));
+        } else if ("PCMPlaybackPaused".equals(cmd.getHeader().get("name"))) {
+            _sessionExecutor.submit(()-> handlePCMPlaybackPausedCommand(cmd, webSocket));
+        } else if ("PCMPlaybackResumed".equals(cmd.getHeader().get("name"))) {
+            _sessionExecutor.submit(()-> handlePCMPlaybackResumedCommand(cmd, webSocket));
         } /* else if ("Playback".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handlePlaybackCommand(cmd, webSocket));
         } else if ("PlayTTS".equals(cmd.getHeader().get("name"))) {
