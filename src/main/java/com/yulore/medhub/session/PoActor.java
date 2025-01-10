@@ -222,7 +222,8 @@ public class PoActor extends ASRActor {
             if (length >= 10) {
                 if ( (length - countChinesePunctuations(payload.getResult())) >= 10  && _currentPlaybackPaused.compareAndSet(false, true)) {
                     _sendEvent.accept("PCMPausePlayback", new PayloadPCMEvent(_currentPlaybackId.get(), ""));
-                    log.info("[{}]: notifyTranscriptionResultChanged: pause current for result {} text >= 10", _sessionId, payload.getResult());
+                    log.info("[{}]: notifyTranscriptionResultChanged: pause_current ({}) for result {} text >= 10",
+                            _sessionId, _currentPlaybackId.get(), payload.getResult());
                 }
             }
         }
@@ -277,7 +278,7 @@ public class PoActor extends ASRActor {
                     } else {
                         if (isAiSpeaking && _currentPlaybackPaused.compareAndSet(true, false) ) {
                             _sendEvent.accept("PCMResumePlayback", new PayloadPCMEvent(_currentPlaybackId.get(), ""));
-                            log.info("[{}]: notifySentenceEnd: resume current ({}) for ai_reply ({}) without new ai playback",
+                            log.info("[{}]: notifySentenceEnd: resume_current ({}) for ai_reply ({}) without_new_ai_playback",
                                     _sessionId, _currentPlaybackId.get(), payload.getResult());
                         }
                     }
