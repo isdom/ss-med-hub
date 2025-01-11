@@ -753,7 +753,7 @@ public class HubMain {
             log.error("UserAnswer: {} without CallSession, abort", webSocket.getRemoteSocketAddress());
             return;
         }
-        session.notifyUserAnswer(cmd, webSocket);
+        session.notifyUserAnswer(cmd);
     }
 
     Consumer<StreamSession.EventContext> buildSendEvent(final WebSocket webSocket, final int delayInMs) {

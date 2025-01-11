@@ -10,10 +10,11 @@ import com.yulore.medhub.vo.*;
 import com.yulore.util.ByteArrayListInputStream;
 import com.yulore.util.ExceptionUtil;
 import com.yulore.util.WaveUtil;
+import lombok.Builder;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
-import org.java_websocket.WebSocket;
 
 import java.io.*;
 import java.nio.ByteBuffer;
@@ -37,6 +38,17 @@ public class PoActor extends ASRActor {
     }
 
     public record PlaybackContext(String playbackId, String path, String contentId) {
+    }
+
+    @Builder
+    @Data
+    @ToString
+    private static class PlaybackMemo {
+        final int playbackIdx;
+        final String contentId;
+        final boolean cancelOnSpeak;
+        final boolean hangup;
+        long beginInMs;
     }
 
     public PoActor(final String uuid,
@@ -71,7 +83,7 @@ public class PoActor extends ASRActor {
         }
     }
 
-    public void notifyUserAnswer(final HubCommandVO cmd, final WebSocket webSocket) {
+    public void notifyUserAnswer(final HubCommandVO cmd) {
         if (!_isUserAnswered.compareAndSet(false, true)) {
             log.warn("[{}]: notifyUserAnswer called already, ignore!", _sessionId);
             return;
@@ -95,13 +107,29 @@ public class PoActor extends ASRActor {
             log.info("[{}]: userAnswer: kid:{}/tid:{}/realName:{}/gender:{}/aesMobile:{} => response: {}",
                     _sessionId, kid, tid, realName, genderStr, aesMobile, response);
 
-            _lastReply = response.getData();
+            _welcome.set(response.getData());
             _aiSetting = response.getData().getAiSetting();
-            doPlayback(_lastReply);
-            // _callSessions.put(_sessionId, this);
-            // HubEventVO.sendEvent(webSocket, "CallStarted", new PayloadCallStarted(response.getData().getSessionId()));
+            tryPlayWelcome();
         } catch (Exception ex) {
             log.warn("failed for callApi.user_answer, detail: {}", ex.toString());
+        }
+    }
+
+    public void attachPlaybackWs(final Function<PlaybackContext, Runnable> playbackOn, final BiConsumer<String, Object> sendEvent) {
+        _playbackOn = playbackOn;
+        _sendEvent = sendEvent;
+        tryPlayWelcome();
+    }
+
+    private void tryPlayWelcome() {
+        try {
+            _lock.lock();
+            if (_playbackOn != null && _welcome.get() != null) {
+                final AIReplyVO welcome = _welcome.getAndSet(null);
+                doPlayback(welcome);
+            }
+        } finally {
+            _lock.unlock();
         }
     }
 
@@ -132,8 +160,8 @@ public class PoActor extends ASRActor {
                     final ApiResponse<AIReplyVO> response =
                             _scriptApi.ai_reply(_sessionId, null, idleTime, 0, null, 0);
                     if (response.getData() != null) {
-                        if (doPlayback(response.getData())) {
-                            _lastReply = response.getData();
+                        if (response.getData().getAi_content_id() != null && doPlayback(response.getData())) {
+                            // _lastReply = response.getData();
                             return;
                         }
                     } else {
@@ -179,7 +207,7 @@ public class PoActor extends ASRActor {
     }
 
     private String currentAiContentId() {
-        return isAiSpeaking() ? (_lastReply != null && _lastReply.getAi_content_id() != null ? Long.toString(_lastReply.getAi_content_id()) : null) : null;
+        return isAiSpeaking() ? memoFor(_currentPlaybackId.get()).contentId : null;
     }
 
     private int currentSpeakingDuration() {
@@ -187,8 +215,7 @@ public class PoActor extends ASRActor {
     }
 
     public void notifyPlaybackSendStart(final String playbackId, final long startTimestamp) {
-        _id2info.put(playbackId, new PlaybackMemo(startTimestamp, _playbackIdx.incrementAndGet()));
-        // _currentPlaybackBeginInMs.set(startTimestamp);
+        memoFor(playbackId).setBeginInMs(startTimestamp);
         _currentPlaybackDuration.set(()->System.currentTimeMillis() - startTimestamp);
         if (!_currentPS.compareAndSet(null, new PlaybackSegment(startTimestamp))) {
             log.warn("[{}]: notifyPlaybackSendStart: current PlaybackSegment is !NOT! null", _sessionId);
@@ -222,13 +249,22 @@ public class PoActor extends ASRActor {
         log.info("[{}]: notifySentenceBegin: {}", _sessionId, payload);
         _isUserSpeak.set(true);
         _currentSentenceBeginInMs.set(System.currentTimeMillis());
-        if (isAiSpeaking() && _lastReply != null && _lastReply.getCancel_on_speak() != null && _lastReply.getCancel_on_speak()) {
+        if (isAICancelOnSpeak()) {
             final Runnable stopPlayback = _currentStopPlayback.getAndSet(null);
             if (stopPlayback != null) {
                 stopPlayback.run();
             }
             _sendEvent.accept("PCMStopPlayback", new PayloadPCMEvent(_currentPlaybackId.get(), ""));
-            log.info("[{}]: stop current playing ({}) for cancel_on_speak: {}", _sessionId, _currentPlaybackId.get(), _lastReply);
+            log.info("[{}]: stop current playing ({}) for cancel_on_speak is true", _sessionId, _currentPlaybackId.get());
+        }
+    }
+
+    private boolean isAICancelOnSpeak() {
+        final String playbackId = _currentPlaybackId.get();
+        if (playbackId != null) {
+            return memoFor(playbackId).isCancelOnSpeak();
+        } else {
+            return false;
         }
     }
 
@@ -292,7 +328,7 @@ public class PoActor extends ASRActor {
                         userContentId = response.getData().getUser_content_id().toString();
                     }
                     if (response.getData().getAi_content_id() != null && doPlayback(response.getData())) {
-                        _lastReply = response.getData();
+                        // _lastReply = response.getData();
                     } else {
                         if (isAiSpeaking && _currentPlaybackPaused.compareAndSet(true, false) ) {
                             _sendEvent.accept("PCMResumePlayback", new PayloadPCMEvent(_currentPlaybackId.get(), ""));
@@ -374,8 +410,8 @@ public class PoActor extends ASRActor {
                 _currentPlaybackPaused.set(false);
                 _currentPlaybackDuration.set(()->0L);
                 _idleStartInMs.set(System.currentTimeMillis());
-                log.info("[{}]: notifyPlaybackStop => current playbackid: {} Matched / lastReply: {}", _sessionId, playbackId, _lastReply);
-                if (_lastReply != null && _lastReply.getHangup() == 1) {
+                log.info("[{}]: notifyPlaybackStop => current playbackid: {} Matched / memo: {}", _sessionId, playbackId, memoFor(playbackId));
+                if (memoFor(playbackId).isHangup()) {
                     // hangup call
                     _doHangup.accept(this);
                 }
@@ -387,12 +423,12 @@ public class PoActor extends ASRActor {
         }
         {
             // report AI speak timing
-            final PlaybackMemo memo = _id2info.get(playbackId);
+            final PlaybackMemo memo = memoFor(playbackId);
             if (memo == null) {
                 log.warn("[{}]: notifyPlaybackStop: can't find PlaybackMemo by {}", _sessionId, playbackId);
                 return;
             }
-            final long start_speak_timestamp = playback_begin_timestamp != null ? Long.parseLong(playback_begin_timestamp) : memo.beginInMs();
+            final long start_speak_timestamp = playback_begin_timestamp != null ? Long.parseLong(playback_begin_timestamp) : memo.beginInMs;
             final long stop_speak_timestamp = playback_end_timestamp != null ? Long.parseLong(playback_end_timestamp) : System.currentTimeMillis();
             final long ai_speak_duration = playback_duration != null
                     ? (long)(Float.parseFloat(playback_duration) * 1000L)
@@ -401,7 +437,7 @@ public class PoActor extends ASRActor {
             final ApiResponse<Void> resp = _scriptApi.report_content(
                     _sessionId,
                     contentId,
-                    memo.playbackIdx(),
+                    memo.playbackIdx,
                     "AI",
                     _asrStartInMs.get(),
                     start_speak_timestamp,
@@ -410,7 +446,7 @@ public class PoActor extends ASRActor {
             log.info("[{}]: ai report_content(content_id:{}/idx:{}/asr_start:{}/start_speak:{}/stop_speak:{}/speak_duration:{} s)'s resp: {}",
                     _sessionId,
                     contentId,
-                    memo.playbackIdx(),
+                    memo.playbackIdx,
                     _asrStartInMs.get(),
                     start_speak_timestamp,
                     stop_speak_timestamp,
@@ -586,11 +622,6 @@ public class PoActor extends ASRActor {
         }
     }
 
-    public void attachPlaybackWs(final Function<PlaybackContext, Runnable> playbackOn, final BiConsumer<String, Object> sendEvent) {
-        _playbackOn = playbackOn;
-        _sendEvent = sendEvent;
-    }
-
     private boolean doPlayback(final AIReplyVO replyVO) {
         final String newPlaybackId = UUID.randomUUID().toString();
         log.info("[{}]: doPlayback: {}", _sessionId, replyVO);
@@ -606,9 +637,31 @@ public class PoActor extends ASRActor {
             _currentPlaybackId.set(newPlaybackId);
             _currentPlaybackPaused.set(false);
             _currentPlaybackDuration.set(()->0L);
+            createPlaybackMemo(newPlaybackId,
+                    replyVO.getAi_content_id(),
+                    replyVO.getCancel_on_speak(),
+                    replyVO.getHangup() == 1);
             _currentStopPlayback.set(playback.get());
             return true;
         }
+    }
+
+    private void createPlaybackMemo(final String playbackId,
+                                    final Long contentId,
+                                    final boolean cancelOnSpeak,
+                                    final boolean hangup) {
+        _id2memo.put(playbackId,
+                PlaybackMemo.builder()
+                        .playbackIdx(_playbackIdx.incrementAndGet())
+                        .contentId(Long.toString(contentId))
+                        .beginInMs(System.currentTimeMillis())
+                        .cancelOnSpeak(cancelOnSpeak)
+                        .hangup(hangup)
+                        .build());
+    }
+
+    private PlaybackMemo memoFor(final String playbackId) {
+        return _id2memo.get(playbackId);
     }
 
     private Supplier<Runnable> reply2playback(final String playbackId, final AIReplyVO replyVO) {
@@ -649,14 +702,14 @@ public class PoActor extends ASRActor {
     private final Consumer<PoActor> _doHangup;
     private final String _bucket;
     private final String _wavPath;
-    private AIReplyVO _lastReply;
+    // private AIReplyVO _lastReply;
+    private final AtomicReference<AIReplyVO> _welcome = new AtomicReference<>(null);
     private AiSettingVO _aiSetting;
 
     private Function<PlaybackContext, Runnable> _playbackOn;
     private final AtomicReference<Runnable> _currentStopPlayback = new AtomicReference<>(null);
     private final AtomicReference<String> _currentPlaybackId = new AtomicReference<>(null);
     private final AtomicBoolean _currentPlaybackPaused = new AtomicBoolean(false);
-    // private final AtomicLong _currentPlaybackBeginInMs = new AtomicLong(-1);
     private final AtomicReference<Supplier<Long>> _currentPlaybackDuration = new AtomicReference<>(()->0L);
 
     private final AtomicLong _idleStartInMs = new AtomicLong(System.currentTimeMillis());
@@ -665,9 +718,7 @@ public class PoActor extends ASRActor {
 
     private final AtomicInteger _playbackIdx = new AtomicInteger(0);
 
-    public record PlaybackMemo(long beginInMs, int playbackIdx) {
-    }
-    private final ConcurrentMap<String, PlaybackMemo> _id2info = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, PlaybackMemo> _id2memo = new ConcurrentHashMap<>();
 
     private static final ConcurrentMap<String, PoActor> _callSessions = new ConcurrentHashMap<>();
 
