@@ -62,7 +62,6 @@ public class PoActor extends ASRActor {
                    final Consumer<String> callStarted) {
         _uuid = uuid;
         _tid = tid;
-        _sessionId = null;
         _scriptApi = scriptApi;
         _callApi = callApi;
         _doHangup = doHangup;
@@ -75,7 +74,7 @@ public class PoActor extends ASRActor {
                             .tid(_tid)
                             .build());
             _sessionId = response.getData().getSessionId();
-            log.info("[{}]: apply_session => response: {}", _sessionId, response);
+            log.info("[{}]-[{}]: apply_session => response: {}", _sessionId, _uuid, response);
             _callSessions.put(_sessionId, this);
             callStarted.accept(_sessionId);
         } catch (Exception ex) {
@@ -85,7 +84,7 @@ public class PoActor extends ASRActor {
 
     public void notifyUserAnswer(final HubCommandVO cmd) {
         if (!_isUserAnswered.compareAndSet(false, true)) {
-            log.warn("[{}]: notifyUserAnswer called already, ignore!", _sessionId);
+            log.warn("[{}]-[{}]: notifyUserAnswer called already, ignore!", _sessionId, _uuid);
             return;
         }
         try {
@@ -104,8 +103,8 @@ public class PoActor extends ASRActor {
                             .aesMobile(aesMobile)
                             .answerTime(System.currentTimeMillis())
                             .build());
-            log.info("[{}]: userAnswer: kid:{}/tid:{}/realName:{}/gender:{}/aesMobile:{} => response: {}",
-                    _sessionId, kid, tid, realName, genderStr, aesMobile, response);
+            log.info("[{}]-[{}]: userAnswer: kid:{}/tid:{}/realName:{}/gender:{}/aesMobile:{} => response: {}",
+                    _sessionId, _uuid, kid, tid, realName, genderStr, aesMobile, response);
 
             _welcome.set(response.getData());
             _aiSetting = response.getData().getAiSetting();
@@ -155,25 +154,24 @@ public class PoActor extends ASRActor {
             && _aiSetting != null
             ) {
             if (idleTime > _aiSetting.getIdle_timeout()) {
-                log.info("[{}]: checkIdle: idle duration: {} ms >=: [{}] ms\n", _sessionId, idleTime, _aiSetting.getIdle_timeout());
+                log.info("[{}]-[{}]: checkIdle: idle duration: {} ms >=: [{}] ms\n", _sessionId, _uuid, idleTime, _aiSetting.getIdle_timeout());
                 try {
                     final ApiResponse<AIReplyVO> response =
                             _scriptApi.ai_reply(_sessionId, null, idleTime, 0, null, 0);
                     if (response.getData() != null) {
                         if (response.getData().getAi_content_id() != null && doPlayback(response.getData())) {
-                            // _lastReply = response.getData();
                             return;
                         }
                     } else {
-                        log.info("[{}]: checkIdle: ai_reply {}, do nothing\n", _sessionId, response);
+                        log.info("[{}]-[{}]: checkIdle: ai_reply {}, do nothing\n", _sessionId, _uuid, response);
                     }
                 } catch (Exception ex) {
-                    log.warn("[{}]: checkIdle: ai_reply error, detail: {}", _sessionId, ex.toString());
+                    log.warn("[{}]-[{}]: checkIdle: ai_reply error, detail: {}", _sessionId, _uuid, ex.toString());
                 }
             }
         }
-        log.info("[{}]: checkIdle: is_speaking: {}/is_playing: {}/idle duration: {} ms",
-                _sessionId, _isUserSpeak.get(), isAiSpeaking, idleTime);
+        log.info("[{}]-[{}]: checkIdle: is_speaking: {}/is_playing: {}/idle duration: {} ms",
+                _sessionId, _uuid, _isUserSpeak.get(), isAiSpeaking, idleTime);
         /*
         if (!_isUserSpeak.get() && isAiSpeaking() && _currentPlaybackPaused.get() && idleTime >= 2000) {
             // user not speaking & ai speaking and paused and user not speak more than 2s
