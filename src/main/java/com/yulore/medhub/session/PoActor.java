@@ -15,6 +15,7 @@ import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.*;
 import java.nio.ByteBuffer;
@@ -199,7 +200,7 @@ public class PoActor extends ASRActor {
 
             return result;
         } catch (Exception ex) {
-            log.warn("[{}]: transmit_asr_failed, detail: {}", _sessionId, ex.toString());
+            log.warn("[{}]-[{}]: transmit_asr_failed, detail: {}", _sessionId, _uuid, ex.toString());
             return false;
         }
     }
@@ -216,9 +217,9 @@ public class PoActor extends ASRActor {
         memoFor(playbackId).setBeginInMs(startTimestamp);
         _currentPlaybackDuration.set(()->System.currentTimeMillis() - startTimestamp);
         if (!_currentPS.compareAndSet(null, new PlaybackSegment(startTimestamp))) {
-            log.warn("[{}]: notifyPlaybackSendStart: current PlaybackSegment is !NOT! null", _sessionId);
+            log.warn("[{}]-[{}]: notifyPlaybackSendStart: current PlaybackSegment is !NOT! null", _sessionId, _uuid);
         } else {
-            log.info("[{}]: notifyPlaybackSendStart: add new PlaybackSegment", _sessionId);
+            log.info("[{}]-[{}]: notifyPlaybackSendStart: add new PlaybackSegment", _sessionId, _uuid);
         }
     }
 
@@ -226,9 +227,9 @@ public class PoActor extends ASRActor {
         final PlaybackSegment ps = _currentPS.getAndSet(null);
         if (ps != null) {
             _dsBufs.add(ps);
-            log.info("[{}]: notifyPlaybackSendStop: move current PlaybackSegment to _dsBufs", _sessionId);
+            log.info("[{}]-[{}]: notifyPlaybackSendStop: move current PlaybackSegment to _dsBufs", _sessionId, _uuid);
         } else {
-            log.warn("[{}]: notifyPlaybackSendStop: current PlaybackSegment is null", _sessionId);
+            log.warn("[{}]-[{}]: notifyPlaybackSendStop: current PlaybackSegment is null", _sessionId, _uuid);
         }
     }
 
@@ -237,14 +238,14 @@ public class PoActor extends ASRActor {
         if (ps != null) {
             ps._data.add(bytes);
         } else {
-            log.warn("[{}]: notifyPlaybackSendData: current PlaybackSegment is null", _sessionId);
+            log.warn("[{}]-[{}]: notifyPlaybackSendData: current PlaybackSegment is null", _sessionId, _uuid);
         }
     }
 
     @Override
     public void notifySentenceBegin(final PayloadSentenceBegin payload) {
         super.notifySentenceBegin(payload);
-        log.info("[{}]: notifySentenceBegin: {}", _sessionId, payload);
+        log.info("[{}]-[{}]: notifySentenceBegin: {}", _sessionId, _uuid, payload);
         _isUserSpeak.set(true);
         _currentSentenceBeginInMs.set(System.currentTimeMillis());
         if (isAICancelOnSpeak()) {
@@ -253,7 +254,7 @@ public class PoActor extends ASRActor {
                 stopPlayback.run();
             }
             _sendEvent.accept("PCMStopPlayback", new PayloadPCMEvent(_currentPlaybackId.get(), ""));
-            log.info("[{}]: stop current playing ({}) for cancel_on_speak is true", _sessionId, _currentPlaybackId.get());
+            log.info("[{}]-[{}]: stop current playing ({}) for cancel_on_speak is true", _sessionId, _uuid, _currentPlaybackId.get());
         }
     }
 
@@ -274,8 +275,8 @@ public class PoActor extends ASRActor {
             if (length >= 10) {
                 if ( (length - countChinesePunctuations(payload.getResult())) >= 10  && _currentPlaybackPaused.compareAndSet(false, true)) {
                     _sendEvent.accept("PCMPausePlayback", new PayloadPCMEvent(_currentPlaybackId.get(), ""));
-                    log.info("[{}]: notifyTranscriptionResultChanged: pause_current ({}) for result {} text >= 10",
-                            _sessionId, _currentPlaybackId.get(), payload.getResult());
+                    log.info("[{}]-[{}]: notifyTranscriptionResultChanged: pause_current ({}) for result {} text >= 10",
+                            _sessionId, _uuid, _currentPlaybackId.get(), payload.getResult());
                 }
             }
         }
@@ -292,106 +293,72 @@ public class PoActor extends ASRActor {
         return count;
     }
 
+    // 将需要计算的中文标点放入此数组中
+    private static final Character[] punctuations = new Character[] {
+            '，', '。', '！', '？', '；', '：', '“', '”'
+    };
+
     private static boolean isChinesePunctuation(final char ch) {
-        // 将需要计算的中文标点放入此数组中
-        final Character[] punctuations = new Character[]{
-                '，', '。', '！', '？', '；', '：', '“', '”'
-        };
         return Arrays.stream(punctuations).anyMatch(p -> p == ch);
     }
 
     @Override
     public void notifySentenceEnd(final PayloadSentenceEnd payload) {
         super.notifySentenceEnd(payload);
-        log.info("[{}]: notifySentenceEnd: {}", _sessionId, payload);
+        log.info("[{}]-[{}]: notifySentenceEnd: {}", _sessionId, _uuid, payload);
 
         final long sentenceEndInMs = System.currentTimeMillis();
         _isUserSpeak.set(false);
         _idleStartInMs.set(sentenceEndInMs);
         if (_sessionId != null && _playbackOn != null) {
             // _playbackOn != null means playback ws has connected
-            final boolean isAiSpeaking = isAiSpeaking();;
-            String userContentId = null;
-            try {
-                final String userSpeechText = payload.getResult();
-                final String aiContentId = currentAiContentId();
-                final int speakingDuration = currentSpeakingDuration();
-                log.info("[{}]: ai_reply: speech:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
-                        _sessionId, userSpeechText, isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
-                final ApiResponse<AIReplyVO> response =
-                        _scriptApi.ai_reply(_sessionId, userSpeechText,null, isAiSpeaking ? 1 : 0, aiContentId, speakingDuration);
-
-                if (response.getData() != null) {
-                    if (response.getData().getUser_content_id() != null) {
-                        userContentId = response.getData().getUser_content_id().toString();
-                    }
-                    if (response.getData().getAi_content_id() != null && doPlayback(response.getData())) {
-                        // _lastReply = response.getData();
-                    } else {
-                        if (isAiSpeaking && _currentPlaybackPaused.compareAndSet(true, false) ) {
-                            _sendEvent.accept("PCMResumePlayback", new PayloadPCMEvent(_currentPlaybackId.get(), ""));
-                            log.info("[{}]: notifySentenceEnd: resume_current ({}) for ai_reply ({}) without_new_ai_playback",
-                                    _sessionId, _currentPlaybackId.get(), payload.getResult());
-                        }
-                    }
-                } else {
-                    log.info("[{}]: notifySentenceEnd: ai_reply {}, do nothing\n", _sessionId, response);
-                }
-            } catch (Exception ex) {
-                log.warn("[{}]: notifySentenceEnd: ai_reply error, detail: {}", _sessionId, ExceptionUtil.exception2detail(ex));
-            }
-
-            {
-                // report USER speak timing
-                // ASR-Sentence-Begin-Time in Milliseconds
-                final long start_speak_timestamp = _asrStartInMs.get() + payload.getBegin_time();
-                // ASR-Sentence-End-Time in Milliseconds
-                final long stop_speak_timestamp = _asrStartInMs.get() + payload.getTime();
-                final long user_speak_duration = stop_speak_timestamp - start_speak_timestamp;
-
-                final ApiResponse<Void> resp = _scriptApi.report_content(
-                        _sessionId,
-                        userContentId,
-                        payload.getIndex(),
-                        "USER",
-                        _asrStartInMs.get(),
-                        start_speak_timestamp,
-                        stop_speak_timestamp,
-                        user_speak_duration);
-                log.info("[{}]: user report_content(content_id:{}/idx:{}/asr_start:{}/start_speak:{}/stop_speak:{}/speak_duration:{} s)'s resp: {}",
-                        _sessionId,
-                        userContentId,
-                        payload.getIndex(),
-                        _asrStartInMs.get(),
-                        start_speak_timestamp,
-                        stop_speak_timestamp,
-                        user_speak_duration / 1000.0,
-                        resp);
-            }
-            {
-                // report ASR event timing
-                // sentence_begin_event_time in Milliseconds
-                final long begin_event_time = _currentSentenceBeginInMs.get() - _asrStartInMs.get();
-
-                // sentence_end_event_time in Milliseconds
-                final long end_event_time = sentenceEndInMs - _asrStartInMs.get();
-
-                final ApiResponse<Void> resp = _scriptApi.report_asrtime(
-                        _sessionId,
-                        userContentId,
-                        payload.getIndex(),
-                        begin_event_time,
-                        end_event_time);
-                log.info("[{}]: user report_asrtime({})'s resp: {}", _sessionId, userContentId, resp);
-            }
+            final String userContentId = interactWithScriptEngine(payload);
+            reportUserContent(payload, userContentId);
+            reportAsrTime(payload, sentenceEndInMs, userContentId);
         } else {
-            log.warn("[{}]: notifySentenceEnd but sessionId is null or playback not ready => _playbackOn {}", _sessionId, _playbackOn);
+            log.warn("[{}]-[{}]: notifySentenceEnd but sessionId is null or playback not ready => _playbackOn {}",
+                    _sessionId, _uuid, _playbackOn);
         }
     }
 
+    @Nullable
+    private String interactWithScriptEngine(final PayloadSentenceEnd payload) {
+        final boolean isAiSpeaking = isAiSpeaking();
+        String userContentId = null;
+        try {
+            final String userSpeechText = payload.getResult();
+            final String aiContentId = currentAiContentId();
+            final int speakingDuration = currentSpeakingDuration();
+            log.info("[{}]-[{}]: ai_reply: speech:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
+                    _sessionId, _uuid, userSpeechText, isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
+            final ApiResponse<AIReplyVO> response =
+                    _scriptApi.ai_reply(_sessionId, userSpeechText,null, isAiSpeaking ? 1 : 0, aiContentId, speakingDuration);
+
+            if (response.getData() != null) {
+                if (response.getData().getUser_content_id() != null) {
+                    userContentId = response.getData().getUser_content_id().toString();
+                }
+                if (response.getData().getAi_content_id() != null && doPlayback(response.getData())) {
+                    // _lastReply = response.getData();
+                } else {
+                    if (isAiSpeaking && _currentPlaybackPaused.compareAndSet(true, false) ) {
+                        _sendEvent.accept("PCMResumePlayback", new PayloadPCMEvent(_currentPlaybackId.get(), ""));
+                        log.info("[{}]-[{}]: notifySentenceEnd: resume_current ({}) for ai_reply ({}) without_new_ai_playback",
+                                _sessionId, _uuid, _currentPlaybackId.get(), payload.getResult());
+                    }
+                }
+            } else {
+                log.info("[{}]-[{}]: notifySentenceEnd: ai_reply {}, do_nothing", _sessionId, _uuid, response);
+            }
+        } catch (final Exception ex) {
+            log.warn("[{}]-[{}]: notifySentenceEnd: ai_reply error, detail: {}", _sessionId, _uuid, ExceptionUtil.exception2detail(ex));
+        }
+        return userContentId;
+    }
+
     public void notifyPlaybackStart(final String playbackId) {
-        log.info("[{}]: notifyPlaybackStart => task: {} while currentPlaybackId: {}",
-                _sessionId, playbackId, _currentPlaybackId.get());
+        log.info("[{}]-[{}]: notifyPlaybackStart => task: {} while currentPlaybackId: {}",
+                _sessionId, _uuid, playbackId, _currentPlaybackId.get());
     }
 
     public void notifyPlaybackStop(final String playbackId,
@@ -408,49 +375,103 @@ public class PoActor extends ASRActor {
                 _currentPlaybackPaused.set(false);
                 _currentPlaybackDuration.set(()->0L);
                 _idleStartInMs.set(System.currentTimeMillis());
-                log.info("[{}]: notifyPlaybackStop => current playbackid: {} Matched / memo: {}", _sessionId, playbackId, memoFor(playbackId));
+                log.info("[{}]-[{}]: notifyPlaybackStop => current playbackid: {} Matched / memo: {}", _sessionId, _uuid, playbackId, memoFor(playbackId));
                 if (memoFor(playbackId).isHangup()) {
                     // hangup call
                     _doHangup.accept(this);
                 }
             } else {
-                log.info("[{}]: notifyPlaybackStop => current playbackid: {} mismatch stopped playbackid: {}, ignore", _sessionId, currentPlaybackId, playbackId);
+                log.info("[{}]-[{}]: notifyPlaybackStop => current playbackid: {} mismatch stopped playbackid: {}, ignore",
+                        _sessionId, _uuid, currentPlaybackId, playbackId);
             }
         } else {
-            log.warn("[{}]: currentPlaybackId is null BUT notifyPlaybackStop with: {}", _sessionId, playbackId);
+            log.warn("[{}]-[{}]: currentPlaybackId is null BUT notifyPlaybackStop with: {}", _sessionId, _uuid, playbackId);
         }
-        {
-            // report AI speak timing
-            final PlaybackMemo memo = memoFor(playbackId);
-            if (memo == null) {
-                log.warn("[{}]: notifyPlaybackStop: can't find PlaybackMemo by {}", _sessionId, playbackId);
-                return;
-            }
-            final long start_speak_timestamp = playback_begin_timestamp != null ? Long.parseLong(playback_begin_timestamp) : memo.beginInMs;
-            final long stop_speak_timestamp = playback_end_timestamp != null ? Long.parseLong(playback_end_timestamp) : System.currentTimeMillis();
-            final long ai_speak_duration = playback_duration != null
-                    ? (long)(Float.parseFloat(playback_duration) * 1000L)
-                    : (stop_speak_timestamp - start_speak_timestamp);
+        reportAIContent(playbackId, contentId, playback_begin_timestamp, playback_end_timestamp, playback_duration);
+    }
 
-            final ApiResponse<Void> resp = _scriptApi.report_content(
-                    _sessionId,
-                    contentId,
-                    memo.playbackIdx,
-                    "AI",
-                    _asrStartInMs.get(),
-                    start_speak_timestamp,
-                    stop_speak_timestamp,
-                    ai_speak_duration);
-            log.info("[{}]: ai report_content(content_id:{}/idx:{}/asr_start:{}/start_speak:{}/stop_speak:{}/speak_duration:{} s)'s resp: {}",
-                    _sessionId,
-                    contentId,
-                    memo.playbackIdx,
-                    _asrStartInMs.get(),
-                    start_speak_timestamp,
-                    stop_speak_timestamp,
-                    ai_speak_duration / 1000.0,
-                    resp);
+    private void reportUserContent(final PayloadSentenceEnd payload, final String userContentId) {
+        // report USER speak timing
+        // ASR-Sentence-Begin-Time in Milliseconds
+        final long start_speak_timestamp = _asrStartInMs.get() + payload.getBegin_time();
+        // ASR-Sentence-End-Time in Milliseconds
+        final long stop_speak_timestamp = _asrStartInMs.get() + payload.getTime();
+        final long user_speak_duration = stop_speak_timestamp - start_speak_timestamp;
+
+        final ApiResponse<Void> resp = _scriptApi.report_content(
+                _sessionId,
+                userContentId,
+                payload.getIndex(),
+                "USER",
+                _asrStartInMs.get(),
+                start_speak_timestamp,
+                stop_speak_timestamp,
+                user_speak_duration);
+        log.info("[{}]-[{}]: user report_content(content_id:{}/idx:{}/asr_start:{}/start_speak:{}/stop_speak:{}/speak_duration:{} s)'s resp: {}",
+                _sessionId,
+                _uuid,
+                userContentId,
+                payload.getIndex(),
+                _asrStartInMs.get(),
+                start_speak_timestamp,
+                stop_speak_timestamp,
+                user_speak_duration / 1000.0,
+                resp);
+    }
+
+    private void reportAsrTime(final PayloadSentenceEnd payload, final long sentenceEndInMs, final String userContentId) {
+        // report ASR event timing
+        // sentence_begin_event_time in Milliseconds
+        final long begin_event_time = _currentSentenceBeginInMs.get() - _asrStartInMs.get();
+
+        // sentence_end_event_time in Milliseconds
+        final long end_event_time = sentenceEndInMs - _asrStartInMs.get();
+
+        final ApiResponse<Void> resp = _scriptApi.report_asrtime(
+                _sessionId,
+                userContentId,
+                payload.getIndex(),
+                begin_event_time,
+                end_event_time);
+        log.info("[{}]: user report_asrtime({})'s resp: {}", _sessionId, userContentId, resp);
+    }
+
+    private void reportAIContent(final String playbackId,
+                                 final String contentId,
+                                 final String playback_begin_timestamp,
+                                 final String playback_end_timestamp,
+                                 final String playback_duration) {
+        // report AI speak timing
+        final PlaybackMemo memo = memoFor(playbackId);
+        if (memo == null) {
+            log.warn("[{}]-[{}]: notifyPlaybackStop: can't find PlaybackMemo by {}", _sessionId, _uuid, playbackId);
+            return;
         }
+        final long start_speak_timestamp = playback_begin_timestamp != null ? Long.parseLong(playback_begin_timestamp) : memo.beginInMs;
+        final long stop_speak_timestamp = playback_end_timestamp != null ? Long.parseLong(playback_end_timestamp) : System.currentTimeMillis();
+        final long ai_speak_duration = playback_duration != null
+                ? (long)(Float.parseFloat(playback_duration) * 1000L)
+                : (stop_speak_timestamp - start_speak_timestamp);
+
+        final ApiResponse<Void> resp = _scriptApi.report_content(
+                _sessionId,
+                contentId,
+                memo.playbackIdx,
+                "AI",
+                _asrStartInMs.get(),
+                start_speak_timestamp,
+                stop_speak_timestamp,
+                ai_speak_duration);
+        log.info("[{}]-[{}]: ai report_content(content_id:{}/idx:{}/asr_start:{}/start_speak:{}/stop_speak:{}/speak_duration:{} s)'s resp: {}",
+                _sessionId,
+                _uuid,
+                contentId,
+                memo.playbackIdx,
+                _asrStartInMs.get(),
+                start_speak_timestamp,
+                stop_speak_timestamp,
+                ai_speak_duration / 1000.0,
+                resp);
     }
 
     public void notifyPlaybackPaused(final String playbackId,
@@ -463,12 +484,14 @@ public class PoActor extends ASRActor {
                         ? (long)(Float.parseFloat(playback_duration) * 1000L)
                         : 0;
                 _currentPlaybackDuration.set(()->ai_speak_duration);
-                log.info("[{}]: notifyPlaybackPaused => current playbackid: {} Matched / playback_duration: {} ms", _sessionId, playbackId, ai_speak_duration);
+                log.info("[{}]-[{}]: notifyPlaybackPaused => current playbackid: {} Matched / playback_duration: {} ms",
+                        _sessionId, _uuid, playbackId, ai_speak_duration);
             } else {
-                log.info("[{}]: notifyPlaybackPaused => current playbackid: {} mismatch stopped playbackid: {}, ignore", _sessionId, currentPlaybackId, playbackId);
+                log.info("[{}]-[{}]: notifyPlaybackPaused => current playbackid: {} mismatch stopped playbackid: {}, ignore",
+                        _sessionId, _uuid, currentPlaybackId, playbackId);
             }
         } else {
-            log.warn("[{}]: currentPlaybackId is null BUT notifyPlaybackPaused with: {}", _sessionId, playbackId);
+            log.warn("[{}]-[{}]: currentPlaybackId is null BUT notifyPlaybackPaused with: {}", _sessionId, _uuid, playbackId);
         }
     }
 
@@ -481,14 +504,16 @@ public class PoActor extends ASRActor {
                 final long ai_speak_duration = playback_duration != null
                         ? (long)(Float.parseFloat(playback_duration) * 1000L)
                         : 0;
-                final long now = System.currentTimeMillis();
-                _currentPlaybackDuration.set(()->ai_speak_duration + (System.currentTimeMillis() - now));
-                log.info("[{}]: notifyPlaybackResumed => current playbackid: {} Matched / playback_duration: {} ms", _sessionId, playbackId, ai_speak_duration);
+                final long playbackResumedInMs = System.currentTimeMillis();
+                _currentPlaybackDuration.set(()->ai_speak_duration + (System.currentTimeMillis() - playbackResumedInMs));
+                log.info("[{}]-[{}]: notifyPlaybackResumed => current playbackid: {} Matched / playback_duration: {} ms",
+                        _sessionId, _uuid, playbackId, ai_speak_duration);
             } else {
-                log.info("[{}]: notifyPlaybackResumed => current playbackid: {} mismatch stopped playbackid: {}, ignore", _sessionId, currentPlaybackId, playbackId);
+                log.info("[{}]-[{}]: notifyPlaybackResumed => current playbackid: {} mismatch stopped playbackid: {}, ignore",
+                        _sessionId, _uuid, currentPlaybackId, playbackId);
             }
         } else {
-            log.warn("[{}]: currentPlaybackId is null BUT notifyPlaybackResumed with: {}", _sessionId, playbackId);
+            log.warn("[{}]-[{}]: currentPlaybackId is null BUT notifyPlaybackResumed with: {}", _sessionId, _uuid, playbackId);
         }
     }
 
@@ -497,17 +522,24 @@ public class PoActor extends ASRActor {
         super.close();
         if (_sessionId != null) {
             _callSessions.remove(_sessionId);
-            if (isAiSpeaking()) {
+            final String currentPlaybackId = _currentPlaybackId.getAndSet(null);
+            if (null != currentPlaybackId) {
                 // stop current playback when call close()
                 final Runnable stopPlayback = _currentStopPlayback.getAndSet(null);
                 if (stopPlayback != null) {
                     stopPlayback.run();
                 }
-                _sendEvent.accept("PCMStopPlayback", new PayloadPCMEvent(_currentPlaybackId.get(), ""));
+                _sendEvent.accept("PCMStopPlayback", new PayloadPCMEvent(currentPlaybackId, ""));
             }
             generateRecordAndUpload();
         } else {
-            log.warn("PoActor: close_without_valid_sessionId");
+            log.warn("[{}]: close_without_valid_sessionId", _uuid);
+        }
+        if (!_isUserAnswered.get()) {
+            log.warn("[{}]-[{}]: close_without_user_answer", _sessionId, _uuid);
+        }
+        if (_playbackOn == null) {
+            log.warn("[{}]-[{}]: close_without_playback_ws", _sessionId, _uuid);
         }
     }
 
@@ -516,19 +548,19 @@ public class PoActor extends ASRActor {
         // eg: "answer_record_file": "rms://{uuid={uuid},url=xxxx,bucket=<bucketName>}<objectName>",
         final int braceBegin = path.indexOf('{');
         if (braceBegin == -1) {
-            log.warn("{} missing vars, ignore", path);
+            log.warn("[{}]-[{}]: {} missing vars, ignore", _sessionId, _uuid, path);
             return;
         }
         final int braceEnd = path.lastIndexOf('}');
         if (braceEnd == -1) {
-            log.warn("{} missing vars, ignore", path);
+            log.warn("[{}]-[{}]: {} missing vars, ignore", _sessionId, _uuid, path);
             return;
         }
         final String vars = path.substring(braceBegin + 1, braceEnd);
 
         final String bucketName = VarsUtil.extractValue(vars, "bucket");
         if (null == bucketName) {
-            log.warn("{} missing bucket field, ignore", path);
+            log.warn("[{}]-[{}]: {} missing bucket field, ignore", _sessionId, _uuid, path);
             return;
         }
 
@@ -558,12 +590,12 @@ public class PoActor extends ASRActor {
                 if (next_ps.get() != null && next_ps.get().timestamp == currentInMs) {
                     // current ps & next_ps overlapped
                     // ignore the rest of current ps, and using next_ps as new ps for recording
-                    log.info("current ps overlapped with next ps at timestamp: {}, using_next_ps_as_current", next_ps.get().timestamp);
+                    log.info("[{}]-[{}]: current ps overlapped with next ps at timestamp: {}, using_next_ps_as_current", _sessionId, _uuid, next_ps.get().timestamp);
                     fetchPS(ps, next_ps, currentInMs);
                     downsample_is = null;
                 }
                 if (downsample_is == null && ps.get() != null && ps.get().timestamp == currentInMs) {
-                    log.info("current ps {} match currentInMS", ps.get().timestamp);
+                    log.info("[{}]-[{}]: current ps {} match currentInMS", _sessionId, _uuid, ps.get().timestamp);
                     downsample_is = new ByteArrayListInputStream(ps.get()._data);
                 }
                 boolean downsample_written = false;
@@ -592,12 +624,12 @@ public class PoActor extends ASRActor {
                 }
             }
 
-            log.info("[{}]: total written {} samples, {} seconds", _sessionId, sample_count, (float)sample_count / 16000);
+            log.info("[{}]-[{}] generateRecordAndUpload: total written {} samples, {} seconds", _sessionId, _uuid, sample_count, (float)sample_count / 16000);
 
             bos.flush();
             _doSaveRecord.accept(new RecordContext(_sessionId, bucketName, objectName, new ByteArrayInputStream(bos.toByteArray())));
         } catch (IOException ex) {
-            log.warn("[{}] close: generate record stream error, detail: {}", _sessionId, ex.toString());
+            log.warn("[{}]-[{}] generateRecordAndUpload: generate record stream error, detail: {}", _sessionId, _uuid, ex.toString());
             throw new RuntimeException(ex);
         }
     }
@@ -606,13 +638,13 @@ public class PoActor extends ASRActor {
         if (!_dsBufs.isEmpty()) {
             ps.set(_dsBufs.remove(0));
             if (ps.get() != null) {
-                log.info("new current ps's start tm: {} / currentInMS: {}", ps.get().timestamp, currentInMs);
+                log.info("[{}]-[{}]: new current ps's start tm: {} / currentInMS: {}", _sessionId, _uuid, ps.get().timestamp, currentInMs);
             }
             if (!_dsBufs.isEmpty()) {
                 // prefetch next ps
                 next_ps.set(_dsBufs.get(0));
                 if (next_ps.get() != null) {
-                    log.info("next current ps's start tm: {} / currentInMS: {}", next_ps.get().timestamp, currentInMs);
+                    log.info("[{}]-[{}]: next current ps's start tm: {} / currentInMS: {}", _sessionId, _uuid, next_ps.get().timestamp, currentInMs);
                 }
             } else {
                 next_ps.set(null);
@@ -622,10 +654,10 @@ public class PoActor extends ASRActor {
 
     private boolean doPlayback(final AIReplyVO replyVO) {
         final String newPlaybackId = UUID.randomUUID().toString();
-        log.info("[{}]: doPlayback: {}", _sessionId, replyVO);
+        log.info("[{}]-[{}]: doPlayback: {}", _sessionId, _uuid, replyVO);
         final Supplier<Runnable> playback = reply2playback(newPlaybackId, replyVO);
         if (playback == null) {
-            log.info("[{}]: doPlayback: unknown reply: {}, ignore", _sessionId, replyVO);
+            log.info("[{}]-[{}]: doPlayback: unknown reply: {}, ignore", _sessionId, _uuid, replyVO);
             return false;
         } else {
             final Runnable stopPlayback = _currentStopPlayback.getAndSet(null);
@@ -700,7 +732,6 @@ public class PoActor extends ASRActor {
     private final Consumer<PoActor> _doHangup;
     private final String _bucket;
     private final String _wavPath;
-    // private AIReplyVO _lastReply;
     private final AtomicReference<AIReplyVO> _welcome = new AtomicReference<>(null);
     private AiSettingVO _aiSetting;
 
