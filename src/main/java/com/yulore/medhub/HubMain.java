@@ -424,6 +424,21 @@ public class HubMain {
         }
     }
 
+    private void handlePCMPlaybackStartedCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        // eg: {"header": {"name": "PCMPlaybackStarted"},"payload": {"playback_id": "ebfafab3-eb5e-454a-9427-187ceff9ff23", "content_id": "2213745"}}
+        final String playbackId = cmd.getPayload() != null ? cmd.getPayload().get("playback_id") : null;
+        final String contentId = cmd.getPayload() != null ? cmd.getPayload().get("content_id") : null;
+
+        final Object attachment = webSocket.getAttachment();
+        if (attachment instanceof String sessionId) {
+            PoActor poActor = PoActor.findBy(sessionId);
+            log.info("[{}]: handlePCMPlaybackStartedCommand: playbackId: {}/attached PoActor: {}", sessionId, playbackId, poActor != null);
+            if (poActor != null) {
+                poActor.notifyPlaybackStarted(playbackId, contentId);
+            }
+        }
+    }
+
     private void handlePCMPlaybackResumedCommand(final HubCommandVO cmd, final WebSocket webSocket) {
         // eg: {"header": {"name": "PCMPlaybackResumed"},"payload": {"playback_id": "ebfafab3-eb5e-454a-9427-187ceff9ff23", "content_id": "2213745", "playback_duration": "4.410666666666666"}}
         final String playbackId = cmd.getPayload() != null ? cmd.getPayload().get("playback_id") : null;
@@ -663,6 +678,8 @@ public class HubMain {
             _sessionExecutor.submit(()-> handlePCMPlaybackPausedCommand(cmd, webSocket));
         } else if ("PCMPlaybackResumed".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handlePCMPlaybackResumedCommand(cmd, webSocket));
+        } else if ("PCMPlaybackStarted".equals(cmd.getHeader().get("name"))) {
+            _sessionExecutor.submit(()-> handlePCMPlaybackStartedCommand(cmd, webSocket));
         } /* else if ("Playback".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handlePlaybackCommand(cmd, webSocket));
         } else if ("PlayTTS".equals(cmd.getHeader().get("name"))) {

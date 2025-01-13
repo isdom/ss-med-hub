@@ -357,8 +357,27 @@ public class PoActor extends ASRActor {
     }
 
     public void notifyPlaybackStart(final String playbackId) {
-        log.info("[{}]-[{}]: notifyPlaybackStart => task: {} while currentPlaybackId: {}",
+        log.info("[{}]-[{}]: notifyPlaybackStart => playbackId: {} while currentPlaybackId: {}",
                 _sessionId, _uuid, playbackId, _currentPlaybackId.get());
+    }
+
+    public void notifyPlaybackStarted(final String playbackId, final String contentId) {
+        log.info("[{}]-[{}]: notifyPlaybackStarted => playbackId: {} while currentPlaybackId: {}",
+                _sessionId, _uuid, playbackId, _currentPlaybackId.get());
+        final String currentPlaybackId = _currentPlaybackId.get();
+        if (currentPlaybackId != null) {
+            if (currentPlaybackId.equals(playbackId)) {
+                final long playbackStartedInMs = System.currentTimeMillis();
+                _currentPlaybackDuration.set(()->System.currentTimeMillis() - playbackStartedInMs);
+                log.info("[{}]-[{}]: notifyPlaybackStarted => current playbackid: {} Matched",
+                        _sessionId, _uuid, playbackId);
+            } else {
+                log.info("[{}]-[{}]: notifyPlaybackStarted => current playbackid: {} mismatch started playbackid: {}, ignore",
+                        _sessionId, _uuid, currentPlaybackId, playbackId);
+            }
+        } else {
+            log.warn("[{}]-[{}]: currentPlaybackId is null BUT notifyPlaybackStarted with: {}", _sessionId, _uuid, playbackId);
+        }
     }
 
     public void notifyPlaybackStop(final String playbackId,
