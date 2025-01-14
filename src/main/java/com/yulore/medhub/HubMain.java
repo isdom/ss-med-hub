@@ -383,8 +383,14 @@ public class HubMain {
                     }
 
                     @Override
-                    public void onError(WebSocket webSocket, Exception ex) {
-                        log.warn("an error occurred on connection {}:{}", webSocket.getRemoteSocketAddress(), ExceptionUtil.exception2detail(ex));
+                    public void onError(final WebSocket webSocket, final Exception ex) {
+                        final Object attachment = webSocket.getAttachment();
+                        if (attachment instanceof PoActor actor) {
+                            actor.onError(ex);
+                            return;
+                        }
+                        log.warn("an error occurred on connection {}:{}",
+                                webSocket.getRemoteSocketAddress(), ExceptionUtil.exception2detail(ex));
                     }
 
                     @Override

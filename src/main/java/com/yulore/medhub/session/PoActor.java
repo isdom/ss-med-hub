@@ -52,6 +52,12 @@ public class PoActor extends ASRActor {
         long beginInMs;
     }
 
+    public void onError(final Exception ex) {
+        log.warn("[{}]: [{}]-[{}]: exception_detail: (callStack)\n{}\n{}", _clientIp, _sessionId, _uuid,
+                ExceptionUtil.dumpCallStack(ex, null, 0),
+                ExceptionUtil.exception2detail(ex));
+    }
+
     public PoActor(final String clientIp,
                    final String uuid,
                    final String tid,
