@@ -249,8 +249,10 @@ public class HubMain {
                             final String path = clientHandshake.getResourceDescriptor();
                             final int varsBegin = path.indexOf('?');
                             final String uuid = varsBegin > 0 ? VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "uuid", '&') : "unknown";
-                            final String tid = varsBegin > 0 ? VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "tid", '&') : "unknown";;
+                            final String tid = varsBegin > 0 ? VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "tid", '&') : "unknown";
+                            final String clientIp = clientHandshake.getFieldValue("X-Forwarded-For");
                             final PoActor session = new PoActor(
+                                    clientIp,
                                     uuid,
                                     tid,
                                     _callApi,
