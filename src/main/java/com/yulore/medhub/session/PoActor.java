@@ -576,6 +576,11 @@ public class PoActor extends ASRActor {
     }
 
     private void generateRecordAndUpload() {
+        if (null == _aiSetting) {
+            log.warn("[{}]: [{}]-[{}]: generateRecordAndUpload _aiSetting is null ", _clientIp, _sessionId, _uuid);
+            return;
+        }
+
         final String path = _aiSetting.getAnswer_record_file();
         // eg: "answer_record_file": "rms://{uuid={uuid},url=xxxx,bucket=<bucketName>}<objectName>",
         final int braceBegin = path.indexOf('{');
