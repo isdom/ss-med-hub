@@ -678,6 +678,10 @@ public class HubMain {
             _sessionExecutor.submit(()-> handleStopTranscriptionCommand(cmd, webSocket));
         } else if ("FSPlaybackStopped".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handleFSPlaybackStoppedCommand(cmd, webSocket));
+        } else if ("FSPlaybackPaused".equals(cmd.getHeader().get("name"))) {
+            _sessionExecutor.submit(()-> handleFSPlaybackPausedCommand(cmd, webSocket));
+        } else if ("FSPlaybackResumed".equals(cmd.getHeader().get("name"))) {
+            _sessionExecutor.submit(()-> handleFSPlaybackResumedCommand(cmd, webSocket));
         } else if ("FSRecordStarted".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handleFSRecordStartedCommand(cmd, webSocket));
         } else if ("PCMPlaybackStopped".equals(cmd.getHeader().get("name"))) {
@@ -730,6 +734,21 @@ public class HubMain {
             session.notifyFSPlaybackStopped(cmd);
         }
     }
+
+    private void handleFSPlaybackResumedCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        final Object attachment = webSocket.getAttachment();
+        if (attachment instanceof FsActor fsActor) {
+            fsActor.notifyPlaybackResumed(cmd);
+        }
+    }
+
+    private void handleFSPlaybackPausedCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        final Object attachment = webSocket.getAttachment();
+        if (attachment instanceof FsActor fsActor) {
+            fsActor.notifyPlaybackPaused(cmd);
+        }
+    }
+
 
     private void previewOn(final String path, final PreviewSession previewSession, final WebSocket webSocket) {
         // interval = 20 ms

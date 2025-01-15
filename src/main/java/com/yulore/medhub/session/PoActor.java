@@ -290,26 +290,6 @@ public class PoActor extends ASRActor {
         }
     }
 
-    private static int countChinesePunctuations(final String text) {
-        int count = 0;
-        for (char c : text.toCharArray()) {
-            // 判断是否是中文标点
-            if (isChinesePunctuation(c)) {
-                count++;
-            }
-        }
-        return count;
-    }
-
-    // 将需要计算的中文标点放入此数组中
-    private static final Character[] punctuations = new Character[] {
-            '，', '。', '！', '？', '；', '：', '“', '”'
-    };
-
-    private static boolean isChinesePunctuation(final char ch) {
-        return Arrays.stream(punctuations).anyMatch(p -> p == ch);
-    }
-
     @Override
     public void notifySentenceEnd(final PayloadSentenceEnd payload) {
         super.notifySentenceEnd(payload);
@@ -517,7 +497,7 @@ public class PoActor extends ASRActor {
                 log.info("[{}]: [{}]-[{}]: notifyPlaybackPaused => current playbackid: {} Matched / playback_duration: {} ms",
                         _clientIp, _sessionId, _uuid, playbackId, ai_speak_duration);
             } else {
-                log.info("[{}]: [{}]-[{}]: notifyPlaybackPaused => current playbackid: {} mismatch stopped playbackid: {}, ignore",
+                log.info("[{}]: [{}]-[{}]: notifyPlaybackPaused => current playbackid: {} mismatch paused playbackid: {}, ignore",
                         _clientIp, _sessionId, _uuid, currentPlaybackId, playbackId);
             }
         } else {
@@ -540,7 +520,7 @@ public class PoActor extends ASRActor {
                 log.info("[{}]: [{}]-[{}]: notifyPlaybackResumed => current playbackid: {} Matched / playback_duration: {} ms",
                         _clientIp, _sessionId, _uuid, playbackId, ai_speak_duration);
             } else {
-                log.info("[{}]: [{}]-[{}]: notifyPlaybackResumed => current playbackid: {} mismatch stopped playbackid: {}, ignore",
+                log.info("[{}]: [{}]-[{}]: notifyPlaybackResumed => current playbackid: {} mismatch resumed playbackid: {}, ignore",
                         _clientIp, _sessionId, _uuid, currentPlaybackId, playbackId);
             }
         } else {

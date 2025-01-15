@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.exceptions.WebsocketNotConnectedException;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -22,6 +23,26 @@ import java.util.function.Consumer;
 @ToString
 @Slf4j
 public class ASRActor {
+    static int countChinesePunctuations(final String text) {
+        int count = 0;
+        for (char c : text.toCharArray()) {
+            // 判断是否是中文标点
+            if (isChinesePunctuation(c)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    // 将需要计算的中文标点放入此数组中
+    private static final Character[] punctuations = new Character[] {
+            '，', '。', '！', '？', '；', '：', '“', '”'
+    };
+
+    private static boolean isChinesePunctuation(final char ch) {
+        return Arrays.stream(punctuations).anyMatch(p -> p == ch);
+    }
+
     public ASRActor() {
         _sessionBeginInMs = System.currentTimeMillis();
     }
