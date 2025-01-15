@@ -676,6 +676,8 @@ public class HubMain {
             _sessionExecutor.submit(()-> handleStartTranscriptionCommand(cmd, webSocket));
         } else if ("StopTranscription".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handleStopTranscriptionCommand(cmd, webSocket));
+        } else if ("FSPlaybackStarted".equals(cmd.getHeader().get("name"))) {
+            _sessionExecutor.submit(()-> handleFSPlaybackStartedCommand(cmd, webSocket));
         } else if ("FSPlaybackStopped".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handleFSPlaybackStoppedCommand(cmd, webSocket));
         } else if ("FSPlaybackPaused".equals(cmd.getHeader().get("name"))) {
@@ -725,6 +727,13 @@ public class HubMain {
         final Object attachment = webSocket.getAttachment();
         if (attachment instanceof FsActor session) {
             session.notifyFSRecordStarted(cmd);
+        }
+    }
+
+    private void handleFSPlaybackStartedCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+        final Object attachment = webSocket.getAttachment();
+        if (attachment instanceof FsActor session) {
+            session.notifyFSPlaybackStarted(cmd);
         }
     }
 

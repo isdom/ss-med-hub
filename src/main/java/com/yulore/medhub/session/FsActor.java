@@ -178,6 +178,24 @@ public class FsActor extends ASRActor {
         }
     }
 
+    public void notifyFSPlaybackStarted(final HubCommandVO cmd) {
+        final String playbackId = cmd.getPayload().get("playback_id");
+        final String currentPlaybackId = _currentPlaybackId.get();
+        if (currentPlaybackId != null) {
+            if (currentPlaybackId.equals(playbackId)) {
+                final long playbackStartedInMs = System.currentTimeMillis();
+                _currentPlaybackDuration.set(()->System.currentTimeMillis() - playbackStartedInMs);
+                log.info("[{}]: notifyFSPlaybackStarted => current playbackid: {} Matched",
+                        _sessionId, playbackId);
+            } else {
+                log.info("[{}]: notifyFSPlaybackStarted => current playbackid: {} mismatch started playbackid: {}, ignore",
+                        _sessionId, currentPlaybackId, playbackId);
+            }
+        } else {
+            log.warn("[{}]: currentPlaybackId is null BUT notifyFSPlaybackStarted with: {}", _sessionId, playbackId);
+        }
+    }
+
     public void notifyPlaybackResumed(final HubCommandVO cmd) {
         final String playbackId = cmd.getPayload().get("playback_id");
         final String currentPlaybackId = _currentPlaybackId.get();
@@ -258,11 +276,9 @@ public class FsActor extends ASRActor {
             _currentAIContentId.set(ai_content_id);
             _currentPlaybackId.set(playback_id);
             _currentPlaybackPaused.set(false);
-            // _currentPlaybackDuration.set(()->0L);
+            _currentPlaybackDuration.set(()->0L);
             _sendEvent.accept("FSStartPlayback", new PayloadFSStartPlayback(_uuid, playback_id, ai_content_id, file));
-            final long playbackStartedInMs = System.currentTimeMillis();
-            _currentPlaybackDuration.set(()->System.currentTimeMillis() - playbackStartedInMs);
-            log.info("[{}]: fs play [{}] as {}", _sessionId, file, playback_id);
+            log.info("[{}]: fs_play [{}] as {}", _sessionId, file, playback_id);
             return true;
         } else {
             return false;
