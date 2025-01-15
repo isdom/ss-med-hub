@@ -139,7 +139,7 @@ public class FsActor extends ASRActor {
                             _scriptApi.ai_reply(_sessionId, null, idleTime, 0, null, 0);
                     if (response.getData() != null) {
                         if (doPlayback(response.getData())) {
-                            _lastReply = response.getData();
+                            // _lastReply = response.getData();
                         }
                     } else {
                         log.info("[{}]: checkIdle: ai_reply {}, do nothing\n", _sessionId, response);
@@ -161,7 +161,7 @@ public class FsActor extends ASRActor {
                         _scriptApi.ai_reply(_sessionId, _welcome, null, 0, null, 0);
                 if (response.getData() != null) {
                     if (doPlayback(response.getData())) {
-                        _lastReply = response.getData();
+                        // _lastReply = response.getData();
                     }
                 } else {
                     _sendEvent.accept("FSHangup", new PayloadFSHangup(_uuid, _sessionId));
@@ -180,10 +180,12 @@ public class FsActor extends ASRActor {
 
     public void notifyFSPlaybackStarted(final HubCommandVO cmd) {
         final String playbackId = cmd.getPayload().get("playback_id");
+        final long playbackStartedInMs = System.currentTimeMillis();
+        memoFor(playbackId).setBeginInMs(playbackStartedInMs);
+
         final String currentPlaybackId = _currentPlaybackId.get();
         if (currentPlaybackId != null) {
             if (currentPlaybackId.equals(playbackId)) {
-                final long playbackStartedInMs = System.currentTimeMillis();
                 _currentPlaybackDuration.set(()->System.currentTimeMillis() - playbackStartedInMs);
                 log.info("[{}]: notifyFSPlaybackStarted => current playbackid: {} Matched",
                         _sessionId, playbackId);
@@ -236,36 +238,35 @@ public class FsActor extends ASRActor {
     }
 
     public void notifyFSPlaybackStopped(final HubCommandVO cmd) {
-        final String playback_id = cmd.getPayload().get("playback_id");
+        final String playbackId = cmd.getPayload().get("playback_id");
         if (_currentPlaybackId.get() != null
-            && playback_id != null
-            && playback_id.equals(_currentPlaybackId.get()) ) {
+            && playbackId != null
+            && playbackId.equals(_currentPlaybackId.get()) ) {
             _currentPlaybackId.set(null);
             _currentPlaybackDuration.set(()->0L);
             _idleStartInMs.set(System.currentTimeMillis());
-            log.info("[{}]: notifyFSPlaybackStopped: current playback_id matched:{}, clear current PlaybackId", _sessionId, playback_id);
-            log.info("[{}]: notifyFSPlaybackStopped: lastReply: {}", _sessionId, _lastReply);
-            if (_lastReply != null && _lastReply.getHangup() == 1) {
+            log.info("[{}]: notifyFSPlaybackStopped: current playback_id matched:{}, clear current PlaybackId", _sessionId, playbackId);
+            if (memoFor(playbackId).isHangup()) {
                 // hangup call
                 _sendEvent.accept("FSHangup", new PayloadFSHangup(_uuid, _sessionId));
             }
         } else {
-            log.info("!NOT! current playback_id:{}, ignored", playback_id);
+            log.info("!NOT! current playback_id:{}, ignored", playbackId);
         }
     }
 
-    private boolean doPlayback(final AIReplyVO vo) {
-        if (vo.getVoiceMode() == null || vo.getAi_content_id() == null) {
+    private boolean doPlayback(final AIReplyVO replyVO) {
+        if (replyVO.getVoiceMode() == null || replyVO.getAi_content_id() == null) {
             return false;
         }
 
-        final String ai_content_id = Long.toString(vo.getAi_content_id());
-        final String playback_id = UUID.randomUUID().toString();
+        final String newPlaybackId = UUID.randomUUID().toString();
+        final String ai_content_id = Long.toString(replyVO.getAi_content_id());
 
-        final String file = aireply2file(vo,
+        final String file = aireply2file(replyVO,
                 ()->String.format("%s=%s,content_id=%s,vars_start_timestamp=%d,playback_idx=%d",
-                PLAYBACK_ID_NAME, playback_id, ai_content_id, System.currentTimeMillis() * 1000L, 0),
-                playback_id);
+                PLAYBACK_ID_NAME, newPlaybackId, ai_content_id, System.currentTimeMillis() * 1000L, 0),
+                newPlaybackId);
 
         if (file != null) {
             final String prevPlaybackId = _currentPlaybackId.getAndSet(null);
@@ -273,12 +274,16 @@ public class FsActor extends ASRActor {
                 _sendEvent.accept("FSStopPlayback", new PayloadFSChangePlayback(_uuid, prevPlaybackId));
             }
 
-            _currentAIContentId.set(ai_content_id);
-            _currentPlaybackId.set(playback_id);
+            //_currentAIContentId.set(ai_content_id);
+            _currentPlaybackId.set(newPlaybackId);
             _currentPlaybackPaused.set(false);
             _currentPlaybackDuration.set(()->0L);
-            _sendEvent.accept("FSStartPlayback", new PayloadFSStartPlayback(_uuid, playback_id, ai_content_id, file));
-            log.info("[{}]: fs_play [{}] as {}", _sessionId, file, playback_id);
+            createPlaybackMemo(newPlaybackId,
+                    replyVO.getAi_content_id(),
+                    replyVO.getCancel_on_speak(),
+                    replyVO.getHangup() == 1);
+            _sendEvent.accept("FSStartPlayback", new PayloadFSStartPlayback(_uuid, newPlaybackId, ai_content_id, file));
+            log.info("[{}]: fs_play [{}] as {}", _sessionId, file, newPlaybackId);
             return true;
         } else {
             return false;
@@ -327,10 +332,19 @@ public class FsActor extends ASRActor {
         super.notifySentenceBegin(payload);
         _isUserSpeak.set(true);
         _currentSentenceBeginInMs.set(System.currentTimeMillis());
-        if (isAiSpeaking() && _lastReply != null && _lastReply.getCancel_on_speak() != null && _lastReply.getCancel_on_speak()) {
+        if (isAICancelOnSpeak()) {
             final String playback_id = _currentPlaybackId.get();
             _sendEvent.accept("FSStopPlayback", new PayloadFSChangePlayback(_uuid, playback_id));
-            log.info("[{}]: stop current playing (id:{}) for cancel_on_speak: {}", _sessionId, playback_id, _lastReply);
+            log.info("[{}]: stop current playing ({}) for cancel_on_speak is true", _sessionId, playback_id);
+        }
+    }
+
+    private boolean isAICancelOnSpeak() {
+        final String playbackId = _currentPlaybackId.get();
+        if (playbackId != null) {
+            return memoFor(playbackId).isCancelOnSpeak();
+        } else {
+            return false;
         }
     }
 
@@ -373,7 +387,7 @@ public class FsActor extends ASRActor {
                     userContentId = response.getData().getUser_content_id().toString();
                 }
                 if (doPlayback(response.getData())) {
-                    _lastReply = response.getData();
+                    // _lastReply = response.getData();
                 } else {
                     if (isAiSpeaking && _currentPlaybackPaused.compareAndSet(true, false) ) {
                         _sendEvent.accept("FSResumePlayback", new PayloadFSChangePlayback(_uuid, _currentPlaybackId.get()));
@@ -428,7 +442,7 @@ public class FsActor extends ASRActor {
     }
 
     private String currentAiContentId() {
-        return isAiSpeaking() ? _currentAIContentId.get() : null;
+        return isAiSpeaking() ? memoFor(_currentPlaybackId.get()).contentId : null;
     }
 
     private int currentSpeakingDuration() {
@@ -456,10 +470,10 @@ public class FsActor extends ASRActor {
     private final String _rms_tts_prefix;
     private final String _rms_wav_prefix;
 
-    private AIReplyVO _lastReply;
+    // private AIReplyVO _lastReply;
 
     private final AtomicReference<String> _currentPlaybackId = new AtomicReference<>(null);
-    private final AtomicReference<String> _currentAIContentId = new AtomicReference<>(null);
+    // private final AtomicReference<String> _currentAIContentId = new AtomicReference<>(null);
     private final AtomicBoolean _currentPlaybackPaused = new AtomicBoolean(false);
     private final AtomicReference<Supplier<Long>> _currentPlaybackDuration = new AtomicReference<>(()->0L);
 

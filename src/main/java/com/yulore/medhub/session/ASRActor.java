@@ -4,15 +4,15 @@ import com.alibaba.nls.client.protocol.asr.SpeechTranscriber;
 import com.yulore.medhub.vo.PayloadSentenceBegin;
 import com.yulore.medhub.vo.PayloadSentenceEnd;
 import com.yulore.medhub.vo.PayloadTranscriptionResultChanged;
+import lombok.Builder;
+import lombok.Data;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.exceptions.WebsocketNotConnectedException;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -23,6 +23,17 @@ import java.util.function.Consumer;
 @ToString
 @Slf4j
 public class ASRActor {
+    @Builder
+    @Data
+    @ToString
+    static class PlaybackMemo {
+        final int playbackIdx;
+        final String contentId;
+        final boolean cancelOnSpeak;
+        final boolean hangup;
+        long beginInMs;
+    }
+
     static int countChinesePunctuations(final String text) {
         int count = 0;
         for (char c : text.toCharArray()) {
@@ -150,6 +161,24 @@ public class ASRActor {
         _transmitData.set(transmitData);
     }
 
+    void createPlaybackMemo(final String playbackId,
+                                    final Long contentId,
+                                    final boolean cancelOnSpeak,
+                                    final boolean hangup) {
+        _id2memo.put(playbackId,
+                PlaybackMemo.builder()
+                        .playbackIdx(_playbackIdx.incrementAndGet())
+                        .contentId(Long.toString(contentId))
+                        .beginInMs(System.currentTimeMillis())
+                        .cancelOnSpeak(cancelOnSpeak)
+                        .hangup(hangup)
+                        .build());
+    }
+
+    PlaybackMemo memoFor(final String playbackId) {
+        return _id2memo.get(playbackId);
+    }
+
     String _sessionId;
     final Lock _lock = new ReentrantLock();
 
@@ -164,4 +193,7 @@ public class ASRActor {
     final AtomicReference<ScheduledFuture<?>>   _checkIdleFuture = new AtomicReference<>(null);
     final AtomicInteger _checkIdleCount = new AtomicInteger(0);
     final long _sessionBeginInMs;
+
+    private final AtomicInteger _playbackIdx = new AtomicInteger(0);
+    private final ConcurrentMap<String, PlaybackMemo> _id2memo = new ConcurrentHashMap<>();
 }

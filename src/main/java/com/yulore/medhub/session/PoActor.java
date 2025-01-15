@@ -41,17 +41,6 @@ public class PoActor extends ASRActor {
     public record PlaybackContext(String playbackId, String path, String contentId) {
     }
 
-    @Builder
-    @Data
-    @ToString
-    private static class PlaybackMemo {
-        final int playbackIdx;
-        final String contentId;
-        final boolean cancelOnSpeak;
-        final boolean hangup;
-        long beginInMs;
-    }
-
     public void onError(final Exception ex) {
         log.warn("[{}]: [{}]-[{}]: exception_detail: (callStack)\n{}\n{}", _clientIp, _sessionId, _uuid,
                 ExceptionUtil.dumpCallStack(ex, null, 0),
@@ -253,7 +242,7 @@ public class PoActor extends ASRActor {
     @Override
     public void notifySentenceBegin(final PayloadSentenceBegin payload) {
         super.notifySentenceBegin(payload);
-        log.info("[{}]-[{}]: notifySentenceBegin: {}", _sessionId, _uuid, payload);
+        log.info("[{}]: [{}]-[{}]: notifySentenceBegin: {}", _clientIp, _sessionId, _uuid, payload);
         _isUserSpeak.set(true);
         _currentSentenceBeginInMs.set(System.currentTimeMillis());
         if (isAICancelOnSpeak()) {
@@ -698,24 +687,6 @@ public class PoActor extends ASRActor {
         }
     }
 
-    private void createPlaybackMemo(final String playbackId,
-                                    final Long contentId,
-                                    final boolean cancelOnSpeak,
-                                    final boolean hangup) {
-        _id2memo.put(playbackId,
-                PlaybackMemo.builder()
-                        .playbackIdx(_playbackIdx.incrementAndGet())
-                        .contentId(Long.toString(contentId))
-                        .beginInMs(System.currentTimeMillis())
-                        .cancelOnSpeak(cancelOnSpeak)
-                        .hangup(hangup)
-                        .build());
-    }
-
-    private PlaybackMemo memoFor(final String playbackId) {
-        return _id2memo.get(playbackId);
-    }
-
     private Supplier<Runnable> reply2playback(final String playbackId, final AIReplyVO replyVO) {
         final String aiContentId = replyVO.getAi_content_id() != null ? Long.toString(replyVO.getAi_content_id()) : null;
         if ("cp".equals(replyVO.getVoiceMode())) {
@@ -767,10 +738,6 @@ public class PoActor extends ASRActor {
     private final AtomicLong _idleStartInMs = new AtomicLong(System.currentTimeMillis());
     private final AtomicBoolean _isUserSpeak = new AtomicBoolean(false);
     private final AtomicLong _currentSentenceBeginInMs = new AtomicLong(-1);
-
-    private final AtomicInteger _playbackIdx = new AtomicInteger(0);
-
-    private final ConcurrentMap<String, PlaybackMemo> _id2memo = new ConcurrentHashMap<>();
 
     private static final ConcurrentMap<String, PoActor> _callSessions = new ConcurrentHashMap<>();
 
