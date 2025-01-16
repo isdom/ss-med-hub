@@ -296,14 +296,14 @@ public class PoActor extends ASRActor {
         final long sentenceEndInMs = System.currentTimeMillis();
         _isUserSpeak.set(false);
         _idleStartInMs.set(sentenceEndInMs);
-        if (_sessionId != null && _playbackOn != null) {
-            // _playbackOn != null means playback ws has connected
+        if (_sessionId != null && _playbackOn != null && _aiSetting != null) {
+            // playback ws has connected && _aiSetting is valid
             final String userContentId = interactWithScriptEngine(payload);
             reportUserContent(payload, userContentId);
             reportAsrTime(payload, sentenceEndInMs, userContentId);
         } else {
-            log.warn("[{}]: [{}]-[{}]: notifySentenceEnd but sessionId is null or playback not ready => _playbackOn {}",
-                    _clientIp, _sessionId, _uuid, _playbackOn);
+            log.warn("[{}]: [{}]-[{}]: notifySentenceEnd but sessionId is null or playback not ready or aiSetting not ready => _playbackOn: {}/aiSetting: {}",
+                    _clientIp, _sessionId, _uuid, _playbackOn, _aiSetting);
         }
     }
 
