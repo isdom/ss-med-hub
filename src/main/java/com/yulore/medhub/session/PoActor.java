@@ -3,6 +3,7 @@ package com.yulore.medhub.session;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.nls.client.protocol.SampleRateEnum;
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriber;
+import com.google.common.base.Strings;
 import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.medhub.api.*;
 import com.yulore.medhub.stream.VarsUtil;
@@ -66,6 +67,10 @@ public class PoActor extends ASRActor {
         _bucket = bucket;
         _wavPath = wavPath;
         _doSaveRecord = saveRecord;
+        if (Strings.isNullOrEmpty(_uuid) || Strings.isNullOrEmpty(_tid)) {
+            log.warn("[{}]: PoActor_ctor error for uuid:{}/tid:{}, abort apply_session.", _clientIp, _sessionId, _uuid);
+            return;
+        }
         try {
             final ApiResponse<ApplySessionVO> response = _callApi.apply_session(CallApi.ApplySessionRequest.builder()
                             .uuid(_uuid)
@@ -83,6 +88,10 @@ public class PoActor extends ASRActor {
     public void notifyUserAnswer(final HubCommandVO cmd) {
         if (!_isUserAnswered.compareAndSet(false, true)) {
             log.warn("[{}]: [{}]-[{}]: notifyUserAnswer called already, ignore!", _clientIp, _sessionId, _uuid);
+            return;
+        }
+        if (Strings.isNullOrEmpty(_uuid) || Strings.isNullOrEmpty(_tid)) {
+            log.warn("[{}]: PoActor_notifyUserAnswer error for uuid:{}/tid:{}, abort user_answer.", _clientIp, _sessionId, _uuid);
             return;
         }
         try {
