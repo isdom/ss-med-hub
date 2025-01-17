@@ -351,16 +351,16 @@ public class FsActor extends ASRActor {
     @Override
     public void notifyTranscriptionResultChanged(final PayloadTranscriptionResultChanged payload) {
         super.notifyTranscriptionResultChanged(payload);
+        /*
         if (isAiSpeaking()) {
             final int length = payload.getResult().length();
             if (length >= 10) {
                 if ( (length - countChinesePunctuations(payload.getResult())) >= 10  && _currentPlaybackPaused.compareAndSet(false, true)) {
                     _sendEvent.accept("FSPausePlayback", new PayloadFSChangePlayback(_uuid, _currentPlaybackId.get()));
                     log.info("[{}]: notifyTranscriptionResultChanged: pause_current for result {} text >= 10", _sessionId, payload.getResult());
-                    _sendEvent.accept("PCMPausePlayback", new PayloadPCMEvent(_currentPlaybackId.get(), ""));
                 }
             }
-        }
+        }*/
     }
 
     @Override
