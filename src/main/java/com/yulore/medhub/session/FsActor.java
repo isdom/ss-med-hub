@@ -262,6 +262,7 @@ public class FsActor extends ASRActor {
 
         final String newPlaybackId = UUID.randomUUID().toString();
         final String ai_content_id = Long.toString(replyVO.getAi_content_id());
+        log.info("[{}]: doPlayback: {}", _sessionId, replyVO);
 
         final String file = aireply2file(replyVO,
                 ()->String.format("%s=%s,content_id=%s,vars_start_timestamp=%d,playback_idx=%d",
