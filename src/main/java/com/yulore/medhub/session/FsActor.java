@@ -137,12 +137,13 @@ public class FsActor extends ASRActor {
                 try {
                     final ApiResponse<AIReplyVO> response =
                             _scriptApi.ai_reply(_sessionId, null, idleTime, 0, null, 0);
+                    log.info("[{}]: checkIdle: ai_reply {}", _sessionId, response);
                     if (response.getData() != null) {
                         if (doPlayback(response.getData())) {
                             // _lastReply = response.getData();
                         }
                     } else {
-                        log.info("[{}]: checkIdle: ai_reply {}, do nothing\n", _sessionId, response);
+                        log.info("[{}]: checkIdle: ai_reply's data is null, do_nothing", _sessionId);
                     }
                 } catch (Exception ex) {
                     log.warn("[{}]: checkIdle: ai_reply error, detail: {}", _sessionId, ex.toString());
@@ -383,6 +384,7 @@ public class FsActor extends ASRActor {
                     _sessionId, userSpeechText, isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
             final ApiResponse<AIReplyVO> response =
                     _scriptApi.ai_reply(_sessionId, userSpeechText, null, isAiSpeaking ? 1 : 0, aiContentId, speakingDuration);
+            log.info("[{}]: notifySentenceEnd: ai_reply {}", _sessionId, response);
             if (response.getData() != null) {
                 if (response.getData().getUser_content_id() != null) {
                     userContentId = response.getData().getUser_content_id().toString();
@@ -397,7 +399,7 @@ public class FsActor extends ASRActor {
                     }
                 }
             } else {
-                log.info("[{}]: notifySentenceEnd: ai_reply {}, do nothing\n", _sessionId, response);
+                log.info("[{}]: notifySentenceEnd: ai_reply's data is null', do_nothing", _sessionId);
             }
         } catch (Exception ex) {
             log.warn("[{}]: notifySentenceEnd: ai_reply error, detail: {}", _sessionId, ex.toString());
