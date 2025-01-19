@@ -133,7 +133,7 @@ public class FsActor extends ASRActor {
             // && _aiSetting != null
         ) {
             if (idleTime > CHECK_IDLE_TIMEOUT) {
-                log.info("[{}]: checkIdle: idle duration: {} ms >=: [{}] ms\n", _sessionId, idleTime, CHECK_IDLE_TIMEOUT);
+                log.info("[{}]: checkIdle: idle duration: {} ms >=: [{}] ms", _sessionId, idleTime, CHECK_IDLE_TIMEOUT);
                 try {
                     final ApiResponse<AIReplyVO> response =
                             _scriptApi.ai_reply(_sessionId, null, idleTime, 0, null, 0);
@@ -166,7 +166,7 @@ public class FsActor extends ASRActor {
                     }
                 } else {
                     _sendEvent.accept("FSHangup", new PayloadFSHangup(_uuid, _sessionId));
-                    log.warn("[{}]: transcriptionStarted: ai_reply {}, hangup\n", _sessionId, response);
+                    log.warn("[{}]: transcriptionStarted: ai_reply {}, hangup", _sessionId, response);
                 }
             } catch (Exception ex) {
                 _sendEvent.accept("FSHangup", new PayloadFSHangup(_uuid, _sessionId));
