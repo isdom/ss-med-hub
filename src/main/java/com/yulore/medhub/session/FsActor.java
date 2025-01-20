@@ -392,6 +392,10 @@ public class FsActor extends ASRActor {
                 if (doPlayback(response.getData())) {
                     // _lastReply = response.getData();
                 } else {
+                    if (response.getData().getHangup() == 1) {
+                        _sendEvent.accept("FSHangup", new PayloadFSHangup(_uuid, _sessionId));
+                        log.info("[{}]: notifySentenceEnd: hangup ({}) for ai_reply ({})", _sessionId, _sessionId, response.getData());
+                    }
                     if (isAiSpeaking && _currentPlaybackPaused.compareAndSet(true, false) ) {
                         _sendEvent.accept("FSResumePlayback", new PayloadFSChangePlayback(_uuid, _currentPlaybackId.get()));
                         log.info("[{}]: notifySentenceEnd: resume_current ({}) for ai_reply ({}) without_new_ai_playback",
