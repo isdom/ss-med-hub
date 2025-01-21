@@ -161,7 +161,7 @@ public class PoActor extends ASRActor {
             && _aiSetting != null
             ) {
             if (idleTime > _aiSetting.getIdle_timeout()) {
-                log.info("[{}]: [{}]-[{}]: checkIdle: idle duration: {} ms >=: [{}] ms\n", _clientIp, _sessionId, _uuid, idleTime, _aiSetting.getIdle_timeout());
+                log.info("[{}]: [{}]-[{}]: checkIdle: idle duration: {} ms >=: [{}] ms", _clientIp, _sessionId, _uuid, idleTime, _aiSetting.getIdle_timeout());
                 try {
                     final ApiResponse<AIReplyVO> response =
                             _scriptApi.ai_reply(_sessionId, null, idleTime, 0, null, 0);
@@ -170,7 +170,7 @@ public class PoActor extends ASRActor {
                             return;
                         }
                     } else {
-                        log.info("[{}]: [{}]-[{}]: checkIdle: ai_reply {}, do nothing\n", _clientIp, _sessionId, _uuid, response);
+                        log.info("[{}]: [{}]-[{}]: checkIdle: ai_reply {}, do nothing", _clientIp, _sessionId, _uuid, response);
                     }
                 } catch (Exception ex) {
                     log.warn("[{}]: [{}]-[{}]: checkIdle: ai_reply error, detail: {}", _clientIp, _sessionId, _uuid, ex.toString());
