@@ -11,8 +11,6 @@ import com.yulore.medhub.vo.*;
 import com.yulore.util.ByteArrayListInputStream;
 import com.yulore.util.ExceptionUtil;
 import com.yulore.util.WaveUtil;
-import lombok.Builder;
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
@@ -24,7 +22,6 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.*;
@@ -42,7 +39,7 @@ public class PoActor extends ASRActor {
     public record PlaybackContext(String playbackId, String path, String contentId) {
     }
 
-    public void onError(final Exception ex) {
+    public void onWebsocketError(final Exception ex) {
         log.warn("[{}]: [{}]-[{}]: exception_detail: (callStack)\n{}\n{}", _clientIp, _sessionId, _uuid,
                 ExceptionUtil.dumpCallStack(ex, null, 0),
                 ExceptionUtil.exception2detail(ex));
