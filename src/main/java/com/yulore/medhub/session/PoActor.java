@@ -645,7 +645,7 @@ public class PoActor extends ASRActor {
             _doSaveRecord.accept(new RecordContext(_sessionId, bucketName, objectName, new ByteArrayInputStream(bos.toByteArray())));
         } catch (IOException ex) {
             log.warn("[{}]: [{}]-[{}] generateRecordAndUpload: generate record stream error, detail: {}",
-                    _clientIp, _sessionId, _uuid, ex.toString());
+                    _clientIp, _sessionId, _uuid, ExceptionUtil.exception2detail(ex));
             throw new RuntimeException(ex);
         }
     }
