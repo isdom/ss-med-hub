@@ -543,10 +543,10 @@ public class PoActor extends ASRActor {
             log.warn("[{}]: [{}]: close_without_valid_sessionId", _clientIp, _uuid);
         }
         if (!_isUserAnswered.get()) {
-            log.warn("[{}]: [{}]-[{}]: close_without_user_answer", _clientIp, _sessionId, _uuid);
+            log.warn("[{}]: [{}]-[{}]: close_without_user_answer, total duration {} s", _clientIp, _sessionId, _uuid, (System.currentTimeMillis() - _sessionBeginInMs) / 1000.0f);
         }
         if (_playbackOn == null) {
-            log.warn("[{}]: [{}]-[{}]: close_without_playback_ws", _clientIp, _sessionId, _uuid);
+            log.warn("[{}]: [{}]-[{}]: close_without_playback_ws, total duration {} s", _clientIp, _sessionId, _uuid, (System.currentTimeMillis() - _sessionBeginInMs) / 1000.0f);
         }
     }
 
