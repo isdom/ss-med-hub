@@ -166,9 +166,9 @@ public class FsActor extends ASRActor {
                     }
                 } else {
                     _sendEvent.accept("FSHangup", new PayloadFSHangup(_uuid, _sessionId));
-                    log.warn("[{}]: transcriptionStarted: ai_reply {}, hangup", _sessionId, response);
+                    log.warn("[{}]: transcriptionStarted: ai_reply({}), hangup", _sessionId, response);
                 }
-            } catch (Exception ex) {
+            } catch (final Exception ex) {
                 _sendEvent.accept("FSHangup", new PayloadFSHangup(_uuid, _sessionId));
                 log.warn("[{}]: transcriptionStarted: ai_reply error, hangup, detail: {}", _sessionId, ex.toString());
             }
