@@ -384,7 +384,7 @@ public class FsActor extends ASRActor {
                     _sessionId, userSpeechText, isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
             final ApiResponse<AIReplyVO> response =
                     _scriptApi.ai_reply(_sessionId, userSpeechText, null, isAiSpeaking ? 1 : 0, aiContentId, speakingDuration);
-            log.info("[{}]: notifySentenceEnd: ai_reply {}", _sessionId, response);
+            log.info("[{}]: notifySentenceEnd: ai_reply ({})", _sessionId, response);
             if (response.getData() != null) {
                 if (response.getData().getUser_content_id() != null) {
                     userContentId = response.getData().getUser_content_id().toString();
