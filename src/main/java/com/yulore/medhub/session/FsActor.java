@@ -380,7 +380,7 @@ public class FsActor extends ASRActor {
             final String aiContentId = currentAiContentId();
             final int speakingDuration = currentSpeakingDuration();
 
-            log.info("[{}]: ai_reply: speech:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
+            log.info("[{}]: before ai_reply: speech:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
                     _sessionId, userSpeechText, isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
             final ApiResponse<AIReplyVO> response =
                     _scriptApi.ai_reply(_sessionId, userSpeechText, null, isAiSpeaking ? 1 : 0, aiContentId, speakingDuration);
