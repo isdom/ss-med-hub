@@ -68,16 +68,6 @@ public class PlaybackActor {
         }
     }
 
-    /*
-    public void stopCurrentIfMatch(final PlayPCMTask current) {
-        if (_playingTask.compareAndSet(current, null)) {
-            if (current != null) {
-                current.stop();
-            }
-        }
-    }
-    */
-
     public void stopCurrent() {
         final PlayTask current = _playingTask.getAndSet(null);
         if (current != null) {
