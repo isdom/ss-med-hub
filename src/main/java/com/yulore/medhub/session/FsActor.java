@@ -424,7 +424,7 @@ public class FsActor extends ASRActor {
                     start_speak_timestamp,
                     stop_speak_timestamp,
                     user_speak_duration);
-            log.info("[{}]: user report_content({})'s resp: {}", _sessionId, userContentId, resp);
+            log.info("[{}]: user report_content ({})'s resp: {}", _sessionId, userContentId, resp);
         }
         {
             // report ASR event timing
@@ -440,7 +440,7 @@ public class FsActor extends ASRActor {
                     payload.getIndex(),
                     begin_event_time,
                     end_event_time);
-            log.info("[{}]: user report_asrtime({})'s resp: {}", _sessionId, userContentId, resp);
+            log.info("[{}]: user report_asrtime ({})'s resp: {}", _sessionId, userContentId, resp);
         }
     }
 
