@@ -1,6 +1,9 @@
 package com.yulore.medhub;
 
+import com.alibaba.cloud.nacos.NacosDiscoveryProperties;
 import com.alibaba.fastjson.JSON;
+import com.alibaba.nacos.api.naming.NamingService;
+import com.alibaba.nacos.api.naming.pojo.Instance;
 import com.alibaba.nls.client.protocol.InputFormatEnum;
 import com.alibaba.nls.client.protocol.NlsClient;
 import com.alibaba.nls.client.protocol.OutputFormatEnum;
@@ -167,6 +170,9 @@ public class HubMain {
 
     @Resource
     private CallApi _callApi;
+
+    @Autowired
+    private NacosDiscoveryProperties _nacosDiscoveryProperties;
 
     @PostConstruct
     public void start() {
@@ -400,6 +406,25 @@ public class HubMain {
                 };
         // _wsServer.setConnectionLostTimeout(_ws_heartbeat);
         _wsServer.start();
+        // registerToNacos(_wsServer.getPort());
+    }
+
+    private void registerToNacos(final String ip, final int port) {
+        try {
+            final NamingService namingService = _nacosDiscoveryProperties.namingServiceInstance();
+            final Instance instance = new Instance();
+            instance.setIp(ip);
+            instance.setPort(port);
+            instance.setHealthy(true);
+            instance.setServiceName("med-hub");
+            instance.setClusterName("DEFAULT");
+            instance.getMetadata().put("preserved.register.source", "SPRING_CLOUD");
+
+            namingService.registerInstance("med-hub", "DEFAULT_GROUP", instance);
+            log.info("服务注册成功: {} - {}:{}, namespace={}", "med-hub", ip, port, _nacosDiscoveryProperties.getNamespace());
+        } catch (final Exception ex) {
+            log.warn("服务注册失败: {}", ex.getMessage());
+        }
     }
 
     private void playbackOn(final String path, final String contentId, final PoActor callSession, final PlaybackActor playbackSession, final WebSocket webSocket) {
