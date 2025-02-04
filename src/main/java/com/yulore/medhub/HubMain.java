@@ -427,6 +427,16 @@ public class HubMain {
         }
     }
 
+    private void unregisterFromNacos(final String ip, final int port) {
+        try {
+            final NamingService namingService = _nacosDiscoveryProperties.namingServiceInstance();
+            namingService.deregisterInstance("med-hub", "DEFAULT_GROUP", ip, port);
+            log.info("服务反注册成功: {} - {}:{}, namespace={}", "med-hub", ip, port, _nacosDiscoveryProperties.getNamespace());
+        } catch (final Exception ex) {
+            log.warn("服务反注册失败: {}", ex.getMessage());
+        }
+    }
+
     private void playbackOn(final String path, final String contentId, final PoActor callSession, final PlaybackActor playbackSession, final WebSocket webSocket) {
         // interval = 20 ms
         int interval = 20;
