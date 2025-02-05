@@ -63,10 +63,6 @@ public class HubMain {
     @Value("${ws_server.port}")
     private int _ws_port;
 
-    // in seconds
-    //@Value("${ws_server.heartbeat}")
-    //private int _ws_heartbeat;
-
     @Value("${nls.url}")
     private String _nls_url;
 
