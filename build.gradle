@@ -51,6 +51,7 @@ dependencies {
     //implementation 'org.asynchttpclient:async-http-client:3.0.0'
     // https://mvnrepository.com/artifact/org.asynchttpclient/async-http-client
     implementation 'org.asynchttpclient:async-http-client:2.12.4'
+    implementation 'org.apache.httpcomponents:httpmime:4.5.14'
 
     // implementation 'com.aliyun:aliyun-java-sdk-core:4.6.4'
 

@@ -33,6 +33,15 @@ import com.yulore.util.ExceptionUtil;
 import io.netty.util.NettyRuntime;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.ContentType;
+import org.apache.http.entity.mime.MultipartEntityBuilder;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
 import org.asynchttpclient.*;
 import org.asynchttpclient.request.body.multipart.ByteArrayPart;
 import org.asynchttpclient.request.body.multipart.StringPart;
@@ -51,6 +60,7 @@ import java.io.*;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -817,10 +827,49 @@ public class HubMain {
                 is.transferTo(bos);
                 final byte[] wavBytes = bos.toByteArray();
                 log.info("Cosy2: ttsText:{}/promptText:{}/promptWav size:{}", ttsText, promptText, wavBytes.length);
-                callCosy2InferenceZeroShot(ttsText, promptText, wavBytes);
+                callCosy2ZeroShot(ttsText, promptText, wavBytes);
             } catch (IOException ex) {
             }
         });
+    }
+
+    private void callCosy2ZeroShot(final String ttsText, final String promptText, final byte[] wavBytes) {
+        try {
+            // 创建 HttpClient 实例
+            final HttpClient httpClient = HttpClients.createDefault();
+
+            // 创建 HttpGet 请求
+            // HttpGet httpGet = new HttpGet(_cosy2_url);
+            final HttpPost httpPost = new HttpPost(_cosy2_url);
+
+            // 构建 MultipartEntity
+            final HttpEntity entity = MultipartEntityBuilder.create()
+                    .setCharset(StandardCharsets.UTF_8) // 设置全局字符编码为 UTF-8
+                    .addTextBody("tts_text", ttsText, ContentType.TEXT_PLAIN.withCharset(StandardCharsets.UTF_8))
+                    .addTextBody("prompt_text", promptText, ContentType.TEXT_PLAIN.withCharset(StandardCharsets.UTF_8))
+                    .addBinaryBody("prompt_wav", wavBytes, ContentType.APPLICATION_OCTET_STREAM, "prompt_wav")
+                    .build();
+
+            // 设置请求体
+            httpPost.setEntity(entity);
+
+            // 发送请求并获取响应
+            HttpResponse response = httpClient.execute(httpPost);
+
+            // 检查响应状态码
+            if (response.getStatusLine().getStatusCode() == 200) {
+                // 保存响应内容到文件
+                HttpEntity responseEntity = response.getEntity();
+                if (responseEntity != null) {
+                    byte[] audioData = EntityUtils.toByteArray(responseEntity);
+                    log.info("callCosy2ZeroShot: Response {}/audioData.size: {}", response, audioData.length);
+                }
+            } else {
+                System.out.println("Failed to get response. Status code: " + response.getStatusLine().getStatusCode());
+            }
+        } catch (IOException ex) {
+            log.warn("callCosy2ZeroShot: failed, detail: {}", ExceptionUtil.exception2detail(ex));
+        }
     }
 
     private void callCosy2InferenceZeroShot(final String ttsText, final String promptText, final byte[] wavBytes) {
