@@ -33,6 +33,9 @@ import com.yulore.util.ExceptionUtil;
 import io.netty.util.NettyRuntime;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.extern.slf4j.Slf4j;
+import org.asynchttpclient.*;
+import org.asynchttpclient.request.body.multipart.ByteArrayPart;
+import org.asynchttpclient.request.body.multipart.StringPart;
 import org.java_websocket.WebSocket;
 import org.java_websocket.exceptions.WebsocketNotConnectedException;
 import org.java_websocket.handshake.ClientHandshake;
@@ -51,6 +54,7 @@ import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 @Slf4j
@@ -154,6 +158,9 @@ public class HubMain {
 
     @Value("${rms.wav_prefix}")
     private String _rms_wav_prefix;
+
+    @Value("${cosy2.url}")
+    private String _cosy2_url;
 
     private OSS _ossClient;
 
@@ -753,6 +760,8 @@ public class HubMain {
             _sessionExecutor.submit(()-> handleUserAnswerCommand(cmd, webSocket));
         } else if ("Preview".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handlePreviewCommand(cmd, webSocket));
+        } else if ("Cosy2".equals(cmd.getHeader().get("name"))) {
+            _sessionExecutor.submit(()-> handleCosy2Command(cmd, webSocket));
         } else {
             log.warn("handleHubCommand: Unknown Command: {}", cmd);
         }
@@ -793,6 +802,78 @@ public class HubMain {
         }
     }
 
+    private void handleCosy2Command(final HubCommandVO cmd, final WebSocket webSocket) {
+        final String ttsText = cmd.getPayload().get("tts_text");
+        final String promptText = cmd.getPayload().get("prompt_text");
+
+        // {bucket=xxxx}yyyy/zzzz.wav
+        final String promptWav = cmd.getPayload().get("prompt_wav");
+
+        final BuildStreamTask bst = new OSSStreamTask(promptWav, _ossClient, false);
+        final List<byte[]> byteList = new ArrayList<>();
+        bst.buildStream(byteList::add, (ignored) -> {
+            try (final InputStream is = new ByteArrayListInputStream(byteList);
+            final ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
+                is.transferTo(bos);
+                final byte[] wavBytes = bos.toByteArray();
+                log.info("Cosy2: ttsText:{}/promptText:{}/promptWav size:{}", ttsText, promptText, wavBytes.length);
+                callCosy2InferenceZeroShot(ttsText, promptText, wavBytes);
+            } catch (IOException ex) {
+            }
+        });
+    }
+
+    private void callCosy2InferenceZeroShot(final String ttsText, final String promptText, final byte[] wavBytes) {
+        final String outputPath = "response.wav";
+
+        log.info("callCosy2InferenceZeroShot: Step0");
+        try(final AsyncHttpClient ahc = Dsl.asyncHttpClient(new DefaultAsyncHttpClientConfig.Builder()
+                     .setMaxRequestRetry(0)
+                    .setHttpClientCodecMaxChunkSize(10240000)
+                    .setWebSocketMaxBufferSize(1024000)
+                    .setWebSocketMaxFrameSize(1024000)
+                    .build())) {
+            log.info("callCosy2InferenceZeroShot: Step1");
+
+            final BoundRequestBuilder requestBuilder = ahc.prepareGet(_cosy2_url);
+
+            final ByteArrayPart part3 = new ByteArrayPart("prompt_wav", wavBytes, "application/octet-stream");
+
+            log.info("callCosy2InferenceZeroShot: Step2");
+            // 构建 Multipart 请求体
+            requestBuilder
+                    .setHeader("Transfer-Encoding", "chunked")
+                    .addBodyPart(new StringPart("tts_text", ttsText))
+                    .addBodyPart(new StringPart("prompt_text", promptText))
+                    .addBodyPart(part3)
+                    ;
+                    //.build();
+
+            log.info("callCosy2InferenceZeroShot: Step3");
+
+            final Future<Response> responseFuture = requestBuilder.execute();
+
+            log.info("callCosy2InferenceZeroShot: Step4");
+
+            // 获取响应
+            final Response response = responseFuture.get();
+
+            log.info("callCosy2InferenceZeroShot: Step5");
+
+            // 检查响应状态码
+            if (response.getStatusCode() == 200) {
+                // 保存响应内容到文件
+                byte[] audioData = response.getResponseBodyAsBytes();
+                // saveToFile(audioData, outputPath);
+                log.info("callCosy2InferenceZeroShot: Response {}", response);
+            } else {
+                log.warn("callCosy2InferenceZeroShot: Failed to get response. Status code: {}", response.getStatusCode());
+            }
+        } catch (Exception ex) {
+            log.warn("callCosy2InferenceZeroShot: failed, detail: {}", ExceptionUtil.exception2detail(ex));
+            // throw new RuntimeException(e);
+        }
+    }
 
     private void previewOn(final String path, final PreviewSession previewSession, final WebSocket webSocket) {
         // interval = 20 ms
