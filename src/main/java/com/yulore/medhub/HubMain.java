@@ -93,6 +93,9 @@ public class HubMain {
     @Value("${session.check_idle_interval_ms}")
     private long _check_idle_interval_ms;
 
+    @Value("${call.answer_timeout_ms}")
+    private long _answer_timeout_ms;
+
     @Value("${session.match_fs}")
     private String _match_fs;
 
@@ -253,7 +256,7 @@ public class HubMain {
                             final String uuid = varsBegin > 0 ? VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "uuid", '&') : "unknown";
                             final String tid = varsBegin > 0 ? VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "tid", '&') : "unknown";
                             final String clientIp = clientHandshake.getFieldValue("X-Forwarded-For");
-                            final PoActor session = new PoActor(
+                            final PoActor actor = new PoActor(
                                     clientIp,
                                     uuid,
                                     tid,
@@ -278,10 +281,11 @@ public class HubMain {
                                         });
                                     },
                                     (sessionId) -> HubEventVO.sendEvent(webSocket, "CallStarted", new PayloadCallStarted(sessionId)));
-                            webSocket.setAttachment(session);
-                            session.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms, session::checkIdle);
+                            webSocket.setAttachment(actor);
+                            actor.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms, actor::checkIdle);
+                            _scheduledExecutor.schedule(actor::notifyMockAnswer, _answer_timeout_ms, TimeUnit.MILLISECONDS);
 
-                            log.info("ws path match: {}, using ws as CallSession", _match_call);
+                            log.info("ws path match: {}, using ws as PoActor", _match_call);
                         } else if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_playback)) {
                             // init PlaybackSession attach with webSocket
                             final String path = clientHandshake.getResourceDescriptor();

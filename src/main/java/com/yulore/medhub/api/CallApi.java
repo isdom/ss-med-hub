@@ -24,6 +24,18 @@ public interface CallApi {
     @Builder
     @Data
     @ToString
+    class MockAnswerRequest {
+        private String sessionId;
+        private String uuid;
+        private String tid;
+        private long answerTime;
+    }
+    @RequestMapping(value = "${call.api.mock_answer:unknown_mock_answer}", method = RequestMethod.POST)
+    ApiResponse<UserAnswerVO> mock_answer(@RequestBody MockAnswerRequest request);
+
+    @Builder
+    @Data
+    @ToString
     class UserAnswerRequest {
         private String sessionId;
         private String kid;

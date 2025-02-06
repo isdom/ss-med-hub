@@ -82,13 +82,37 @@ public class PoActor extends ASRActor {
         }
     }
 
+    public void notifyMockAnswer() {
+        if (_isUserAnswered.get()) {
+            log.info("[{}]: [{}]-[{}]: notifyUserAnswer has called already, ignore notifyMockAnswer!", _clientIp, _sessionId, _uuid);
+            return;
+        }
+        if (Strings.isNullOrEmpty(_uuid) || Strings.isNullOrEmpty(_tid)) {
+            log.warn("[{}]/[{}]: doMockAnswer error for uuid:{}/tid:{}, abort mock_answer.", _clientIp, _sessionId, _uuid, _tid);
+            return;
+        }
+        try {
+            final ApiResponse<UserAnswerVO> response = _callApi.mock_answer(CallApi.MockAnswerRequest.builder()
+                    .sessionId(_sessionId)
+                    .uuid(_uuid)
+                    .tid(_tid)
+                    .answerTime(System.currentTimeMillis())
+                    .build());
+            log.info("[{}]: [{}]-[{}]: mockAnswer: tid:{} => response: {}", _clientIp, _sessionId, _uuid, _tid, response);
+
+            saveAndPlayWelcome(response);
+        } catch (Exception ex) {
+            log.warn("[{}]: [{}]-[{}]: failed for callApi.mock_answer, detail: {}", _clientIp, _sessionId, _uuid, ex.toString());
+        }
+    }
+
     public void notifyUserAnswer(final HubCommandVO cmd) {
         if (!_isUserAnswered.compareAndSet(false, true)) {
             log.warn("[{}]: [{}]-[{}]: notifyUserAnswer called already, ignore!", _clientIp, _sessionId, _uuid);
             return;
         }
         if (Strings.isNullOrEmpty(_uuid) || Strings.isNullOrEmpty(_tid)) {
-            log.warn("[{}]: PoActor_notifyUserAnswer error for uuid:{}/tid:{}, abort user_answer.", _clientIp, _sessionId, _uuid);
+            log.warn("[{}]/[{}]: PoActor_notifyUserAnswer error for uuid:{}/tid:{}, abort user_answer.", _clientIp, _sessionId, _uuid, _tid);
             return;
         }
         try {
@@ -110,11 +134,19 @@ public class PoActor extends ASRActor {
             log.info("[{}]: [{}]-[{}]: userAnswer: kid:{}/tid:{}/realName:{}/gender:{}/aesMobile:{} => response: {}",
                     _clientIp, _sessionId, _uuid, kid, tid, realName, genderStr, aesMobile, response);
 
-            _welcome.set(response.getData());
-            _aiSetting = response.getData().getAiSetting();
-            tryPlayWelcome();
+            saveAndPlayWelcome(response);
         } catch (Exception ex) {
             log.warn("[{}]: [{}]-[{}]: failed for callApi.user_answer, detail: {}", _clientIp, _sessionId, _uuid, ex.toString());
+        }
+    }
+
+    private void saveAndPlayWelcome(final ApiResponse<UserAnswerVO> response) {
+        if (null != response.getData()) {
+            _welcome.set(response.getData());
+            if (null != response.getData()) {
+                _aiSetting = response.getData().getAiSetting();
+            }
+            tryPlayWelcome();
         }
     }
 
@@ -129,7 +161,9 @@ public class PoActor extends ASRActor {
             _lock.lock();
             if (_playbackOn != null && _welcome.get() != null) {
                 final AIReplyVO welcome = _welcome.getAndSet(null);
-                doPlayback(welcome);
+                if (null != welcome) {
+                    doPlayback(welcome);
+                }
             }
         } finally {
             _lock.unlock();
