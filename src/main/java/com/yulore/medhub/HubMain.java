@@ -16,6 +16,7 @@ import com.aliyun.oss.OSSClientBuilder;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Charsets;
+import com.google.common.primitives.Bytes;
 import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.tencent.asrv2.*;
 import com.tencent.core.ws.SpeechClient;
@@ -30,6 +31,7 @@ import com.yulore.medhub.task.*;
 import com.yulore.medhub.vo.*;
 import com.yulore.util.ByteArrayListInputStream;
 import com.yulore.util.ExceptionUtil;
+import com.yulore.util.WaveUtil;
 import io.netty.util.NettyRuntime;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.extern.slf4j.Slf4j;
@@ -56,6 +58,10 @@ import org.springframework.stereotype.Component;
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import javax.annotation.Resource;
+import javax.sound.sampled.AudioFormat;
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.UnsupportedAudioFileException;
 import java.io.*;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
@@ -825,15 +831,21 @@ public class HubMain {
             try (final InputStream is = new ByteArrayListInputStream(byteList);
             final ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
                 is.transferTo(bos);
-                final byte[] wavBytes = bos.toByteArray();
-                log.info("Cosy2: ttsText:{}/promptText:{}/promptWav size:{}", ttsText, promptText, wavBytes.length);
-                callCosy2ZeroShot(ttsText, promptText, wavBytes);
-            } catch (IOException ex) {
+                final byte[] promptWavBytes = bos.toByteArray();
+                log.info("Cosy2: ttsText:{}/promptText:{}/promptWav size:{}", ttsText, promptText, promptWavBytes.length);
+                final byte[] wavBytes = callCosy2ZeroShot(ttsText, promptText, promptWavBytes);
+                if (wavBytes != null) {
+                    webSocket.send(wavBytes);
+                    log.info("Cosy2: output wav size:{}", wavBytes.length);
+                } else {
+                    log.info("Cosy2: output wav failed");
+                }
+            } catch (IOException ignored1) {
             }
         });
     }
 
-    private void callCosy2ZeroShot(final String ttsText, final String promptText, final byte[] wavBytes) {
+    private byte[] callCosy2ZeroShot(final String ttsText, final String promptText, final byte[] wavBytes) {
         try {
             // 创建 HttpClient 实例
             final HttpClient httpClient = HttpClients.createDefault();
@@ -861,14 +873,37 @@ public class HubMain {
                 // 保存响应内容到文件
                 HttpEntity responseEntity = response.getEntity();
                 if (responseEntity != null) {
-                    byte[] audioData = EntityUtils.toByteArray(responseEntity);
-                    log.info("callCosy2ZeroShot: Response {}/audioData.size: {}", response, audioData.length);
+                    byte[] pcm = EntityUtils.toByteArray(responseEntity);
+                    log.info("callCosy2ZeroShot: Response {}/audioData.size: {}", response, pcm.length);
+                    return Bytes.concat(
+                            WaveUtil.genWaveHeader(16000, 1),
+                            resamplePCM(pcm, 24000, 16000));
                 }
             } else {
-                System.out.println("Failed to get response. Status code: " + response.getStatusLine().getStatusCode());
+                log.warn("Failed to get response. Status code: {}", response.getStatusLine().getStatusCode());
             }
         } catch (IOException ex) {
             log.warn("callCosy2ZeroShot: failed, detail: {}", ExceptionUtil.exception2detail(ex));
+        }
+        return null;
+    }
+
+    // 转换采样率
+    private static byte[] resamplePCM(final byte[] pcm, final int sourceSampleRate, final int targetSampleRate) {
+        final AudioFormat sf = new AudioFormat(sourceSampleRate, 16, 1, true, false);
+        final AudioFormat tf = new AudioFormat(targetSampleRate, 16, 1, true, false);
+        try(// 创建原始音频格式
+            final AudioInputStream ss = new AudioInputStream(new ByteArrayInputStream(pcm), sf, pcm.length);
+            // 创建目标音频格式
+            final AudioInputStream ts = AudioSystem.getAudioInputStream(tf, ss);
+            // 读取转换后的数据
+            final ByteArrayOutputStream os = new ByteArrayOutputStream();
+        ) {
+            ts.transferTo(os);
+            return os.toByteArray();
+        } catch (Exception ex) {
+            log.warn("resamplePCM: failed, detail: {}", ExceptionUtil.exception2detail(ex));
+            return null;
         }
     }
 
