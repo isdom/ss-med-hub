@@ -32,7 +32,6 @@ dependencies {
     // https://mvnrepository.com/artifact/com.google.guava/guava
     implementation 'com.google.guava:guava:33.3.1-jre'
 
-
     implementation 'com.alibaba.nls:nls-sdk-common:2.2.17'
     implementation 'com.alibaba.nls:nls-sdk-transcriber:2.2.17'
     implementation 'com.alibaba.nls:nls-sdk-tts:2.2.17'

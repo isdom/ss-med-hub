@@ -1895,6 +1895,6 @@ public class HubMain {
         _scheduledExecutor.shutdownNow();
         _ossAccessExecutor.shutdownNow();
 
-        log.info("ASR-Hub: shutdown");
+        log.info("MediaHub: shutdown");
     }
 }
