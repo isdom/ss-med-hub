@@ -3,6 +3,7 @@ package com.yulore.medhub.stream;
 
 import com.aliyun.oss.OSS;
 import com.aliyun.oss.model.OSSObject;
+import com.yulore.util.VarsUtil;
 import lombok.extern.slf4j.Slf4j;
 
 import javax.sound.sampled.AudioSystem;

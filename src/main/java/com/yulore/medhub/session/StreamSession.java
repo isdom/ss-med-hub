@@ -1,6 +1,6 @@
 package com.yulore.medhub.session;
 
-import com.yulore.medhub.stream.VarsUtil;
+import com.yulore.util.VarsUtil;
 import com.yulore.util.ByteArrayListInputStream;
 import lombok.AllArgsConstructor;
 import lombok.ToString;

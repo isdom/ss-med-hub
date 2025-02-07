@@ -8,6 +8,7 @@ import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
 import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.medhub.nls.CosyAgent;
+import com.yulore.util.VarsUtil;
 import lombok.extern.slf4j.Slf4j;
 
 import java.nio.ByteBuffer;

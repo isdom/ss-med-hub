@@ -1,4 +1,4 @@
-package com.yulore.medhub.stream;
+package com.yulore.util;
 
 import lombok.extern.slf4j.Slf4j;
 

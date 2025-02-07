@@ -6,7 +6,7 @@ import com.alibaba.nls.client.protocol.asr.SpeechTranscriber;
 import com.google.common.base.Strings;
 import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.medhub.api.*;
-import com.yulore.medhub.stream.VarsUtil;
+import com.yulore.util.VarsUtil;
 import com.yulore.medhub.vo.*;
 import com.yulore.util.ByteArrayListInputStream;
 import com.yulore.util.ExceptionUtil;
