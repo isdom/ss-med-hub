@@ -1,6 +1,8 @@
 #!/bin/bash
 
-PIDFILE=~/pids/med-hub.pid
+source ~/env.sh
+
+PIDFILE=~/pids/${JVM_PID_FILE}
 
 if [ ! -f ${PIDFILE} ]
 then

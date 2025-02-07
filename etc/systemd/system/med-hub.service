@@ -14,8 +14,8 @@ PIDFile=/home/med-hub/pids/med-hub.pid
 ; -nonat disables Network Address Translation probing at FreeSWITCH start, which might not be what you want!
 ; blank ExecStart= line flushes the list
 ;ExecStart=
-ExecStart=/home/med-hub/start_hub.sh
-ExecStop=/home/med-hub/stop_hub.sh
+ExecStart=/home/med-hub/start_srv.sh
+ExecStop=/home/med-hub/stop_srv.sh
 
 ;TimeoutStartSec=45
 ;TimeoutStopSec=45
