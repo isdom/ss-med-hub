@@ -2,6 +2,10 @@ package com.yulore.util;
 
 import lombok.extern.slf4j.Slf4j;
 
+import javax.sound.sampled.AudioFormat;
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -115,4 +119,24 @@ public class WaveUtil {
         int i1 = (data & 0x0000ff00) >> 8;
         dos.writeByte(i0);
         dos.writeByte(i1);
-    }}
+    }
+
+    // 转换采样率
+    public static byte[] resamplePCM(final byte[] pcm, final int sourceSampleRate, final int targetSampleRate) {
+        final AudioFormat sf = new AudioFormat(sourceSampleRate, 16, 1, true, false);
+        final AudioFormat tf = new AudioFormat(targetSampleRate, 16, 1, true, false);
+        try(// 创建原始音频格式
+            final AudioInputStream ss = new AudioInputStream(new ByteArrayInputStream(pcm), sf, pcm.length);
+            // 创建目标音频格式
+            final AudioInputStream ts = AudioSystem.getAudioInputStream(tf, ss);
+            // 读取转换后的数据
+            final ByteArrayOutputStream os = new ByteArrayOutputStream();
+        ) {
+            ts.transferTo(os);
+            return os.toByteArray();
+        } catch (Exception ex) {
+            log.warn("resamplePCM: failed, detail: {}", ExceptionUtil.exception2detail(ex));
+            return null;
+        }
+    }
+}
