@@ -146,14 +146,14 @@ public class HubMain {
 
     private ScheduledExecutorService _scheduledExecutor;
 
-    @Value("${oss.endpoint}")
-    private String _oss_endpoint;
-
-    @Value("${oss.access_key_id}")
-    private String _oss_access_key_id;
-
-    @Value("${oss.access_key_secret}")
-    private String _oss_access_key_secret;
+//    @Value("${oss.endpoint}")
+//    private String _oss_endpoint;
+//
+//    @Value("${oss.access_key_id}")
+//    private String _oss_access_key_id;
+//
+//    @Value("${oss.access_key_secret}")
+//    private String _oss_access_key_secret;
 
     @Value("${oss.bucket}")
     private String _oss_bucket;
@@ -176,7 +176,7 @@ public class HubMain {
     @Value("${cosy2.url}")
     private String _cosy2_url;
 
-    private OSS _ossClient;
+    private final OSS _ossClient;
 
     private ExecutorService _ossAccessExecutor;
 
@@ -194,11 +194,16 @@ public class HubMain {
     @Autowired
     private NacosDiscoveryProperties _nacosDiscoveryProperties;
 
+    @Autowired
+    public HubMain(final OSS ossClient) {
+        this._ossClient = ossClient;
+    }
+
     @PostConstruct
     public void start() {
         //创建NlsClient实例应用全局创建一个即可。生命周期可和整个应用保持一致，默认服务地址为阿里云线上服务地址。
         _nlsClient = new NlsClient(_nls_url, "invalid_token");
-        _ossClient = new OSSClientBuilder().build(_oss_endpoint, _oss_access_key_id, _oss_access_key_secret);
+        //_ossClient = new OSSClientBuilder().build(_oss_endpoint, _oss_access_key_id, _oss_access_key_secret);
 
         _txClient = new SpeechClient(AsrConstant.DEFAULT_RT_REQ_URL);
 
