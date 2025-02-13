@@ -23,12 +23,6 @@ import java.util.function.Consumer;
 @Component
 public class StreamCacheService {
 
-    /*
-    oss_bucket: ylhz-aicall
-    oss_path: aispeech/
-    local_path: /var/znc/wav_cache/
-    */
-
     private ExecutorService _scsExecutor;
 
     private final ConcurrentMap<String, LoadAndCahceTask> _key2task = new ConcurrentHashMap<>();
