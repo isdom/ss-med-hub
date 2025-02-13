@@ -1117,7 +1117,9 @@ public class HubMain {
     private BuildStreamTask cvo2bst(final CompositeVO cvo) {
         if (cvo.getBucket() != null && !cvo.getBucket().isEmpty() && cvo.getObject() != null && !cvo.getObject().isEmpty()) {
             log.info("support CVO => OSS Stream: {}", cvo);
-            return new OSSStreamTask("{bucket=" + cvo.getBucket() + "}" + cvo.getObject(), _ossClient, true);
+            return new OSSStreamTask(
+                    "{bucket=" + cvo.bucket + ",start=" + cvo.start + ",end=" + cvo.end + "}" + cvo.object,
+                    _ossClient, true);
         } else if (cvo.getType() != null && cvo.getType().equals("tts")) {
             log.info("support CVO => TTS Stream: {}", cvo);
             return genTtsStreamTask(cvo);

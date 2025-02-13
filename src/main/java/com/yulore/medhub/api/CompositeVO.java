@@ -7,21 +7,25 @@ import lombok.ToString;
 @Data
 @ToString
 public class CompositeVO {
-    private String type;
+    public String type;
 
-    private String bucket;
+    public String bucket;
 
-    private String object;
+    public String object;
 
-    private String voice;
+    public String voice;
 
-    private String text;
+    public String text;
 
-    private Boolean cache;
+    public Boolean cache;
 
-    private int volume = 50;
+    public int volume = 50;
 
-    private int speech_rate = 0;
+    public int speech_rate = 0;
 
-    private int pitch_rate = 0;
+    public int pitch_rate = 0;
+
+    public int start = 0;
+
+    public int end = -1;
 }

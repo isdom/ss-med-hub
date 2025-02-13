@@ -3,9 +3,13 @@ package com.yulore.medhub.stream;
 
 import com.aliyun.oss.OSS;
 import com.aliyun.oss.model.OSSObject;
+import com.google.common.base.Strings;
 import com.yulore.util.VarsUtil;
+import com.yulore.util.WaveUtil;
 import lombok.extern.slf4j.Slf4j;
 
+import javax.sound.sampled.AudioFormat;
+import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.UnsupportedAudioFileException;
 import java.io.ByteArrayInputStream;
@@ -38,6 +42,12 @@ public class OSSStreamTask implements BuildStreamTask {
             throw new RuntimeException(path + " missing bucket field, ignore");
         }
 
+        final String start = VarsUtil.extractValue(vars, "start");
+        _start = Strings.isNullOrEmpty(start) ? 0 : Integer.parseInt(start);
+
+        final String end = VarsUtil.extractValue(vars, "end");
+        _end = Strings.isNullOrEmpty(end) ? -1 : Integer.parseInt(end);
+
         _objectName = path.substring(rightBracePos + 1);
         _key = buildKey();
     }
@@ -50,6 +60,10 @@ public class OSSStreamTask implements BuildStreamTask {
         sb.append(_bucketName);
         sb.append(":");
         sb.append(_objectName);
+        sb.append(":");
+        sb.append(_start);
+        sb.append(":");
+        sb.append(_end);
         return sb.toString();
     }
 
@@ -66,17 +80,45 @@ public class OSSStreamTask implements BuildStreamTask {
         try (final OSSObject ossObject = _ossClient.getObject(_bucketName, _objectName);
              final ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
             ossObject.getObjectContent().transferTo(bos);
-            if (_removeWavHdr) {
+            if (_start > 0 || _end != -1 || _removeWavHdr) {
                 try {
                     final ByteArrayInputStream bis = new ByteArrayInputStream(bos.toByteArray());
                     bos.reset();
-                    AudioSystem.getAudioInputStream(bis).transferTo(bos);
+                    final AudioInputStream ais = AudioSystem.getAudioInputStream(bis);
+                    final AudioFormat af = ais.getFormat();
+                    final int samples = (int)ais.getFrameLength();
+                    if (_start > 0) {
+                        log.info("AudioFormat: frameSize:{}/sampleSizeInBits:{}", af.getFrameSize(), af.getSampleSizeInBits());
+                        ais.skip((long) _start * af.getFrameSize());
+                    }
+
+                    if (!_removeWavHdr) {
+                        // add wav header
+                        bos.write(WaveUtil.genWaveHeader((int)af.getSampleRate(), af.getChannels()));
+                    }
+                    if (_end == -1) {
+                        ais.transferTo(bos);
+                    } else if (_end > samples) {
+                        log.warn("{}'s total samples:{}, BUT end:{}, ignore end property", _objectName, samples, _end);
+                        ais.transferTo(bos);
+                    } else {
+                        log.info("AudioFormat: frameSize:{}/sampleSizeInBits:{}", af.getFrameSize(), af.getSampleSizeInBits());
+                        int to_transfer = (_end - _start) * af.getFrameSize();
+                        byte[] buffer = new byte[512];
+                        int read;
+                        while (to_transfer > 0 && (read = ais.read(buffer, 0, Math.min(512, to_transfer))) >= 0) {
+                            bos.write(buffer, 0, read);
+                            to_transfer -= read;
+                        }
+                    }
                 } catch (UnsupportedAudioFileException ex) {
                     log.warn("failed to extract pcm from wav: {}", ex.toString());
                 }
             }
             bytes = bos.toByteArray();
-            log.info("and save content size {}, total cost: {} ms", bytes.length, System.currentTimeMillis() - startInMs);
+            log.info("and save content (has wav hdr:{}/start:{}/end:{}) size {}, total cost: {} ms",
+                    !_removeWavHdr, _start, _end,
+                    bytes.length, System.currentTimeMillis() - startInMs);
             onPart.accept(bytes);
             onCompleted.accept(true);
         } catch (IOException ex) {
@@ -91,4 +133,6 @@ public class OSSStreamTask implements BuildStreamTask {
     private final String _objectName;
     private final String _key;
     private final boolean _removeWavHdr;
+    private final int _start;
+    private final int _end;
 }
