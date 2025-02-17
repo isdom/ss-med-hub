@@ -1106,7 +1106,8 @@ public class HubMain {
                 });
                 return bst.key() != null ? _scsService.asCache(bst) : bst;
             } else {
-                return _scsService.asCache(new OSSStreamTask(path, _ossClient, removeWavHdr));
+                final BuildStreamTask bst = new OSSStreamTask(path, _ossClient, removeWavHdr);
+                return bst.key() != null ? _scsService.asCache(bst) : bst;
             }
         } catch (Exception ex) {
             log.warn("getTaskOf failed: {}", ex.toString());
@@ -1118,7 +1119,7 @@ public class HubMain {
         if (cvo.getBucket() != null && !cvo.getBucket().isEmpty() && cvo.getObject() != null && !cvo.getObject().isEmpty()) {
             log.info("support CVO => OSS Stream: {}", cvo);
             return new OSSStreamTask(
-                    "{bucket=" + cvo.bucket + ",start=" + cvo.start + ",end=" + cvo.end + "}" + cvo.object,
+                    "{bucket=" + cvo.bucket + ",cache=" + cvo.cache + ",start=" + cvo.start + ",end=" + cvo.end + "}" + cvo.object,
                     _ossClient, true);
         } else if (cvo.getType() != null && cvo.getType().equals("tts")) {
             log.info("support CVO => TTS Stream: {}", cvo);
@@ -1154,24 +1155,24 @@ public class HubMain {
         // {type=tts,voice=xxx,url=ws://172.18.86.131:6789/playback,vars_playback_id=<uuid>,content_id=2088788,vars_start_timestamp=1732028219711854,text='StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(content)'}
         //          unused.wav
         return String.format("{type=tts,cache=%s,voice=%s,pitch_rate=%s,speech_rate=%s,volume=%s,text=%s}tts.wav",
-                cvo.getCache(),
-                cvo.getVoice(),
-                cvo.getPitch_rate(),
-                cvo.getSpeech_rate(),
-                cvo.getVolume(),
-                StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(cvo.getText()));
+                cvo.cache,
+                cvo.voice,
+                cvo.pitch_rate,
+                cvo.speech_rate,
+                cvo.volume,
+                StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(cvo.text));
     }
 
     static private String cvo2cosy(final CompositeVO cvo) {
         // eg: {type=cosy,voice=xxx,url=ws://172.18.86.131:6789/cosy,vars_playback_id=<uuid>,content_id=2088788,vars_start_timestamp=1732028219711854,text='StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(content)'}
         //          unused.wav
         return String.format("{type=cosy,cache=%s,voice=%s,pitch_rate=%s,speech_rate=%s,volume=%s,text=%s}cosy.wav",
-                cvo.getCache(),
-                cvo.getVoice(),
-                cvo.getPitch_rate(),
-                cvo.getSpeech_rate(),
-                cvo.getVolume(),
-                StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(cvo.getText()));
+                cvo.cache,
+                cvo.voice,
+                cvo.pitch_rate,
+                cvo.speech_rate,
+                cvo.volume,
+                StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(cvo.text));
     }
 
     private void handleGetFileLenCommand(final HubCommandVO cmd, final WebSocket webSocket) {

@@ -49,7 +49,10 @@ public class OSSStreamTask implements BuildStreamTask {
         _end = Strings.isNullOrEmpty(end) ? -1 : Integer.parseInt(end);
 
         _objectName = path.substring(rightBracePos + 1);
-        _key = buildKey();
+
+        final String cacheStr = VarsUtil.extractValue(vars, "cache");
+        final boolean cache = !Strings.isNullOrEmpty(cacheStr) && Boolean.parseBoolean(cacheStr);
+        _key = cache ? buildKey() : null;
     }
 
     private String buildKey() {
