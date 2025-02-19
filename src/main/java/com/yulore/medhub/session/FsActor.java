@@ -7,6 +7,7 @@ import com.yulore.medhub.api.AIReplyVO;
 import com.yulore.medhub.api.ApiResponse;
 import com.yulore.medhub.api.ScriptApi;
 import com.yulore.medhub.vo.*;
+import com.yulore.util.ExceptionUtil;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
@@ -145,8 +146,8 @@ public class FsActor extends ASRActor {
                     } else {
                         log.info("[{}]: checkIdle: ai_reply's data is null, do_nothing", _sessionId);
                     }
-                } catch (Exception ex) {
-                    log.warn("[{}]: checkIdle: ai_reply error, detail: {}", _sessionId, ex.toString());
+                } catch (final Exception ex) {
+                    log.warn("[{}]: checkIdle: ai_reply error, detail: {}", _sessionId, ExceptionUtil.exception2detail(ex));
                 }
             }
         }
@@ -170,7 +171,7 @@ public class FsActor extends ASRActor {
                 }
             } catch (final Exception ex) {
                 _sendEvent.accept("FSHangup", new PayloadFSHangup(_uuid, _sessionId));
-                log.warn("[{}]: transcriptionStarted: ai_reply error, hangup, detail: {}", _sessionId, ex.toString());
+                log.warn("[{}]: transcriptionStarted: ai_reply error, hangup, detail: {}", _sessionId, ExceptionUtil.exception2detail(ex));
             }
             return true;
         } else {
@@ -405,8 +406,8 @@ public class FsActor extends ASRActor {
             } else {
                 log.info("[{}]: notifySentenceEnd: ai_reply's data is null', do_nothing", _sessionId);
             }
-        } catch (Exception ex) {
-            log.warn("[{}]: notifySentenceEnd: ai_reply error, detail: {}", _sessionId, ex.toString());
+        } catch (final Exception ex) {
+            log.warn("[{}]: notifySentenceEnd: ai_reply error, detail: {}", _sessionId, ExceptionUtil.exception2detail(ex));
         }
 
         {

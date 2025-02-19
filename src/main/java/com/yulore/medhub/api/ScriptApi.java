@@ -1,11 +1,18 @@
 package com.yulore.medhub.api;
 
+import feign.Request;
 import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.context.annotation.Bean;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 
-@FeignClient(value = "${SCRIPT_PROVIDER:unknown-script}")
+import java.util.concurrent.TimeUnit;
+
+@FeignClient(
+        value = "${SCRIPT_PROVIDER:unknown-script}",
+        configuration = ScriptApi.ScriptApiConfig.class
+)
 public interface ScriptApi {
     @RequestMapping(value = "${script.api.ai_reply:unknown_ai_api}", method = RequestMethod.GET)
     ApiResponse<AIReplyVO> ai_reply(
@@ -37,4 +44,12 @@ public interface ScriptApi {
             @RequestParam("sentence_begin_event_time") long begin_event_time,
             @RequestParam("sentence_end_event_time") long end_event_time
     );
-}
+
+    // 配置类定义
+    class ScriptApiConfig {
+        @Bean
+        public Request.Options aiReplyOptions() {
+            // connect(200ms), read(500ms), followRedirects(true)
+            return new Request.Options(200, TimeUnit.MILLISECONDS,  500, TimeUnit.MILLISECONDS,true);
+        }
+    }}
