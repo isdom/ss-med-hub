@@ -180,7 +180,7 @@ public class FsActor extends ASRActor {
         }
     }
 
-    public void notifyFSPlaybackStarted(final HubCommandVO cmd) {
+    public void notifyFSPlaybackStarted(final WSCommandVO cmd) {
         final String playbackId = cmd.getPayload().get("playback_id");
         final long playbackStartedInMs = System.currentTimeMillis();
         memoFor(playbackId).setBeginInMs(playbackStartedInMs);
@@ -200,7 +200,7 @@ public class FsActor extends ASRActor {
         }
     }
 
-    public void notifyPlaybackResumed(final HubCommandVO cmd) {
+    public void notifyPlaybackResumed(final WSCommandVO cmd) {
         final String playbackId = cmd.getPayload().get("playback_id");
         final String currentPlaybackId = _currentPlaybackId.get();
         if (currentPlaybackId != null) {
@@ -220,7 +220,7 @@ public class FsActor extends ASRActor {
         }
     }
 
-    public void notifyPlaybackPaused(final HubCommandVO cmd) {
+    public void notifyPlaybackPaused(final WSCommandVO cmd) {
         final String playbackId = cmd.getPayload().get("playback_id");
         final String currentPlaybackId = _currentPlaybackId.get();
         if (currentPlaybackId != null) {
@@ -239,7 +239,7 @@ public class FsActor extends ASRActor {
         }
     }
 
-    public void notifyFSPlaybackStopped(final HubCommandVO cmd) {
+    public void notifyFSPlaybackStopped(final WSCommandVO cmd) {
         final String playbackId = cmd.getPayload().get("playback_id");
         if (_currentPlaybackId.get() != null
             && playbackId != null
@@ -457,7 +457,7 @@ public class FsActor extends ASRActor {
         return isAiSpeaking() ?  _currentPlaybackDuration.get().get().intValue() : 0;
     }
 
-    public void notifyFSRecordStarted(final HubCommandVO cmd) {
+    public void notifyFSRecordStarted(final WSCommandVO cmd) {
         final String recordStartTimestamp = cmd.getPayload().get("record_start_timestamp");
         if (recordStartTimestamp != null && !recordStartTimestamp.isEmpty()) {
             final long rst = Long.parseLong(recordStartTimestamp);

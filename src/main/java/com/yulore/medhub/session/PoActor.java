@@ -106,7 +106,7 @@ public class PoActor extends ASRActor {
         }
     }
 
-    public void notifyUserAnswer(final HubCommandVO cmd) {
+    public void notifyUserAnswer(final WSCommandVO cmd) {
         if (!_isUserAnswered.compareAndSet(false, true)) {
             log.warn("[{}]: [{}]-[{}]: notifyUserAnswer called already, ignore!", _clientIp, _sessionId, _uuid);
             return;
