@@ -1,4 +1,4 @@
-package com.yulore.medhub.stream;
+package com.yulore.bst;
 
 import java.util.function.Consumer;
 
