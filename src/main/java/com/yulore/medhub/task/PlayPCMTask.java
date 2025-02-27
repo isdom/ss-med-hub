@@ -1,6 +1,6 @@
 package com.yulore.medhub.task;
 
-import com.yulore.medhub.vo.HubEventVO;
+import com.yulore.medhub.vo.WSEventVO;
 import com.yulore.medhub.vo.PayloadPlaybackStart;
 import com.yulore.medhub.vo.PayloadPlaybackStop;
 import lombok.RequiredArgsConstructor;
@@ -48,7 +48,7 @@ public class PlayPCMTask {
             log.warn("pcm task has stopped, can't start again");
         }
         if (_started.compareAndSet(false, true)) {
-            HubEventVO.sendEvent(_webSocket, "PlaybackStart", new PayloadPlaybackStart(_id,"pcm", _sampleInfo.sampleRate(), _sampleInfo.interval(), _sampleInfo.channels()));
+            WSEventVO.sendEvent(_webSocket, "PlaybackStart", new PayloadPlaybackStart(_id,"pcm", _sampleInfo.sampleRate(), _sampleInfo.interval(), _sampleInfo.channels()));
             _startTimestamp = System.currentTimeMillis();
             schedule(1 );
         } else {
@@ -129,7 +129,7 @@ public class PlayPCMTask {
 
     private void safeSendPlaybackStopEvent(final boolean completed) {
         if (_stopEventSended.compareAndSet(false, true)) {
-            HubEventVO.sendEvent(_webSocket, "PlaybackStop", new PayloadPlaybackStop(_id,"pcm", _samples.get(), completed));
+            WSEventVO.sendEvent(_webSocket, "PlaybackStop", new PayloadPlaybackStop(_id,"pcm", _samples.get(), completed));
         }
     }
 }
