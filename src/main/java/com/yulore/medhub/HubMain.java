@@ -159,9 +159,6 @@ public class HubMain {
     @Value("${oss.path}")
     private String _oss_path;
 
-    //@Value("${oss.match_prefix}")
-    //private String _oss_match_prefix;
-
     @Value("${rms.cp_prefix}")
     private String _rms_cp_prefix;
 
