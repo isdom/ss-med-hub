@@ -190,6 +190,9 @@ public class HubMain {
     private NacosDiscoveryProperties _nacosDiscoveryProperties;
 
     @Autowired
+    WebSocketServer  _ws2;
+
+    @Autowired
     public HubMain(final OSS ossClient) {
         this._ossClient = ossClient;
     }
