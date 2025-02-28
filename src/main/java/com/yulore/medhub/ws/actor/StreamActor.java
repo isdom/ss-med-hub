@@ -1,5 +1,6 @@
 package com.yulore.medhub.ws.actor;
 
+import com.yulore.medhub.session.StreamSession;
 import com.yulore.medhub.ws.WsHandler;
 import org.java_websocket.WebSocket;
 
@@ -15,4 +16,6 @@ public abstract class StreamActor implements WsHandler {
     public void onClose(WebSocket webSocket) {
 
     }
+
+    public StreamSession _ss;
 }

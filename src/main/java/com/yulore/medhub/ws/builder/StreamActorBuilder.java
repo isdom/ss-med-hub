@@ -64,7 +64,7 @@ public class StreamActorBuilder implements WsHandlerBuilder {
             @Override
             public void onMessage(final WebSocket webSocket, final String message) {
                 try {
-                    handleCommand(new ObjectMapper().readValue(message, WSCommandVO.class), webSocket);
+                    handleCommand(new ObjectMapper().readValue(message, WSCommandVO.class), webSocket, this);
                 } catch (JsonProcessingException ex) {
                     log.error("handleCommand {}: {}, an error occurred when parseAsJson: {}",
                             webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
@@ -73,27 +73,24 @@ public class StreamActorBuilder implements WsHandlerBuilder {
 
             @Override
             public void onMessage(final WebSocket webSocket, final ByteBuffer bytes) {
-                if (webSocket.getAttachment() instanceof StreamSession session) {
-                    _sessionExecutor.submit(()-> handleFileWriteCommand(bytes, session, webSocket));
-                    return;
-                }
+                _sessionExecutor.submit(()-> handleFileWriteCommand(bytes, _ss, webSocket));
             }
         };
         webSocket.setAttachment(actor);
         return actor;
     }
 
-    private void handleCommand(final WSCommandVO cmd, final WebSocket webSocket) {
+    private void handleCommand(final WSCommandVO cmd, final WebSocket webSocket, final StreamActor streamActor) {
         if ("OpenStream".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handleOpenStreamCommand(cmd, webSocket));
+            _sessionExecutor.submit(()-> handleOpenStreamCommand(cmd, webSocket, streamActor));
         } else if ("GetFileLen".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handleGetFileLenCommand(cmd, webSocket));
+            _sessionExecutor.submit(()-> handleGetFileLenCommand(cmd, webSocket, streamActor));
         } else if ("FileSeek".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handleFileSeekCommand(cmd, webSocket));
+            _sessionExecutor.submit(()-> handleFileSeekCommand(cmd, webSocket, streamActor));
         } else if ("FileRead".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handleFileReadCommand(cmd, webSocket));
+            _sessionExecutor.submit(()-> handleFileReadCommand(cmd, webSocket, streamActor));
         } else if ("FileTell".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handleFileTellCommand(cmd, webSocket));
+            _sessionExecutor.submit(()-> handleFileTellCommand(cmd, webSocket, streamActor));
         }  else {
             log.warn("handleHubCommand: Unknown Command: {}", cmd);
         }
@@ -122,7 +119,7 @@ public class StreamActorBuilder implements WsHandlerBuilder {
         };
     }
 
-    private void handleOpenStreamCommand(final WSCommandVO cmd, final WebSocket webSocket) {
+    private void handleOpenStreamCommand(final WSCommandVO cmd, final WebSocket webSocket, final StreamActor streamActor) {
         final long startInMs = System.currentTimeMillis();
         final String path = cmd.getPayload().get("path");
         final boolean isWrite = Boolean.parseBoolean(cmd.getPayload().get("is_write"));
@@ -147,7 +144,7 @@ public class StreamActorBuilder implements WsHandlerBuilder {
                     });
                 },
                 path, sessionId, contentId, playIdx);
-        webSocket.setAttachment(_ss);
+        streamActor._ss = _ss;
 
         if (!isWrite) {
             final BuildStreamTask bst = getTaskOf(path, false, 8000);
@@ -262,10 +259,10 @@ public class StreamActorBuilder implements WsHandlerBuilder {
                 StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(cvo.text));
     }
 
-    private void handleGetFileLenCommand(final WSCommandVO cmd, final WebSocket webSocket) {
+    private void handleGetFileLenCommand(final WSCommandVO cmd, final WebSocket webSocket, final StreamActor streamActor) {
         final long startInMs = System.currentTimeMillis();
         log.info("get file len:");
-        final StreamSession ss = webSocket.getAttachment();
+        final StreamSession ss = streamActor._ss;
         if (ss == null) {
             log.warn("handleGetFileLenCommand: ss is null, just return 0");
             WSEventVO.sendEvent(webSocket, "GetFileLenResult", new PayloadGetFileLenResult(0));
@@ -274,12 +271,12 @@ public class StreamActorBuilder implements WsHandlerBuilder {
         ss.sendEvent(startInMs, "GetFileLenResult", new PayloadGetFileLenResult(ss.length()));
     }
 
-    private void handleFileSeekCommand(final WSCommandVO cmd, final WebSocket webSocket) {
+    private void handleFileSeekCommand(final WSCommandVO cmd, final WebSocket webSocket, final StreamActor streamActor) {
         final long startInMs = System.currentTimeMillis();
         final int offset = Integer.parseInt(cmd.getPayload().get("offset"));
         final int whence = Integer.parseInt(cmd.getPayload().get("whence"));
         log.info("file seek => offset: {}, whence: {}", offset, whence);
-        final StreamSession ss = webSocket.getAttachment();
+        final StreamSession ss = streamActor._ss;
         if (ss == null) {
             log.warn("handleFileSeekCommand: ss is null, just return 0");
             WSEventVO.sendEvent(webSocket, "FileSeekResult", new PayloadFileSeekResult(0));
@@ -306,10 +303,10 @@ public class StreamActorBuilder implements WsHandlerBuilder {
         ss.sendEvent(startInMs,"FileSeekResult", new PayloadFileSeekResult(pos));
     }
 
-    private void handleFileReadCommand(final WSCommandVO cmd, final WebSocket webSocket) {
+    private void handleFileReadCommand(final WSCommandVO cmd, final WebSocket webSocket, final StreamActor streamActor) {
         final long startInMs = System.currentTimeMillis();
         final int count = Integer.parseInt(cmd.getPayload().get("count"));
-        final StreamSession ss = webSocket.getAttachment();
+        final StreamSession ss = streamActor._ss;
         if (ss == null) {
             log.warn("handleFileReadCommand: file read => count: {}, and ss is null, send 0 bytes to rms client", count);
             webSocket.send(EMPTY_BYTES);
@@ -393,9 +390,9 @@ public class StreamActorBuilder implements WsHandlerBuilder {
         ss.sendEvent(startInMs, "FileWriteResult", new PayloadFileWriteResult(written));
     }
 
-    private void handleFileTellCommand(final WSCommandVO cmd, final WebSocket webSocket) {
+    private void handleFileTellCommand(final WSCommandVO cmd, final WebSocket webSocket, final StreamActor streamActor) {
         final long startInMs = System.currentTimeMillis();
-        final StreamSession ss = webSocket.getAttachment();
+        final StreamSession ss = streamActor._ss;
         if (ss == null) {
             log.warn("handleFileTellCommand: ss is null, just return 0");
             WSEventVO.sendEvent(webSocket, "FileTellResult", new PayloadFileSeekResult(0));
@@ -405,14 +402,14 @@ public class StreamActorBuilder implements WsHandlerBuilder {
         ss.sendEvent(startInMs, "FileTellResult", new PayloadFileSeekResult(ss.tell()));
     }
 
-    @Autowired
-    private StreamCacheService _scsService;
-
     private ScheduledExecutorService _scheduledExecutor;
     private ExecutorService _sessionExecutor;
     private ExecutorService _ossAccessExecutor;
 
     private final OSS _ossClient;
+
+    @Autowired
+    private StreamCacheService _scsService;
 
     @Autowired
     private NlsService nlsService;
