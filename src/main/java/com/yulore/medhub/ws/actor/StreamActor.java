@@ -9,12 +9,13 @@ import java.nio.ByteBuffer;
 public abstract class StreamActor implements WsHandler {
     @Override
     public void onAttached(WebSocket webSocket) {
-
     }
 
     @Override
-    public void onClose(WebSocket webSocket) {
-
+    public void onClose(final WebSocket webSocket) {
+        if (_ss != null) {
+            _ss.close();
+        }
     }
 
     public StreamSession _ss;
