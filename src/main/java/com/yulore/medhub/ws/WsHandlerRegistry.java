@@ -29,12 +29,12 @@ public class WsHandlerRegistry implements BeanFactoryAware  {
         );
     }
 
-    public void register(String pathPrefix, WsHandlerBuilder builder) {
+    public void register(final String pathPrefix, final WsHandlerBuilder builder) {
         handlerBuilders.put(pathPrefix, builder);
     }
 
     public Optional<WsHandler> createHandler(final WebSocket ws, final ClientHandshake handshake) {
-        String path = handshake.getResourceDescriptor();
+        final String path = handshake.getResourceDescriptor();
         return handlerBuilders.entrySet().stream()
                 .filter(e -> path.startsWith(e.getKey()))
                 .findFirst()

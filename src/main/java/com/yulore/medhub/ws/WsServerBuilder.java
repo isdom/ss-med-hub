@@ -1,11 +1,5 @@
 package com.yulore.medhub.ws;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.yulore.medhub.session.ASRActor;
-import com.yulore.medhub.session.FsActor;
-import com.yulore.medhub.session.StreamSession;
-import com.yulore.medhub.vo.WSCommandVO;
 import com.yulore.util.ExceptionUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,7 +23,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Slf4j
 public class WsServerBuilder {
     @Bean(destroyMethod = "stop")
-    public WebSocketServer webSocketServer() throws Exception {
+    public WebSocketServer webSocketServer() {
+        log.info("webSocketServer: {}", configProps);
         final WebSocketServer server = new WebSocketServer(new InetSocketAddress(configProps.host, configProps.port)) {
             @Override
             public void onOpen(final WebSocket webSocket, final ClientHandshake handshake) {
