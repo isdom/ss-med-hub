@@ -340,7 +340,7 @@ public class HubMain {
                         try {
                             handleHubCommand(new ObjectMapper().readValue(message, WSCommandVO.class), webSocket);
                         } catch (JsonProcessingException ex) {
-                            log.error("handleASRCommand {}: {}, an error occurred when parseAsJson: {}",
+                            log.error("handleHubCommand {}: {}, an error occurred when parseAsJson: {}",
                                     webSocket.getRemoteSocketAddress(), message, ex.toString());
                         }
                     }
