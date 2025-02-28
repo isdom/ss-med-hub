@@ -5,5 +5,5 @@ import org.java_websocket.handshake.ClientHandshake;
 
 @FunctionalInterface
 public interface WsHandlerBuilder {
-    WsHandler build(WebSocket webSocket, ClientHandshake handshake);
+    WsHandler build(final String prefix, final WebSocket webSocket, final ClientHandshake handshake);
 }

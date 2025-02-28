@@ -26,12 +26,12 @@ public class ASRActor {
     @Builder
     @Data
     @ToString
-    static class PlaybackMemo {
-        final int playbackIdx;
-        final String contentId;
-        final boolean cancelOnSpeak;
-        final boolean hangup;
-        long beginInMs;
+    public static class PlaybackMemo {
+        public final int playbackIdx;
+        public final String contentId;
+        public final boolean cancelOnSpeak;
+        public final boolean hangup;
+        public long beginInMs;
     }
 
     static int countChinesePunctuations(final String text) {
@@ -161,7 +161,7 @@ public class ASRActor {
         _transmitData.set(transmitData);
     }
 
-    void createPlaybackMemo(final String playbackId,
+    public void createPlaybackMemo(final String playbackId,
                                     final Long contentId,
                                     final boolean cancelOnSpeak,
                                     final boolean hangup) {
@@ -175,20 +175,20 @@ public class ASRActor {
                         .build());
     }
 
-    PlaybackMemo memoFor(final String playbackId) {
+    public PlaybackMemo memoFor(final String playbackId) {
         return _id2memo.get(playbackId);
     }
 
-    String _sessionId;
+    public String _sessionId;
     final Lock _lock = new ReentrantLock();
 
     final AtomicReference<Runnable> _stopASR = new AtomicReference<>(null);
-    final AtomicReference<Consumer<ByteBuffer>> _transmitData = new AtomicReference<>(null);
+    public final AtomicReference<Consumer<ByteBuffer>> _transmitData = new AtomicReference<>(null);
 
     final AtomicBoolean _isStartTranscription = new AtomicBoolean(false);
-    final AtomicBoolean _isTranscriptionStarted = new AtomicBoolean(false);
-    final AtomicBoolean _isTranscriptionFailed = new AtomicBoolean(false);
-    final AtomicInteger _transmitCount = new AtomicInteger(0);
+    public final AtomicBoolean _isTranscriptionStarted = new AtomicBoolean(false);
+    public final AtomicBoolean _isTranscriptionFailed = new AtomicBoolean(false);
+    public final AtomicInteger _transmitCount = new AtomicInteger(0);
 
     final AtomicReference<ScheduledFuture<?>>   _checkIdleFuture = new AtomicReference<>(null);
     final AtomicInteger _checkIdleCount = new AtomicInteger(0);

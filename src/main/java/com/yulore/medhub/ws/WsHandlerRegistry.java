@@ -38,7 +38,7 @@ public class WsHandlerRegistry implements BeanFactoryAware  {
         return handlerBuilders.entrySet().stream()
                 .filter(e -> path.startsWith(e.getKey()))
                 .findFirst()
-                .map(e -> e.getValue().build(ws, handshake));
+                .map(e -> e.getValue().build(e.getKey(), ws, handshake));
     }
 
     @Override
