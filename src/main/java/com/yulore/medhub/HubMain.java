@@ -12,7 +12,6 @@ import com.alibaba.nls.client.protocol.asr.SpeechTranscriber;
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriberListener;
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriberResponse;
 import com.aliyun.oss.OSS;
-import com.aliyun.oss.OSSClientBuilder;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Charsets;
@@ -20,13 +19,12 @@ import com.google.common.primitives.Bytes;
 import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.tencent.asrv2.*;
 import com.tencent.core.ws.SpeechClient;
+import com.yulore.bst.*;
 import com.yulore.medhub.api.CallApi;
 import com.yulore.medhub.api.CompositeVO;
 import com.yulore.medhub.api.ScriptApi;
 import com.yulore.medhub.nls.*;
 import com.yulore.medhub.session.*;
-import com.yulore.medhub.stream.*;
-import com.yulore.medhub.stream.StreamCacheService;
 import com.yulore.medhub.task.*;
 import com.yulore.medhub.vo.*;
 import com.yulore.util.ByteArrayListInputStream;
@@ -161,9 +159,6 @@ public class HubMain {
     @Value("${oss.path}")
     private String _oss_path;
 
-    //@Value("${oss.match_prefix}")
-    //private String _oss_match_prefix;
-
     @Value("${rms.cp_prefix}")
     private String _rms_cp_prefix;
 
@@ -246,7 +241,7 @@ public class HubMain {
                                         ()->webSocket.close(1006, "test_disconnect"));
                                 webSocket.setAttachment(session);
                                 session.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms, session::checkIdle);
-                                HubEventVO.<Void>sendEvent(webSocket, "FSConnected", null);
+                                WSEventVO.<Void>sendEvent(webSocket, "FSConnected", null);
                                 log.info("ws path match: {}, role: {}. using ws as FsSession {}", _match_fs, role, sessionId);
                             } else {
                                 final String sessionId = clientHandshake.getFieldValue("x-sessionid");
@@ -256,7 +251,7 @@ public class HubMain {
                                     webSocket.setAttachment(fs);
                                     fs.attachPlaybackWs((event, payload) -> {
                                         try {
-                                            HubEventVO.sendEvent(webSocket, event, payload);
+                                            WSEventVO.sendEvent(webSocket, event, payload);
                                         } catch (Exception ex) {
                                             log.warn("[{}]: FsActor sendback {}/{} failed, detail: {}", fs.sessionId(), event, payload, ex.toString());
                                         }
@@ -273,7 +268,7 @@ public class HubMain {
                                     _test_enable_disconnect, _test_disconnect_probability, ()->webSocket.close(1006, "test_disconnect"));
                             webSocket.setAttachment(session);
                             session.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms,
-                                    ()->HubEventVO.<Void>sendEvent(webSocket, "CheckIdle", null));
+                                    ()-> WSEventVO.<Void>sendEvent(webSocket, "CheckIdle", null));
                             log.info("ws path match: {}, using ws as MediaSession {}", _match_media, sessionId);
                         } else if (clientHandshake.getResourceDescriptor() != null && clientHandshake.getResourceDescriptor().startsWith(_match_call)) {
                             // init PoActor attach with webSocket
@@ -290,7 +285,7 @@ public class HubMain {
                                     _scriptApi,
                                     (_session)->{
                                         try {
-                                            HubEventVO.sendEvent(webSocket, "CallEnded", new PayloadCallEnded(_session.sessionId()));
+                                            WSEventVO.sendEvent(webSocket, "CallEnded", new PayloadCallEnded(_session.sessionId()));
                                             log.info("[{}]: sendback CallEnded event", _session.sessionId());
                                         } catch (Exception ex) {
                                             log.warn("[{}]: sendback CallEnded event failed, detail: {}", _session.sessionId(), ex.toString());
@@ -306,7 +301,7 @@ public class HubMain {
                                                     ctx.sessionId(), ctx.bucketName(), ctx.objectName(), System.currentTimeMillis() - startUploadInMs);
                                         });
                                     },
-                                    (sessionId) -> HubEventVO.sendEvent(webSocket, "CallStarted", new PayloadCallStarted(sessionId)));
+                                    (sessionId) -> WSEventVO.sendEvent(webSocket, "CallStarted", new PayloadCallStarted(sessionId)));
                             webSocket.setAttachment(actor);
                             actor.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms, actor::checkIdle);
                             _scheduledExecutor.schedule(actor::notifyMockAnswer, _answer_timeout_ms, TimeUnit.MILLISECONDS);
@@ -332,7 +327,7 @@ public class HubMain {
                                                     webSocket),
                                     (event, payload) -> {
                                         try {
-                                            HubEventVO.sendEvent(webSocket, event, payload);
+                                            WSEventVO.sendEvent(webSocket, event, payload);
                                         } catch (Exception ex) {
                                             log.warn("[{}]: PoActor sendback {}/{} failed, detail: {}", poActor.sessionId(), event, payload, ex.toString());
                                         }
@@ -393,7 +388,7 @@ public class HubMain {
                     public void onMessage(final WebSocket webSocket, final String message) {
                         log.info("received text message from {}: {}", webSocket.getRemoteSocketAddress(), message);
                         try {
-                            handleHubCommand(new ObjectMapper().readValue(message, HubCommandVO.class), webSocket);
+                            handleHubCommand(new ObjectMapper().readValue(message, WSCommandVO.class), webSocket);
                         } catch (JsonProcessingException ex) {
                             log.error("handleASRCommand {}: {}, an error occurred when parseAsJson: {}",
                                     webSocket.getRemoteSocketAddress(), message, ex.toString());
@@ -493,7 +488,7 @@ public class HubMain {
         }
     }
 
-    private void handlePCMPlaybackStartedCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+    private void handlePCMPlaybackStartedCommand(final WSCommandVO cmd, final WebSocket webSocket) {
         // eg: {"header": {"name": "PCMPlaybackStarted"},"payload": {"playback_id": "ebfafab3-eb5e-454a-9427-187ceff9ff23", "content_id": "2213745"}}
         final String playbackId = cmd.getPayload() != null ? cmd.getPayload().get("playback_id") : null;
         final String contentId = cmd.getPayload() != null ? cmd.getPayload().get("content_id") : null;
@@ -508,7 +503,7 @@ public class HubMain {
         }
     }
 
-    private void handlePCMPlaybackResumedCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+    private void handlePCMPlaybackResumedCommand(final WSCommandVO cmd, final WebSocket webSocket) {
         // eg: {"header": {"name": "PCMPlaybackResumed"},"payload": {"playback_id": "ebfafab3-eb5e-454a-9427-187ceff9ff23", "content_id": "2213745", "playback_duration": "4.410666666666666"}}
         final String playbackId = cmd.getPayload() != null ? cmd.getPayload().get("playback_id") : null;
         final String contentId = cmd.getPayload() != null ? cmd.getPayload().get("content_id") : null;
@@ -524,7 +519,7 @@ public class HubMain {
         }
     }
 
-    private void handlePCMPlaybackPausedCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+    private void handlePCMPlaybackPausedCommand(final WSCommandVO cmd, final WebSocket webSocket) {
         // eg: {"header": {"name": "PCMPlaybackPaused"},"payload": {"playback_id": "ebfafab3-eb5e-454a-9427-187ceff9ff23", "content_id": "2213745", "playback_duration": "4.410666666666666"}}
         final String playbackId = cmd.getPayload() != null ? cmd.getPayload().get("playback_id") : null;
         final String contentId = cmd.getPayload() != null ? cmd.getPayload().get("content_id") : null;
@@ -540,7 +535,7 @@ public class HubMain {
         }
     }
 
-    private void handlePCMPlaybackStoppedCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+    private void handlePCMPlaybackStoppedCommand(final WSCommandVO cmd, final WebSocket webSocket) {
         final String playbackId = cmd.getPayload() != null ? cmd.getPayload().get("playback_id") : null;
         final String contentId = cmd.getPayload() != null ? cmd.getPayload().get("content_id") : null;
         final String playback_begin_timestamp = cmd.getPayload() != null ? cmd.getPayload().get("playback_begin_timestamp") : null;
@@ -569,13 +564,13 @@ public class HubMain {
                 _scheduledExecutor,
                 new SampleInfo(16000, interval, 16, 1),
                 (timestamp) -> {
-                    HubEventVO.sendEvent(webSocket, "PCMBegin",
+                    WSEventVO.sendEvent(webSocket, "PCMBegin",
                             new PayloadPCMEvent(playbackContext.playbackId(), playbackContext.contentId()));
                     poActor.notifyPlaybackSendStart(playbackContext.playbackId(), timestamp);
                 },
                 (timestamp) -> {
                     poActor.notifyPlaybackSendStop(playbackContext.playbackId(), timestamp);
-                    HubEventVO.sendEvent(webSocket, "PCMEnd",
+                    WSEventVO.sendEvent(webSocket, "PCMEnd",
                             new PayloadPCMEvent(playbackContext.playbackId(), playbackContext.contentId()));
                 },
                 (bytes) -> {
@@ -732,7 +727,7 @@ public class HubMain {
         }
     }
 
-    private void handleHubCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+    private void handleHubCommand(final WSCommandVO cmd, final WebSocket webSocket) {
         if ("StartTranscription".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handleStartTranscriptionCommand(cmd, webSocket));
         } else if ("StopTranscription".equals(cmd.getHeader().get("name"))) {
@@ -786,42 +781,42 @@ public class HubMain {
         }
     }
 
-    private void handleFSRecordStartedCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+    private void handleFSRecordStartedCommand(final WSCommandVO cmd, final WebSocket webSocket) {
         final Object attachment = webSocket.getAttachment();
         if (attachment instanceof FsActor session) {
             session.notifyFSRecordStarted(cmd);
         }
     }
 
-    private void handleFSPlaybackStartedCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+    private void handleFSPlaybackStartedCommand(final WSCommandVO cmd, final WebSocket webSocket) {
         final Object attachment = webSocket.getAttachment();
         if (attachment instanceof FsActor session) {
             session.notifyFSPlaybackStarted(cmd);
         }
     }
 
-    private void handleFSPlaybackStoppedCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+    private void handleFSPlaybackStoppedCommand(final WSCommandVO cmd, final WebSocket webSocket) {
         final Object attachment = webSocket.getAttachment();
         if (attachment instanceof FsActor session) {
             session.notifyFSPlaybackStopped(cmd);
         }
     }
 
-    private void handleFSPlaybackResumedCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+    private void handleFSPlaybackResumedCommand(final WSCommandVO cmd, final WebSocket webSocket) {
         final Object attachment = webSocket.getAttachment();
         if (attachment instanceof FsActor fsActor) {
             fsActor.notifyPlaybackResumed(cmd);
         }
     }
 
-    private void handleFSPlaybackPausedCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+    private void handleFSPlaybackPausedCommand(final WSCommandVO cmd, final WebSocket webSocket) {
         final Object attachment = webSocket.getAttachment();
         if (attachment instanceof FsActor fsActor) {
             fsActor.notifyPlaybackPaused(cmd);
         }
     }
 
-    private void handleCosy2Command(final HubCommandVO cmd, final WebSocket webSocket) {
+    private void handleCosy2Command(final WSCommandVO cmd, final WebSocket webSocket) {
         final String ttsText = cmd.getPayload().get("tts_text");
         final String promptText = cmd.getPayload().get("prompt_text");
 
@@ -987,7 +982,7 @@ public class HubMain {
         }
     }
 
-    private void handlePreviewCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+    private void handlePreviewCommand(final WSCommandVO cmd, final WebSocket webSocket) {
         final String cps = URLDecoder.decode(cmd.getPayload().get("cps"), Charsets.UTF_8);
         final PreviewSession previewSession = webSocket.getAttachment();
         if (previewSession == null) {
@@ -1003,7 +998,7 @@ public class HubMain {
         previewOn(String.format("type=cp,%s", cps), previewSession, webSocket);
     }
 
-    private void handleUserAnswerCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+    private void handleUserAnswerCommand(final WSCommandVO cmd, final WebSocket webSocket) {
         final PoActor session = webSocket.getAttachment();
         if (session == null) {
             log.error("UserAnswer: {} without CallSession, abort", webSocket.getRemoteSocketAddress());
@@ -1014,7 +1009,7 @@ public class HubMain {
 
     Consumer<StreamSession.EventContext> buildSendEvent(final WebSocket webSocket, final int delayInMs) {
         final Consumer<StreamSession.EventContext> performSendEvent = (ctx) -> {
-            HubEventVO.sendEvent(webSocket, ctx.name, ctx.payload);
+            WSEventVO.sendEvent(webSocket, ctx.name, ctx.payload);
             log.info("sendEvent: {} send => {}, {}, cost {} ms",
                     ctx.session, ctx.name, ctx.payload, System.currentTimeMillis() - ctx.start);
         };
@@ -1035,7 +1030,7 @@ public class HubMain {
         };
     }
 
-    private void handleOpenStreamCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+    private void handleOpenStreamCommand(final WSCommandVO cmd, final WebSocket webSocket) {
         final long startInMs = System.currentTimeMillis();
         final String path = cmd.getPayload().get("path");
         final boolean isWrite = Boolean.parseBoolean(cmd.getPayload().get("is_write"));
@@ -1067,7 +1062,7 @@ public class HubMain {
             if (bst == null) {
                 webSocket.setAttachment(null); // remove Attached ss
                 // TODO: define StreamOpened failed event
-                HubEventVO.sendEvent(webSocket, "StreamOpened", null);
+                WSEventVO.sendEvent(webSocket, "StreamOpened", null);
                 log.warn("OpenStream failed for path: {}/sessionId: {}/contentId: {}/playIdx: {}", path, sessionId, contentId, playIdx);
                 return;
             }
@@ -1106,7 +1101,8 @@ public class HubMain {
                 });
                 return bst.key() != null ? _scsService.asCache(bst) : bst;
             } else {
-                return _scsService.asCache(new OSSStreamTask(path, _ossClient, removeWavHdr));
+                final BuildStreamTask bst = new OSSStreamTask(path, _ossClient, removeWavHdr);
+                return bst.key() != null ? _scsService.asCache(bst) : bst;
             }
         } catch (Exception ex) {
             log.warn("getTaskOf failed: {}", ex.toString());
@@ -1118,7 +1114,7 @@ public class HubMain {
         if (cvo.getBucket() != null && !cvo.getBucket().isEmpty() && cvo.getObject() != null && !cvo.getObject().isEmpty()) {
             log.info("support CVO => OSS Stream: {}", cvo);
             return new OSSStreamTask(
-                    "{bucket=" + cvo.bucket + ",start=" + cvo.start + ",end=" + cvo.end + "}" + cvo.object,
+                    "{bucket=" + cvo.bucket + ",cache=" + cvo.cache + ",start=" + cvo.start + ",end=" + cvo.end + "}" + cvo.object,
                     _ossClient, true);
         } else if (cvo.getType() != null && cvo.getType().equals("tts")) {
             log.info("support CVO => TTS Stream: {}", cvo);
@@ -1154,39 +1150,39 @@ public class HubMain {
         // {type=tts,voice=xxx,url=ws://172.18.86.131:6789/playback,vars_playback_id=<uuid>,content_id=2088788,vars_start_timestamp=1732028219711854,text='StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(content)'}
         //          unused.wav
         return String.format("{type=tts,cache=%s,voice=%s,pitch_rate=%s,speech_rate=%s,volume=%s,text=%s}tts.wav",
-                cvo.getCache(),
-                cvo.getVoice(),
-                cvo.getPitch_rate(),
-                cvo.getSpeech_rate(),
-                cvo.getVolume(),
-                StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(cvo.getText()));
+                cvo.cache,
+                cvo.voice,
+                cvo.pitch_rate,
+                cvo.speech_rate,
+                cvo.volume,
+                StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(cvo.text));
     }
 
     static private String cvo2cosy(final CompositeVO cvo) {
         // eg: {type=cosy,voice=xxx,url=ws://172.18.86.131:6789/cosy,vars_playback_id=<uuid>,content_id=2088788,vars_start_timestamp=1732028219711854,text='StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(content)'}
         //          unused.wav
         return String.format("{type=cosy,cache=%s,voice=%s,pitch_rate=%s,speech_rate=%s,volume=%s,text=%s}cosy.wav",
-                cvo.getCache(),
-                cvo.getVoice(),
-                cvo.getPitch_rate(),
-                cvo.getSpeech_rate(),
-                cvo.getVolume(),
-                StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(cvo.getText()));
+                cvo.cache,
+                cvo.voice,
+                cvo.pitch_rate,
+                cvo.speech_rate,
+                cvo.volume,
+                StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(cvo.text));
     }
 
-    private void handleGetFileLenCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+    private void handleGetFileLenCommand(final WSCommandVO cmd, final WebSocket webSocket) {
         final long startInMs = System.currentTimeMillis();
         log.info("get file len:");
         final StreamSession ss = webSocket.getAttachment();
         if (ss == null) {
             log.warn("handleGetFileLenCommand: ss is null, just return 0");
-            HubEventVO.sendEvent(webSocket, "GetFileLenResult", new PayloadGetFileLenResult(0));
+            WSEventVO.sendEvent(webSocket, "GetFileLenResult", new PayloadGetFileLenResult(0));
             return;
         }
         ss.sendEvent(startInMs, "GetFileLenResult", new PayloadGetFileLenResult(ss.length()));
     }
 
-    private void handleFileSeekCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+    private void handleFileSeekCommand(final WSCommandVO cmd, final WebSocket webSocket) {
         final long startInMs = System.currentTimeMillis();
         final int offset = Integer.parseInt(cmd.getPayload().get("offset"));
         final int whence = Integer.parseInt(cmd.getPayload().get("whence"));
@@ -1194,7 +1190,7 @@ public class HubMain {
         final StreamSession ss = webSocket.getAttachment();
         if (ss == null) {
             log.warn("handleFileSeekCommand: ss is null, just return 0");
-            HubEventVO.sendEvent(webSocket, "FileSeekResult", new PayloadFileSeekResult(0));
+            WSEventVO.sendEvent(webSocket, "FileSeekResult", new PayloadFileSeekResult(0));
             return;
         }
         int seek_from_start = -1;
@@ -1218,7 +1214,7 @@ public class HubMain {
         ss.sendEvent(startInMs,"FileSeekResult", new PayloadFileSeekResult(pos));
     }
 
-    private void handleFileReadCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+    private void handleFileReadCommand(final WSCommandVO cmd, final WebSocket webSocket) {
         final long startInMs = System.currentTimeMillis();
         final int count = Integer.parseInt(cmd.getPayload().get("count"));
         final StreamSession ss = webSocket.getAttachment();
@@ -1305,19 +1301,19 @@ public class HubMain {
         ss.sendEvent(startInMs, "FileWriteResult", new PayloadFileWriteResult(written));
     }
 
-    private void handleFileTellCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+    private void handleFileTellCommand(final WSCommandVO cmd, final WebSocket webSocket) {
         final long startInMs = System.currentTimeMillis();
         final StreamSession ss = webSocket.getAttachment();
         if (ss == null) {
             log.warn("handleFileTellCommand: ss is null, just return 0");
-            HubEventVO.sendEvent(webSocket, "FileTellResult", new PayloadFileSeekResult(0));
+            WSEventVO.sendEvent(webSocket, "FileTellResult", new PayloadFileSeekResult(0));
             return;
         }
         log.info("file tell: current pos: {}", ss.tell());
         ss.sendEvent(startInMs, "FileTellResult", new PayloadFileSeekResult(ss.tell()));
     }
 
-    private void handlePlayTTSCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+    private void handlePlayTTSCommand(final WSCommandVO cmd, final WebSocket webSocket) {
         final String text = cmd.getPayload().get("text");
         if (text == null ) {
             log.warn("PlayTTS: {} 's text is null, abort", webSocket.getRemoteSocketAddress());
@@ -1355,7 +1351,7 @@ public class HubMain {
     }
 
     /*
-    private void handlePlaybackCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+    private void handlePlaybackCommand(final WSCommandVO cmd, final WebSocket webSocket) {
         final MediaSession session = webSocket.getAttachment();
         if (session == null) {
             log.error("Playback: {} without Session, abort", webSocket.getRemoteSocketAddress());
@@ -1377,7 +1373,7 @@ public class HubMain {
         }
     }
 
-    private void handleStopPlaybackCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+    private void handleStopPlaybackCommand(final WSCommandVO cmd, final WebSocket webSocket) {
         final MediaSession session = webSocket.getAttachment();
         if (session == null) {
             log.error("StopPlayback: {} without Session, abort", webSocket.getRemoteSocketAddress());
@@ -1387,7 +1383,7 @@ public class HubMain {
         session.stopCurrentAnyway();
     }
 
-    private void handlePausePlaybackCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+    private void handlePausePlaybackCommand(final WSCommandVO cmd, final WebSocket webSocket) {
         final MediaSession session = webSocket.getAttachment();
         if (session == null) {
             log.error("PausePlayback: {} without Session, abort", webSocket.getRemoteSocketAddress());
@@ -1397,7 +1393,7 @@ public class HubMain {
         session.pauseCurrentAnyway();
     }
 
-    private void handleResumePlaybackCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+    private void handleResumePlaybackCommand(final WSCommandVO cmd, final WebSocket webSocket) {
         final MediaSession session = webSocket.getAttachment();
         if (session == null) {
             log.error("ResumePlayback: {} without Session, abort", webSocket.getRemoteSocketAddress());
@@ -1407,7 +1403,7 @@ public class HubMain {
         session.resumeCurrentAnyway();
     }
 
-    private void playbackByFile(final String file, final HubCommandVO cmd, final MediaSession session, final WebSocket webSocket) {
+    private void playbackByFile(final String file, final WSCommandVO cmd, final MediaSession session, final WebSocket webSocket) {
         final String str_interval = cmd.getPayload().get("interval");
         final int prefixBegin = file.indexOf(_oss_match_prefix);
         if (-1 == prefixBegin) {
@@ -1441,7 +1437,7 @@ public class HubMain {
         });
     }
 
-    private void playbackById(final int id, final HubCommandVO cmd, final MediaSession session, final WebSocket webSocket) {
+    private void playbackById(final int id, final WSCommandVO cmd, final MediaSession session, final WebSocket webSocket) {
         final String str_interval = cmd.getPayload().get("interval");
         final int samples = getIntValueByName(cmd.getPayload(), "samples", 0);
         try {
@@ -1485,7 +1481,7 @@ public class HubMain {
     }
      */
 
-    private void handleStartTranscriptionCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+    private void handleStartTranscriptionCommand(final WSCommandVO cmd, final WebSocket webSocket) {
         final String provider = cmd.getPayload() != null ? cmd.getPayload().get("provider") : null;
         final ASRActor session = webSocket.getAttachment();
         if (session == null) {
@@ -1515,7 +1511,7 @@ public class HubMain {
         }
     }
 
-    private void startWithTxasr(final WebSocket webSocket, final ASRActor session, final HubCommandVO cmd) throws Exception {
+    private void startWithTxasr(final WebSocket webSocket, final ASRActor session, final WSCommandVO cmd) throws Exception {
         final long startConnectingInMs = System.currentTimeMillis();
         final TxASRAgent agent = selectTxASRAgent();
 
@@ -1655,7 +1651,7 @@ public class HubMain {
         };
     }
 
-    private void startWithAliasr(final WebSocket webSocket, final ASRActor session, final HubCommandVO cmd) throws Exception {
+    private void startWithAliasr(final WebSocket webSocket, final ASRActor session, final WSCommandVO cmd) throws Exception {
         final long startConnectingInMs = System.currentTimeMillis();
         final ASRAgent agent = selectASRAgent();
 
@@ -1826,7 +1822,7 @@ public class HubMain {
             if (webSocket.getAttachment() instanceof ASRActor session) {
                 session.transcriptionStarted();
             }
-            HubEventVO.sendEvent(webSocket, "TranscriptionStarted", (Void) null);
+            WSEventVO.sendEvent(webSocket, "TranscriptionStarted", (Void) null);
         } catch (WebsocketNotConnectedException ex) {
             log.info("ws disconnected when sendEvent TranscriptionStarted: {}", ex.toString());
         }
@@ -1837,7 +1833,7 @@ public class HubMain {
             if (webSocket.getAttachment() instanceof ASRActor session) {
                 session.notifySentenceBegin(payload);
             }
-            HubEventVO.sendEvent(webSocket, "SentenceBegin", payload);
+            WSEventVO.sendEvent(webSocket, "SentenceBegin", payload);
         } catch (WebsocketNotConnectedException ex) {
             log.info("ws disconnected when sendEvent SentenceBegin: {}", ex.toString());
         }
@@ -1848,7 +1844,7 @@ public class HubMain {
             if (webSocket.getAttachment() instanceof ASRActor session) {
                 session.notifySentenceEnd(payload);
             }
-            HubEventVO.sendEvent(webSocket, "SentenceEnd", payload);
+            WSEventVO.sendEvent(webSocket, "SentenceEnd", payload);
         } catch (WebsocketNotConnectedException ex) {
             log.info("ws disconnected when sendEvent SentenceEnd: {}", ex.toString());
         }
@@ -1859,7 +1855,7 @@ public class HubMain {
             if (webSocket.getAttachment() instanceof ASRActor session) {
                 session.notifyTranscriptionResultChanged(payload);
             }
-            HubEventVO.sendEvent(webSocket, "TranscriptionResultChanged", payload);
+            WSEventVO.sendEvent(webSocket, "TranscriptionResultChanged", payload);
         } catch (WebsocketNotConnectedException ex) {
             log.info("ws disconnected when sendEvent TranscriptionResultChanged: {}", ex.toString());
         }
@@ -1868,13 +1864,13 @@ public class HubMain {
     private void notifyTranscriptionCompleted(final WebSocket webSocket) {
         try {
             // TODO: account.dec??
-            HubEventVO.sendEvent(webSocket, "TranscriptionCompleted", (Void)null);
+            WSEventVO.sendEvent(webSocket, "TranscriptionCompleted", (Void)null);
         } catch (WebsocketNotConnectedException ex) {
             log.info("ws disconnected when sendEvent TranscriptionCompleted: {}", ex.toString());
         }
     }
 
-    private void handleStopTranscriptionCommand(final HubCommandVO cmd, final WebSocket webSocket) {
+    private void handleStopTranscriptionCommand(final WSCommandVO cmd, final WebSocket webSocket) {
         stopAndCloseTranscriber(webSocket);
         webSocket.close();
     }

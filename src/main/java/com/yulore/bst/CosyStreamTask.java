@@ -1,4 +1,4 @@
-package com.yulore.medhub.stream;
+package com.yulore.bst;
 
 import com.alibaba.nls.client.protocol.tts.StreamInputTts;
 import com.alibaba.nls.client.protocol.tts.StreamInputTtsListener;

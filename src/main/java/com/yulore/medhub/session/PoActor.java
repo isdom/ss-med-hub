@@ -106,7 +106,7 @@ public class PoActor extends ASRActor {
         }
     }
 
-    public void notifyUserAnswer(final HubCommandVO cmd) {
+    public void notifyUserAnswer(final WSCommandVO cmd) {
         if (!_isUserAnswered.compareAndSet(false, true)) {
             log.warn("[{}]: [{}]-[{}]: notifyUserAnswer called already, ignore!", _clientIp, _sessionId, _uuid);
             return;
@@ -737,7 +737,7 @@ public class PoActor extends ASRActor {
         } else if ("wav".equals(replyVO.getVoiceMode())) {
             return ()->_playbackOn.apply(new PlaybackContext(
                     playbackId,
-                    String.format("{bucket=%s}%s%s", _bucket, _wavPath, replyVO.getAi_speech_file()),
+                    String.format("{cache=true,bucket=%s}%s%s", _bucket, _wavPath, replyVO.getAi_speech_file()),
                     aiContentId));
         } else if ("tts".equals(replyVO.getVoiceMode())) {
             return ()->_playbackOn.apply(new PlaybackContext(

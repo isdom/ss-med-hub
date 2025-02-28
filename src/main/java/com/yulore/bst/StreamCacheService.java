@@ -1,4 +1,4 @@
-package com.yulore.medhub.stream;
+package com.yulore.bst;
 
 import io.netty.util.NettyRuntime;
 import io.netty.util.concurrent.DefaultThreadFactory;
@@ -22,12 +22,6 @@ import java.util.function.Consumer;
 @Slf4j
 @Component
 public class StreamCacheService {
-
-    /*
-    oss_bucket: ylhz-aicall
-    oss_path: aispeech/
-    local_path: /var/znc/wav_cache/
-    */
 
     private ExecutorService _scsExecutor;
 

@@ -17,7 +17,7 @@ public class CompositeVO {
 
     public String text;
 
-    public Boolean cache;
+    public Boolean cache = false;
 
     public int volume = 50;
 
