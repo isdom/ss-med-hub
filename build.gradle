@@ -16,6 +16,11 @@ dependencies {
     implementation 'com.alibaba.boot:nacos-config-spring-boot-starter:0.2.12'
     implementation 'org.springframework.cloud:spring-cloud-dependencies:2021.0.8'
     implementation 'com.alibaba.cloud:spring-cloud-alibaba-dependencies:2021.0.5.0'
+    implementation ("org.redisson:redisson-spring-boot-starter:3.43.0") {
+        exclude group: 'org.redisson', module: 'redisson-spring-data-34'
+    }
+    // for org.springframework.boot:2.7.x
+    implementation "org.redisson:redisson-spring-data-27:3.43.0"
 
     implementation 'com.alibaba.cloud:spring-cloud-starter-alibaba-nacos-discovery:2021.0.5.0'
     implementation 'org.springframework.cloud:spring-cloud-starter-openfeign:3.1.8'

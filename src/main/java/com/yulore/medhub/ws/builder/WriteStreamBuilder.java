@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
@@ -38,8 +39,8 @@ public class WriteStreamBuilder implements WsHandlerBuilder {
     public void start() {
         _ossAccessExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
                 new DefaultThreadFactory("ossAccessExecutor"));
-        _scheduledExecutor = Executors.newScheduledThreadPool(NettyRuntime.availableProcessors() * 2,
-                new DefaultThreadFactory("scheduledExecutor"));
+//        _scheduledExecutor = Executors.newScheduledThreadPool(NettyRuntime.availableProcessors() * 2,
+//                new DefaultThreadFactory("scheduledExecutor"));
         _sessionExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
                 new DefaultThreadFactory("sessionExecutor"));
     }
@@ -47,7 +48,7 @@ public class WriteStreamBuilder implements WsHandlerBuilder {
     @PreDestroy
     public void stop() throws InterruptedException {
         _sessionExecutor.shutdownNow();
-        _scheduledExecutor.shutdownNow();
+//        _scheduledExecutor.shutdownNow();
         _ossAccessExecutor.shutdownNow();
     }
 
@@ -96,7 +97,7 @@ public class WriteStreamBuilder implements WsHandlerBuilder {
                     ctx.session, ctx.name, ctx.payload, System.currentTimeMillis() - ctx.start);
         };
         return delayInMs == 0 ? performSendEvent : (ctx) -> {
-            _scheduledExecutor.schedule(() -> performSendEvent.accept(ctx), delayInMs, TimeUnit.MILLISECONDS);
+            schedulerProvider.getObject().schedule(() -> performSendEvent.accept(ctx), delayInMs, TimeUnit.MILLISECONDS);
         };
     }
 
@@ -108,7 +109,7 @@ public class WriteStreamBuilder implements WsHandlerBuilder {
                     ctx.session, size, System.currentTimeMillis() - ctx.start);
         };
         return delayInMs == 0 ? performSendData : (ctx) -> {
-            _scheduledExecutor.schedule(() -> performSendData.accept(ctx), delayInMs, TimeUnit.MILLISECONDS);
+            schedulerProvider.getObject().schedule(() -> performSendData.accept(ctx), delayInMs, TimeUnit.MILLISECONDS);
         };
     }
 
@@ -293,7 +294,9 @@ public class WriteStreamBuilder implements WsHandlerBuilder {
         ss.sendEvent(startInMs, "FileTellResult", new PayloadFileSeekResult(ss.tell()));
     }
 
-    private ScheduledExecutorService _scheduledExecutor;
+    private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
+
+    // private ScheduledExecutorService _scheduledExecutor;
     private ExecutorService _sessionExecutor;
     private ExecutorService _ossAccessExecutor;
 

@@ -26,6 +26,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -39,7 +40,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-@Component("poBuilder")
+@Component("poHandler")
 @RequiredArgsConstructor
 @Slf4j
 public class PoActorBuilder implements WsHandlerBuilder {
@@ -47,8 +48,6 @@ public class PoActorBuilder implements WsHandlerBuilder {
     public void start() {
         _ossAccessExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
                 new DefaultThreadFactory("ossAccessExecutor"));
-        _scheduledExecutor = Executors.newScheduledThreadPool(NettyRuntime.availableProcessors() * 2,
-                new DefaultThreadFactory("scheduledExecutor"));
         _sessionExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
                 new DefaultThreadFactory("sessionExecutor"));
     }
@@ -56,7 +55,6 @@ public class PoActorBuilder implements WsHandlerBuilder {
     @PreDestroy
     public void stop() throws InterruptedException {
         _sessionExecutor.shutdownNow();
-        _scheduledExecutor.shutdownNow();
         _ossAccessExecutor.shutdownNow();
     }
 
@@ -120,8 +118,8 @@ public class PoActorBuilder implements WsHandlerBuilder {
             webSocket.setAttachment(actor);
             actor.onAttached(webSocket);
 
-            actor.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms, actor::checkIdle);
-            _scheduledExecutor.schedule(actor::notifyMockAnswer, _answer_timeout_ms, TimeUnit.MILLISECONDS);
+            actor.scheduleCheckIdle(schedulerProvider.getObject(), _check_idle_interval_ms, actor::checkIdle);
+            schedulerProvider.getObject().schedule(actor::notifyMockAnswer, _answer_timeout_ms, TimeUnit.MILLISECONDS);
 
             log.info("ws path match: {}, using ws as PoActor", prefix);
             return actor;
@@ -224,7 +222,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
                 playbackContext.playbackId(),
                 poActor.sessionId(),
                 playbackContext.path(),
-                _scheduledExecutor,
+                schedulerProvider.getObject(),
                 new SampleInfo(16000, interval, 16, 1),
                 (timestamp) -> {
                     WSEventVO.sendEvent(webSocket, "PCMBegin",
@@ -369,7 +367,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
     @Value("${oss.path}")
     private String _oss_path;
 
-    private ScheduledExecutorService _scheduledExecutor;
+    private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
     private ExecutorService _sessionExecutor;
     private ExecutorService _ossAccessExecutor;
 

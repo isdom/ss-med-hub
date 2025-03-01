@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -28,14 +29,12 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
-@Component("fsBuilder")
+@Component("fsHandler")
 @RequiredArgsConstructor
 @Slf4j
 public class FsActorBuilder implements WsHandlerBuilder {
     @PostConstruct
     public void start() {
-        _scheduledExecutor = Executors.newScheduledThreadPool(NettyRuntime.availableProcessors() * 2,
-                new DefaultThreadFactory("scheduledExecutor"));
         _sessionExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
                 new DefaultThreadFactory("sessionExecutor"));
     }
@@ -43,7 +42,6 @@ public class FsActorBuilder implements WsHandlerBuilder {
     @PreDestroy
     public void stop() throws InterruptedException {
         _sessionExecutor.shutdownNow();
-        _scheduledExecutor.shutdownNow();
     }
 
     @Override
@@ -92,7 +90,7 @@ public class FsActorBuilder implements WsHandlerBuilder {
             };
 
             webSocket.setAttachment(actor);
-            actor.scheduleCheckIdle(_scheduledExecutor, _check_idle_interval_ms, actor::checkIdle);
+            actor.scheduleCheckIdle(schedulerProvider.getObject(), _check_idle_interval_ms, actor::checkIdle);
             WSEventVO.<Void>sendEvent(webSocket, "FSConnected", null);
             log.info("ws path match {}, role: {}. using ws as FsActor {}", prefix, role, sessionId);
             return actor;
@@ -195,7 +193,8 @@ public class FsActorBuilder implements WsHandlerBuilder {
     @Value("${session.check_idle_interval_ms}")
     private long _check_idle_interval_ms;
 
-    private ScheduledExecutorService _scheduledExecutor;
+    private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
+
     private ExecutorService _sessionExecutor;
 
     @Autowired

@@ -13,10 +13,11 @@ import com.yulore.medhub.nls.ASRAgent;
 import com.yulore.medhub.nls.TxASRAgent;
 import com.yulore.medhub.session.*;
 import com.yulore.medhub.vo.*;
-import io.netty.util.concurrent.DefaultThreadFactory;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
 import org.java_websocket.exceptions.WebsocketNotConnectedException;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -26,13 +27,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 class ASRServiceImpl implements ASRService {
     @Override
     public void startTranscription(final WSCommandVO cmd, final WebSocket webSocket) {
@@ -95,8 +96,6 @@ class ASRServiceImpl implements ASRService {
         _nlsClient.shutdown();
         _txClient.shutdown();
 
-        _asrAuthExecutor.shutdownNow();
-
         log.info("NlsServiceImpl: shutdown");
     }
 
@@ -135,8 +134,7 @@ class ASRServiceImpl implements ASRService {
         }
         log.info("txasr agent init, count:{}", _txasrAgents.size());
 
-        _asrAuthExecutor = Executors.newSingleThreadScheduledExecutor(new DefaultThreadFactory("asrAuthExecutor"));
-        _asrAuthExecutor.scheduleAtFixedRate(this::checkAndUpdateASRToken, 0, 10, TimeUnit.SECONDS);
+        schedulerProvider.getObject().scheduleAtFixedRate(this::checkAndUpdateASRToken, 0, 10, TimeUnit.MINUTES);
     }
 
     @Override
@@ -540,7 +538,7 @@ class ASRServiceImpl implements ASRService {
     final List<ASRAgent> _asrAgents = new ArrayList<>();
     final List<TxASRAgent> _txasrAgents = new ArrayList<>();
 
-    private ScheduledExecutorService _asrAuthExecutor;
+    private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
 
     private NlsClient _nlsClient;
 

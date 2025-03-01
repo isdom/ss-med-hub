@@ -32,7 +32,7 @@
             <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
                 <maxFileSize>${log.file.size.max:-100}MB</maxFileSize>
             </timeBasedFileNamingAndTriggeringPolicy>
-            <maxHistory>30</maxHistory>
+            <maxHistory>${log.file.history.max:-7}</maxHistory>
         </rollingPolicy>
 
         <encoder>
@@ -120,6 +120,9 @@
             <appender-ref ref="FILE"/>
             <appender-ref ref="sls"/>
         </root>
+        <logger name="io.netty" level="INFO"/>
+        <logger name="org.redisson" level="INFO"/>
+        <logger name="org.springframework" level="INFO"/>
     </springProfile>
 
 </configuration>

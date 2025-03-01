@@ -3,8 +3,9 @@ package com.yulore.medhub.service;
 import com.alibaba.nls.client.protocol.NlsClient;
 import com.yulore.medhub.nls.CosyAgent;
 import com.yulore.medhub.nls.TTSAgent;
-import io.netty.util.concurrent.DefaultThreadFactory;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -14,12 +15,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 class TTSServiceImpl implements TTSService {
     @PostConstruct
     public void start() {
@@ -32,8 +33,6 @@ class TTSServiceImpl implements TTSService {
     @PreDestroy
     public void stop() throws InterruptedException {
         _nlsClient.shutdown();
-
-        _nlsAuthExecutor.shutdownNow();
 
         log.info("NlsServiceImpl: shutdown");
     }
@@ -71,8 +70,7 @@ class TTSServiceImpl implements TTSService {
         }
         log.info("cosy agent init, count:{}", _cosyAgents.size());
 
-        _nlsAuthExecutor = Executors.newSingleThreadScheduledExecutor(new DefaultThreadFactory("ttsAuthExecutor"));
-        _nlsAuthExecutor.scheduleAtFixedRate(this::checkAndUpdateTTSToken, 0, 10, TimeUnit.SECONDS);
+        schedulerProvider.getObject().scheduleAtFixedRate(this::checkAndUpdateTTSToken, 0, 10, TimeUnit.MINUTES);
     }
 
     @Override
@@ -120,7 +118,7 @@ class TTSServiceImpl implements TTSService {
     final List<TTSAgent> _ttsAgents = new ArrayList<>();
     final List<CosyAgent> _cosyAgents = new ArrayList<>();
 
-    private ScheduledExecutorService _nlsAuthExecutor;
+    private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
 
     private NlsClient _nlsClient;
 }
