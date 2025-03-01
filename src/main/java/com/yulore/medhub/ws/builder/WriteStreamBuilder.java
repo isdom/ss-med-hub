@@ -1,14 +1,8 @@
 package com.yulore.medhub.ws.builder;
 
-import com.alibaba.nls.client.protocol.OutputFormatEnum;
-import com.alibaba.nls.client.protocol.SampleRateEnum;
 import com.aliyun.oss.OSS;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.mgnt.utils.StringUnicodeEncoderDecoder;
-import com.yulore.bst.*;
-import com.yulore.medhub.api.CompositeVO;
-import com.yulore.medhub.service.TTSService;
 import com.yulore.medhub.session.StreamSession;
 import com.yulore.medhub.vo.*;
 import com.yulore.medhub.ws.WsHandler;
@@ -22,7 +16,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
@@ -35,10 +28,10 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
-@Component("streamBuilder")
+@Component("writeStream")
 @RequiredArgsConstructor
 @Slf4j
-public class StreamActorBuilder implements WsHandlerBuilder {
+public class WriteStreamBuilder implements WsHandlerBuilder {
     public static final byte[] EMPTY_BYTES = new byte[0];
 
     @PostConstruct
@@ -80,19 +73,19 @@ public class StreamActorBuilder implements WsHandlerBuilder {
         return actor;
     }
 
-    private void handleCommand(final WSCommandVO cmd, final WebSocket webSocket, final StreamActor streamActor) {
+    private void handleCommand(final WSCommandVO cmd, final WebSocket webSocket, final StreamActor actor) {
         if ("OpenStream".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handleOpenStreamCommand(cmd, webSocket, streamActor));
+            _sessionExecutor.submit(()-> handleOpenStreamCommand(cmd, webSocket, actor));
         } else if ("GetFileLen".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handleGetFileLenCommand(cmd, webSocket, streamActor));
+            _sessionExecutor.submit(()-> handleGetFileLenCommand(cmd, webSocket, actor));
         } else if ("FileSeek".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handleFileSeekCommand(cmd, webSocket, streamActor));
+            _sessionExecutor.submit(()-> handleFileSeekCommand(cmd, webSocket, actor));
         } else if ("FileRead".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handleFileReadCommand(cmd, webSocket, streamActor));
+            _sessionExecutor.submit(()-> handleFileReadCommand(cmd, webSocket, actor));
         } else if ("FileTell".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handleFileTellCommand(cmd, webSocket, streamActor));
+            _sessionExecutor.submit(()-> handleFileTellCommand(cmd, webSocket, actor));
         }  else {
-            log.warn("handleHubCommand: Unknown Command: {}", cmd);
+            log.warn("handleCommand: Unknown Command: {}", cmd);
         }
     }
 
@@ -119,7 +112,7 @@ public class StreamActorBuilder implements WsHandlerBuilder {
         };
     }
 
-    private void handleOpenStreamCommand(final WSCommandVO cmd, final WebSocket webSocket, final StreamActor streamActor) {
+    private void handleOpenStreamCommand(final WSCommandVO cmd, final WebSocket webSocket, final StreamActor actor) {
         final long startInMs = System.currentTimeMillis();
         final String path = cmd.getPayload().get("path");
         final boolean isWrite = Boolean.parseBoolean(cmd.getPayload().get("is_write"));
@@ -127,14 +120,21 @@ public class StreamActorBuilder implements WsHandlerBuilder {
         final String contentId = cmd.getPayload().get("content_id");
         final String playIdx = cmd.getPayload().get("playback_idx");
 
-        log.debug("open stream => path: {}/is_write: {}/sessionId: {}/contentId: {}/playIdx: {}",
-                path, isWrite, sessionId, contentId, playIdx);
+        log.info("[{}]: open read stream => path: {}/is_write: {}/contentId: {}/playIdx: {}",
+                sessionId, path, isWrite, contentId, playIdx);
+        if (!isWrite) {
+            log.warn("[{}]: open write stream with readable, open stream failed!", sessionId);
+            webSocket.setAttachment(null); // remove attached actor
+            // TODO: define StreamOpened failed event
+            WSEventVO.sendEvent(webSocket, "StreamOpened", null);
+            return;
+        }
 
         final int delayInMs = VarsUtil.extractValueAsInteger(path, "test_delay", 0);
         final Consumer<StreamSession.EventContext> sendEvent = buildSendEvent(webSocket, delayInMs);
         final Consumer<StreamSession.DataContext> sendData = buildSendData(webSocket, delayInMs);
 
-        final StreamSession _ss = new StreamSession(isWrite, sendEvent, sendData,
+        final StreamSession _ss = new StreamSession(true, sendEvent, sendData,
                 (ctx) -> {
                     final long startUploadInMs = System.currentTimeMillis();
                     _ossAccessExecutor.submit(()->{
@@ -144,125 +144,16 @@ public class StreamActorBuilder implements WsHandlerBuilder {
                     });
                 },
                 path, sessionId, contentId, playIdx);
-        streamActor._ss = _ss;
+        actor._ss = _ss;
 
-        if (!isWrite) {
-            final BuildStreamTask bst = getTaskOf(path, false, 8000);
-            if (bst == null) {
-                webSocket.setAttachment(null); // remove Attached ss
-                // TODO: define StreamOpened failed event
-                WSEventVO.sendEvent(webSocket, "StreamOpened", null);
-                log.warn("OpenStream failed for path: {}/sessionId: {}/contentId: {}/playIdx: {}", path, sessionId, contentId, playIdx);
-                return;
-            }
-
-            _ss.onDataChange((ss) -> {
-                ss.sendEvent(startInMs, "StreamOpened", null);
-                return true;
-            });
-            bst.buildStream(_ss::appendData, (isOK) -> _ss.appendCompleted());
-        } else {
-            // write mode return StreamOpened event directly
-            _ss.sendEvent(startInMs, "StreamOpened", null);
-        }
+        // write mode return StreamOpened event directly
+        _ss.sendEvent(startInMs, "StreamOpened", null);
     }
 
-    private BuildStreamTask getTaskOf(final String path, final boolean removeWavHdr, final int sampleRate) {
-        try {
-            if (path.contains("type=cp")) {
-                return new CompositeStreamTask(path, (cvo) -> {
-                    final BuildStreamTask bst = cvo2bst(cvo);
-                    if (bst != null) {
-                        return bst.key() != null ? _scsService.asCache(bst) : bst;
-                    }
-                    return null;
-                }, removeWavHdr);
-            } else if (path.contains("type=tts")) {
-                final BuildStreamTask bst = new TTSStreamTask(path, ttsService::selectTTSAgent, (synthesizer) -> {
-                    synthesizer.setFormat(removeWavHdr ? OutputFormatEnum.PCM : OutputFormatEnum.WAV);
-                    synthesizer.setSampleRate(sampleRate);
-                });
-                return bst.key() != null ? _scsService.asCache(bst) : bst;
-            } else if (path.contains("type=cosy")) {
-                final BuildStreamTask bst = new CosyStreamTask(path, ttsService::selectCosyAgent, (synthesizer) -> {
-                    synthesizer.setFormat(removeWavHdr ? OutputFormatEnum.PCM : OutputFormatEnum.WAV);
-                    synthesizer.setSampleRate(sampleRate);
-                });
-                return bst.key() != null ? _scsService.asCache(bst) : bst;
-            } else {
-                final BuildStreamTask bst = new OSSStreamTask(path, _ossClient, removeWavHdr);
-                return bst.key() != null ? _scsService.asCache(bst) : bst;
-            }
-        } catch (Exception ex) {
-            log.warn("getTaskOf failed: {}", ex.toString());
-            return null;
-        }
-    }
-
-    private BuildStreamTask cvo2bst(final CompositeVO cvo) {
-        if (cvo.getBucket() != null && !cvo.getBucket().isEmpty() && cvo.getObject() != null && !cvo.getObject().isEmpty()) {
-            log.info("support CVO => OSS Stream: {}", cvo);
-            return new OSSStreamTask(
-                    "{bucket=" + cvo.bucket + ",cache=" + cvo.cache + ",start=" + cvo.start + ",end=" + cvo.end + "}" + cvo.object,
-                    _ossClient, true);
-        } else if (cvo.getType() != null && cvo.getType().equals("tts")) {
-            log.info("support CVO => TTS Stream: {}", cvo);
-            return genTtsStreamTask(cvo);
-        } else if (cvo.getType() != null && cvo.getType().equals("cosy")) {
-            log.info("support CVO => Cosy Stream: {}", cvo);
-            return genCosyStreamTask(cvo);
-        } else {
-            log.info("not support cvo: {}, skip", cvo);
-            return null;
-        }
-    }
-
-    private BuildStreamTask genCosyStreamTask(final CompositeVO cvo) {
-        return new CosyStreamTask(cvo2cosy(cvo), ttsService::selectCosyAgent, (synthesizer) -> {
-            //设置返回音频的编码格式
-            synthesizer.setFormat(OutputFormatEnum.PCM);
-            //设置返回音频的采样率。
-            synthesizer.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
-        });
-    }
-
-    private BuildStreamTask genTtsStreamTask(final CompositeVO cvo) {
-        return new TTSStreamTask(cvo2tts(cvo), ttsService::selectTTSAgent, (synthesizer) -> {
-            //设置返回音频的编码格式
-            synthesizer.setFormat(OutputFormatEnum.PCM);
-            //设置返回音频的采样率
-            synthesizer.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
-        });
-    }
-
-    static private String cvo2tts(final CompositeVO cvo) {
-        // {type=tts,voice=xxx,url=ws://172.18.86.131:6789/playback,vars_playback_id=<uuid>,content_id=2088788,vars_start_timestamp=1732028219711854,text='StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(content)'}
-        //          unused.wav
-        return String.format("{type=tts,cache=%s,voice=%s,pitch_rate=%s,speech_rate=%s,volume=%s,text=%s}tts.wav",
-                cvo.cache,
-                cvo.voice,
-                cvo.pitch_rate,
-                cvo.speech_rate,
-                cvo.volume,
-                StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(cvo.text));
-    }
-
-    static private String cvo2cosy(final CompositeVO cvo) {
-        // eg: {type=cosy,voice=xxx,url=ws://172.18.86.131:6789/cosy,vars_playback_id=<uuid>,content_id=2088788,vars_start_timestamp=1732028219711854,text='StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(content)'}
-        //          unused.wav
-        return String.format("{type=cosy,cache=%s,voice=%s,pitch_rate=%s,speech_rate=%s,volume=%s,text=%s}cosy.wav",
-                cvo.cache,
-                cvo.voice,
-                cvo.pitch_rate,
-                cvo.speech_rate,
-                cvo.volume,
-                StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(cvo.text));
-    }
-
-    private void handleGetFileLenCommand(final WSCommandVO cmd, final WebSocket webSocket, final StreamActor streamActor) {
+    private void handleGetFileLenCommand(final WSCommandVO cmd, final WebSocket webSocket, final StreamActor actor) {
         final long startInMs = System.currentTimeMillis();
         log.info("get file len:");
-        final StreamSession ss = streamActor._ss;
+        final StreamSession ss = actor._ss;
         if (ss == null) {
             log.warn("handleGetFileLenCommand: ss is null, just return 0");
             WSEventVO.sendEvent(webSocket, "GetFileLenResult", new PayloadGetFileLenResult(0));
@@ -271,12 +162,12 @@ public class StreamActorBuilder implements WsHandlerBuilder {
         ss.sendEvent(startInMs, "GetFileLenResult", new PayloadGetFileLenResult(ss.length()));
     }
 
-    private void handleFileSeekCommand(final WSCommandVO cmd, final WebSocket webSocket, final StreamActor streamActor) {
+    private void handleFileSeekCommand(final WSCommandVO cmd, final WebSocket webSocket, final StreamActor actor) {
         final long startInMs = System.currentTimeMillis();
         final int offset = Integer.parseInt(cmd.getPayload().get("offset"));
         final int whence = Integer.parseInt(cmd.getPayload().get("whence"));
         log.info("file seek => offset: {}, whence: {}", offset, whence);
-        final StreamSession ss = streamActor._ss;
+        final StreamSession ss = actor._ss;
         if (ss == null) {
             log.warn("handleFileSeekCommand: ss is null, just return 0");
             WSEventVO.sendEvent(webSocket, "FileSeekResult", new PayloadFileSeekResult(0));
@@ -303,10 +194,10 @@ public class StreamActorBuilder implements WsHandlerBuilder {
         ss.sendEvent(startInMs,"FileSeekResult", new PayloadFileSeekResult(pos));
     }
 
-    private void handleFileReadCommand(final WSCommandVO cmd, final WebSocket webSocket, final StreamActor streamActor) {
+    private void handleFileReadCommand(final WSCommandVO cmd, final WebSocket webSocket, final StreamActor actor) {
         final long startInMs = System.currentTimeMillis();
         final int count = Integer.parseInt(cmd.getPayload().get("count"));
-        final StreamSession ss = streamActor._ss;
+        final StreamSession ss = actor._ss;
         if (ss == null) {
             log.warn("handleFileReadCommand: file read => count: {}, and ss is null, send 0 bytes to rms client", count);
             webSocket.send(EMPTY_BYTES);
@@ -390,9 +281,9 @@ public class StreamActorBuilder implements WsHandlerBuilder {
         ss.sendEvent(startInMs, "FileWriteResult", new PayloadFileWriteResult(written));
     }
 
-    private void handleFileTellCommand(final WSCommandVO cmd, final WebSocket webSocket, final StreamActor streamActor) {
+    private void handleFileTellCommand(final WSCommandVO cmd, final WebSocket webSocket, final StreamActor actor) {
         final long startInMs = System.currentTimeMillis();
-        final StreamSession ss = streamActor._ss;
+        final StreamSession ss = actor._ss;
         if (ss == null) {
             log.warn("handleFileTellCommand: ss is null, just return 0");
             WSEventVO.sendEvent(webSocket, "FileTellResult", new PayloadFileSeekResult(0));
@@ -407,10 +298,4 @@ public class StreamActorBuilder implements WsHandlerBuilder {
     private ExecutorService _ossAccessExecutor;
 
     private final OSS _ossClient;
-
-    @Autowired
-    private StreamCacheService _scsService;
-
-    @Autowired
-    private TTSService ttsService;
 }
