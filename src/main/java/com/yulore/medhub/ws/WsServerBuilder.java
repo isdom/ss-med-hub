@@ -87,7 +87,14 @@ public class WsServerBuilder {
             }
 
             @Override
-            public void onError(WebSocket webSocket, Exception e) {
+            public void onError(final WebSocket webSocket, final Exception ex) {
+                log.warn("an error occurred on connection {}:{}",
+                        webSocket.getRemoteSocketAddress(), ExceptionUtil.exception2detail(ex));
+
+                final Object attachment = webSocket.getAttachment();
+                if (attachment instanceof WsHandler handler) {
+                    handler.onWebsocketError(ex);
+                }
             }
 
             @Override

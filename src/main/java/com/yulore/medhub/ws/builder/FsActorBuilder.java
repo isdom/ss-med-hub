@@ -134,7 +134,7 @@ public class FsActorBuilder implements WsHandlerBuilder {
         } else if ("FSRecordStarted".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handleFSRecordStartedCommand(cmd, webSocket));
         }  else {
-            log.warn("handleHubCommand: Unknown Command: {}", cmd);
+            log.warn("handleCommand: Unknown Command: {}", cmd);
         }
     }
 

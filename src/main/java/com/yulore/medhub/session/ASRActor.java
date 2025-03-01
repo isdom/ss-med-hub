@@ -34,7 +34,7 @@ public class ASRActor {
         public long beginInMs;
     }
 
-    static int countChinesePunctuations(final String text) {
+    public static int countChinesePunctuations(final String text) {
         int count = 0;
         for (char c : text.toCharArray()) {
             // 判断是否是中文标点
@@ -180,7 +180,7 @@ public class ASRActor {
     }
 
     public String _sessionId;
-    final Lock _lock = new ReentrantLock();
+    public final Lock _lock = new ReentrantLock();
 
     final AtomicReference<Runnable> _stopASR = new AtomicReference<>(null);
     public final AtomicReference<Consumer<ByteBuffer>> _transmitData = new AtomicReference<>(null);
@@ -192,7 +192,7 @@ public class ASRActor {
 
     final AtomicReference<ScheduledFuture<?>>   _checkIdleFuture = new AtomicReference<>(null);
     final AtomicInteger _checkIdleCount = new AtomicInteger(0);
-    final long _sessionBeginInMs;
+    public final long _sessionBeginInMs;
 
     private final AtomicInteger _playbackIdx = new AtomicInteger(0);
     private final ConcurrentMap<String, PlaybackMemo> _id2memo = new ConcurrentHashMap<>();

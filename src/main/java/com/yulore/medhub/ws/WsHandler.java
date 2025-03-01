@@ -9,4 +9,6 @@ public interface WsHandler {
     void onClose(WebSocket webSocket);
     void onMessage(final WebSocket webSocket, final String message);
     void onMessage(final WebSocket webSocket, final ByteBuffer bytes);
+
+    default void onWebsocketError(Exception ex) {}
 }
