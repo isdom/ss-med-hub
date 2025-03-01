@@ -8,7 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.bst.*;
 import com.yulore.medhub.api.CompositeVO;
-import com.yulore.medhub.service.NlsService;
+import com.yulore.medhub.service.TTSService;
 import com.yulore.medhub.session.StreamSession;
 import com.yulore.medhub.vo.*;
 import com.yulore.medhub.ws.WsHandler;
@@ -178,13 +178,13 @@ public class StreamActorBuilder implements WsHandlerBuilder {
                     return null;
                 }, removeWavHdr);
             } else if (path.contains("type=tts")) {
-                final BuildStreamTask bst = new TTSStreamTask(path, nlsService::selectTTSAgent, (synthesizer) -> {
+                final BuildStreamTask bst = new TTSStreamTask(path, ttsService::selectTTSAgent, (synthesizer) -> {
                     synthesizer.setFormat(removeWavHdr ? OutputFormatEnum.PCM : OutputFormatEnum.WAV);
                     synthesizer.setSampleRate(sampleRate);
                 });
                 return bst.key() != null ? _scsService.asCache(bst) : bst;
             } else if (path.contains("type=cosy")) {
-                final BuildStreamTask bst = new CosyStreamTask(path, nlsService::selectCosyAgent, (synthesizer) -> {
+                final BuildStreamTask bst = new CosyStreamTask(path, ttsService::selectCosyAgent, (synthesizer) -> {
                     synthesizer.setFormat(removeWavHdr ? OutputFormatEnum.PCM : OutputFormatEnum.WAV);
                     synthesizer.setSampleRate(sampleRate);
                 });
@@ -218,7 +218,7 @@ public class StreamActorBuilder implements WsHandlerBuilder {
     }
 
     private BuildStreamTask genCosyStreamTask(final CompositeVO cvo) {
-        return new CosyStreamTask(cvo2cosy(cvo), nlsService::selectCosyAgent, (synthesizer) -> {
+        return new CosyStreamTask(cvo2cosy(cvo), ttsService::selectCosyAgent, (synthesizer) -> {
             //设置返回音频的编码格式
             synthesizer.setFormat(OutputFormatEnum.PCM);
             //设置返回音频的采样率。
@@ -227,7 +227,7 @@ public class StreamActorBuilder implements WsHandlerBuilder {
     }
 
     private BuildStreamTask genTtsStreamTask(final CompositeVO cvo) {
-        return new TTSStreamTask(cvo2tts(cvo), nlsService::selectTTSAgent, (synthesizer) -> {
+        return new TTSStreamTask(cvo2tts(cvo), ttsService::selectTTSAgent, (synthesizer) -> {
             //设置返回音频的编码格式
             synthesizer.setFormat(OutputFormatEnum.PCM);
             //设置返回音频的采样率
@@ -412,5 +412,5 @@ public class StreamActorBuilder implements WsHandlerBuilder {
     private StreamCacheService _scsService;
 
     @Autowired
-    private NlsService nlsService;
+    private TTSService ttsService;
 }

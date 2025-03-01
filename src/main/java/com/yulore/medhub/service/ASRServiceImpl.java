@@ -10,8 +10,6 @@ import com.alibaba.nls.client.protocol.asr.SpeechTranscriberResponse;
 import com.tencent.asrv2.*;
 import com.tencent.core.ws.SpeechClient;
 import com.yulore.medhub.nls.ASRAgent;
-import com.yulore.medhub.nls.CosyAgent;
-import com.yulore.medhub.nls.TTSAgent;
 import com.yulore.medhub.nls.TxASRAgent;
 import com.yulore.medhub.session.*;
 import com.yulore.medhub.vo.*;
@@ -35,7 +33,7 @@ import java.util.function.Consumer;
 
 @Slf4j
 @Service
-class NlsServiceImpl implements NlsService {
+class ASRServiceImpl implements ASRService {
     @Override
     public void startTranscription(final WSCommandVO cmd, final WebSocket webSocket) {
         final String provider = cmd.getPayload() != null ? cmd.getPayload().get("provider") : null;
@@ -89,7 +87,7 @@ class NlsServiceImpl implements NlsService {
         _nlsClient = new NlsClient(_nls_url, "invalid_token");
         _txClient = new SpeechClient(AsrConstant.DEFAULT_RT_REQ_URL);
 
-        initNlsAgents(_nlsClient);
+        initASRAgents(_nlsClient);
     }
 
     @PreDestroy
@@ -97,12 +95,12 @@ class NlsServiceImpl implements NlsService {
         _nlsClient.shutdown();
         _txClient.shutdown();
 
-        _nlsAuthExecutor.shutdownNow();
+        _asrAuthExecutor.shutdownNow();
 
         log.info("NlsServiceImpl: shutdown");
     }
 
-    private void initNlsAgents(final NlsClient client) {
+    private void initASRAgents(final NlsClient client) {
         _asrAgents.clear();
         if (_all_asr != null) {
             for (Map.Entry<String, String> entry : _all_asr.entrySet()) {
@@ -119,38 +117,6 @@ class NlsServiceImpl implements NlsService {
             }
         }
         log.info("asr agent init, count:{}", _asrAgents.size());
-
-        if (_all_tts != null) {
-            for (Map.Entry<String, String> entry : _all_tts.entrySet()) {
-                log.info("tts: {} / {}", entry.getKey(), entry.getValue());
-                final String[] values = entry.getValue().split(" ");
-                log.info("tts values detail: {}", Arrays.toString(values));
-                final TTSAgent agent = TTSAgent.parse(entry.getKey(), entry.getValue());
-                if (null == agent) {
-                    log.warn("tts init failed by: {}/{}", entry.getKey(), entry.getValue());
-                } else {
-                    agent.setClient(client);
-                    _ttsAgents.add(agent);
-                }
-            }
-        }
-        log.info("tts agent init, count:{}", _ttsAgents.size());
-
-        if (_all_cosy != null) {
-            for (Map.Entry<String, String> entry : _all_cosy.entrySet()) {
-                log.info("cosy: {} / {}", entry.getKey(), entry.getValue());
-                final String[] values = entry.getValue().split(" ");
-                log.info("cosy values detail: {}", Arrays.toString(values));
-                final CosyAgent agent = CosyAgent.parse(entry.getKey(), entry.getValue());
-                if (null == agent) {
-                    log.warn("cosy init failed by: {}/{}", entry.getKey(), entry.getValue());
-                } else {
-                    agent.setClient(client);
-                    _cosyAgents.add(agent);
-                }
-            }
-        }
-        log.info("cosy agent init, count:{}", _cosyAgents.size());
 
         _txasrAgents.clear();
         if (_all_txasr != null) {
@@ -169,8 +135,8 @@ class NlsServiceImpl implements NlsService {
         }
         log.info("txasr agent init, count:{}", _txasrAgents.size());
 
-        _nlsAuthExecutor = Executors.newSingleThreadScheduledExecutor(new DefaultThreadFactory("nlsAuthExecutor"));
-        _nlsAuthExecutor.scheduleAtFixedRate(this::checkAndUpdateNlsToken, 0, 10, TimeUnit.SECONDS);
+        _asrAuthExecutor = Executors.newSingleThreadScheduledExecutor(new DefaultThreadFactory("asrAuthExecutor"));
+        _asrAuthExecutor.scheduleAtFixedRate(this::checkAndUpdateASRToken, 0, 10, TimeUnit.SECONDS);
     }
 
     @Override
@@ -186,30 +152,6 @@ class NlsServiceImpl implements NlsService {
     }
 
     @Override
-    public TTSAgent selectTTSAgent() {
-        for (TTSAgent agent : _ttsAgents) {
-            final TTSAgent selected = agent.checkAndSelectIfHasIdle();
-            if (null != selected) {
-                log.info("select tts({}): {}/{}", agent.getName(), agent.get_connectingOrConnectedCount().get(), agent.getLimit());
-                return selected;
-            }
-        }
-        throw new RuntimeException("all tts agent has full");
-    }
-
-    @Override
-    public CosyAgent selectCosyAgent() {
-        for (CosyAgent agent : _cosyAgents) {
-            final CosyAgent selected = agent.checkAndSelectIfHasIdle();
-            if (null != selected) {
-                log.info("select cosy({}): {}/{}", agent.getName(), agent.get_connectingOrConnectedCount().get(), agent.getLimit());
-                return selected;
-            }
-        }
-        throw new RuntimeException("all cosy agent has full");
-    }
-
-    @Override
     public TxASRAgent selectTxASRAgent() {
         for (TxASRAgent agent : _txasrAgents) {
             final TxASRAgent selected = agent.checkAndSelectIfHasIdle();
@@ -221,14 +163,8 @@ class NlsServiceImpl implements NlsService {
         throw new RuntimeException("all txasr agent has full");
     }
 
-    private void checkAndUpdateNlsToken() {
+    private void checkAndUpdateASRToken() {
         for (final ASRAgent agent : _asrAgents) {
-            agent.checkAndUpdateAccessToken();
-        }
-        for (final TTSAgent agent : _ttsAgents) {
-            agent.checkAndUpdateAccessToken();
-        }
-        for (final CosyAgent agent : _cosyAgents) {
             agent.checkAndUpdateAccessToken();
         }
     }
@@ -598,21 +534,13 @@ class NlsServiceImpl implements NlsService {
     @Value("#{${nls.asr}}")
     private Map<String,String> _all_asr;
 
-    @Value("#{${nls.tts}}")
-    private Map<String,String> _all_tts;
-
-    @Value("#{${nls.cosy}}")
-    private Map<String,String> _all_cosy;
-
     @Value("#{${nls.txasr}}")
     private Map<String,String> _all_txasr;
 
     final List<ASRAgent> _asrAgents = new ArrayList<>();
-    final List<TTSAgent> _ttsAgents = new ArrayList<>();
-    final List<CosyAgent> _cosyAgents = new ArrayList<>();
     final List<TxASRAgent> _txasrAgents = new ArrayList<>();
 
-    private ScheduledExecutorService _nlsAuthExecutor;
+    private ScheduledExecutorService _asrAuthExecutor;
 
     private NlsClient _nlsClient;
 

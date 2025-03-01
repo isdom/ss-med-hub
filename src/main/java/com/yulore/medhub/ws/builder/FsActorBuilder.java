@@ -3,7 +3,7 @@ package com.yulore.medhub.ws.builder;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yulore.medhub.api.ScriptApi;
-import com.yulore.medhub.service.NlsService;
+import com.yulore.medhub.service.ASRService;
 import com.yulore.medhub.vo.WSCommandVO;
 import com.yulore.medhub.ws.actor.FsActor;
 import com.yulore.medhub.vo.WSEventVO;
@@ -120,9 +120,9 @@ public class FsActorBuilder implements WsHandlerBuilder {
 
     private void handleCommand(final WSCommandVO cmd, final WebSocket webSocket) {
         if ("StartTranscription".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> nlsService.startTranscription(cmd, webSocket));
+            _sessionExecutor.submit(()-> asrService.startTranscription(cmd, webSocket));
         } else if ("StopTranscription".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> nlsService.stopTranscription(cmd, webSocket));
+            _sessionExecutor.submit(()-> asrService.stopTranscription(cmd, webSocket));
         } else if ("FSPlaybackStarted".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handleFSPlaybackStartedCommand(cmd, webSocket));
         } else if ("FSPlaybackStopped".equals(cmd.getHeader().get("name"))) {
@@ -199,5 +199,5 @@ public class FsActorBuilder implements WsHandlerBuilder {
     private ExecutorService _sessionExecutor;
 
     @Autowired
-    private NlsService nlsService;
+    private ASRService asrService;
 }

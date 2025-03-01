@@ -13,7 +13,8 @@ import com.yulore.medhub.api.CallApi;
 import com.yulore.medhub.api.CompositeVO;
 import com.yulore.medhub.api.ScriptApi;
 import com.yulore.medhub.nls.*;
-import com.yulore.medhub.service.NlsService;
+import com.yulore.medhub.service.ASRService;
+import com.yulore.medhub.service.TTSService;
 import com.yulore.medhub.session.*;
 import com.yulore.medhub.task.*;
 import com.yulore.medhub.vo.*;
@@ -141,7 +142,10 @@ public class HubMain {
     private CallApi _callApi;
 
     @Autowired
-    private NlsService nlsService;
+    private ASRService asrService;
+
+    @Autowired
+    private TTSService ttsService;
 
     @Autowired
     WebSocketServer  _ws2;
@@ -523,9 +527,9 @@ public class HubMain {
 
     private void handleHubCommand(final WSCommandVO cmd, final WebSocket webSocket) {
         if ("StartTranscription".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> nlsService.startTranscription(cmd, webSocket));
+            _sessionExecutor.submit(()-> asrService.startTranscription(cmd, webSocket));
         } else if ("StopTranscription".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> nlsService.stopTranscription(cmd, webSocket));
+            _sessionExecutor.submit(()-> asrService.stopTranscription(cmd, webSocket));
         } else if ("FSPlaybackStarted".equals(cmd.getHeader().get("name"))) {
             _sessionExecutor.submit(()-> handleFSPlaybackStartedCommand(cmd, webSocket));
         } else if ("FSPlaybackStopped".equals(cmd.getHeader().get("name"))) {
@@ -883,13 +887,13 @@ public class HubMain {
                     return null;
                 }, removeWavHdr);
             } else if (path.contains("type=tts")) {
-                final BuildStreamTask bst = new TTSStreamTask(path, nlsService::selectTTSAgent, (synthesizer) -> {
+                final BuildStreamTask bst = new TTSStreamTask(path, ttsService::selectTTSAgent, (synthesizer) -> {
                     synthesizer.setFormat(removeWavHdr ? OutputFormatEnum.PCM : OutputFormatEnum.WAV);
                     synthesizer.setSampleRate(sampleRate);
                 });
                 return bst.key() != null ? _scsService.asCache(bst) : bst;
             } else if (path.contains("type=cosy")) {
-                final BuildStreamTask bst = new CosyStreamTask(path, nlsService::selectCosyAgent, (synthesizer) -> {
+                final BuildStreamTask bst = new CosyStreamTask(path, ttsService::selectCosyAgent, (synthesizer) -> {
                     synthesizer.setFormat(removeWavHdr ? OutputFormatEnum.PCM : OutputFormatEnum.WAV);
                     synthesizer.setSampleRate(sampleRate);
                 });
@@ -923,7 +927,7 @@ public class HubMain {
     }
 
     private BuildStreamTask genCosyStreamTask(final CompositeVO cvo) {
-        return new CosyStreamTask(cvo2cosy(cvo), nlsService::selectCosyAgent, (synthesizer) -> {
+        return new CosyStreamTask(cvo2cosy(cvo), ttsService::selectCosyAgent, (synthesizer) -> {
             //设置返回音频的编码格式
             synthesizer.setFormat(OutputFormatEnum.PCM);
             //设置返回音频的采样率。
@@ -932,7 +936,7 @@ public class HubMain {
     }
 
     private BuildStreamTask genTtsStreamTask(final CompositeVO cvo) {
-        return new TTSStreamTask(cvo2tts(cvo), nlsService::selectTTSAgent, (synthesizer) -> {
+        return new TTSStreamTask(cvo2tts(cvo), ttsService::selectTTSAgent, (synthesizer) -> {
             //设置返回音频的编码格式
             synthesizer.setFormat(OutputFormatEnum.PCM);
             //设置返回音频的采样率
@@ -1121,7 +1125,7 @@ public class HubMain {
 
         final List<byte[]> bufs = new ArrayList<>();
         final long startInMs = System.currentTimeMillis();
-        final TTSAgent agent = nlsService.selectTTSAgent();
+        final TTSAgent agent = ttsService.selectTTSAgent();
         final AtomicInteger idx = new AtomicInteger(0);
         final TTSTask task = new TTSTask(agent,
                 (synthesizer)->synthesizer.setText(text),

@@ -7,11 +7,7 @@ import com.yulore.medhub.nls.TxASRAgent;
 import com.yulore.medhub.vo.WSCommandVO;
 import org.java_websocket.WebSocket;
 
-public interface NlsService {
-    ASRAgent selectASRAgent();
+public interface TTSService {
     TTSAgent selectTTSAgent();
     CosyAgent selectCosyAgent();
-    TxASRAgent selectTxASRAgent();
-    void startTranscription(final WSCommandVO cmd, final WebSocket webSocket);
-    void stopTranscription(final WSCommandVO cmd, final WebSocket webSocket);
 }
