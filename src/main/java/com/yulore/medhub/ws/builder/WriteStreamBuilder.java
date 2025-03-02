@@ -29,7 +29,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
-@Component("writeStream")
+@Component("writeRms")
 @RequiredArgsConstructor
 @Slf4j
 public class WriteStreamBuilder implements WsHandlerBuilder {
@@ -39,8 +39,6 @@ public class WriteStreamBuilder implements WsHandlerBuilder {
     public void start() {
         _ossAccessExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
                 new DefaultThreadFactory("ossAccessExecutor"));
-//        _scheduledExecutor = Executors.newScheduledThreadPool(NettyRuntime.availableProcessors() * 2,
-//                new DefaultThreadFactory("scheduledExecutor"));
         _sessionExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
                 new DefaultThreadFactory("sessionExecutor"));
     }
@@ -48,7 +46,6 @@ public class WriteStreamBuilder implements WsHandlerBuilder {
     @PreDestroy
     public void stop() throws InterruptedException {
         _sessionExecutor.shutdownNow();
-//        _scheduledExecutor.shutdownNow();
         _ossAccessExecutor.shutdownNow();
     }
 
@@ -296,7 +293,6 @@ public class WriteStreamBuilder implements WsHandlerBuilder {
 
     private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
 
-    // private ScheduledExecutorService _scheduledExecutor;
     private ExecutorService _sessionExecutor;
     private ExecutorService _ossAccessExecutor;
 

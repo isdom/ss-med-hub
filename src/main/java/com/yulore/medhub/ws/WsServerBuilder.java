@@ -18,9 +18,11 @@ import org.springframework.context.annotation.Configuration;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.util.Enumeration;
+import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 @Configuration
@@ -28,6 +30,9 @@ import java.util.function.Function;
 @RequiredArgsConstructor
 @Slf4j
 public class WsServerBuilder {
+
+    public static final String READ_RMS = "readRms";
+
     @Bean(destroyMethod = "stop")
     public WebSocketServer webSocketServer() {
         log.info("webSocketServer: {}", configProps);
@@ -114,12 +119,19 @@ public class WsServerBuilder {
 
     private void updateHubStatus() {
         final MasterService masterService = redisson.getRemoteService(_service_master)
-                .get(MasterService.class, RemoteInvocationOptions.defaults().noAck().noResult());
+                .get(MasterService.class, RemoteInvocationOptions.defaults()
+                        .noAck()
+                        .expectResultWithin(3, TimeUnit.SECONDS));
 
         final String ipAndPort = ipv4Provider.getObject().getHostAddress() + ":" + configProps.port;
 
         checkAndScheduleNext((startedTimestamp)-> {
-            masterService.updateHubStatus(ipAndPort, configProps.pathMappings, System.currentTimeMillis());
+            try {
+                masterService.updateHubStatus(ipAndPort, configProps.pathMappings, System.currentTimeMillis());
+                rrmsUrls.set(masterService.getUrlsOf(READ_RMS));
+            } catch (Exception ex) {
+                log.warn("interact with masterService failed: {}", ExceptionUtil.exception2detail(ex));
+            }
             return true;
         }, System.currentTimeMillis());
     }
@@ -162,6 +174,19 @@ public class WsServerBuilder {
         return null;
     }
 
+    @Bean
+    public HandlerUrlBuilder getUrlBuilder() {
+        final AtomicInteger idx = new AtomicInteger(0);
+        return handler -> {
+            if (handler.equals(READ_RMS)) {
+                final List<String> urls = rrmsUrls.get();
+                final int size = urls.size();
+                return size > 0 ? urls.get(idx.getAndIncrement() % size) : "";
+            }
+            return "";
+        };
+    }
+
     private final WsHandlerRegistry handlerRegistry;
     private final WsConfigProperties configProps;
 
@@ -175,5 +200,6 @@ public class WsServerBuilder {
     private final ObjectProvider<Inet4Address> ipv4Provider;
     private final RedissonClient redisson;
 
+    private final AtomicReference<List<String>> rrmsUrls = new AtomicReference<>(List.of());
     private final AtomicInteger _currentWSConnection = new AtomicInteger(0);
 }

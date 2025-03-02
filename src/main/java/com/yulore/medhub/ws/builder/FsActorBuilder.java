@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yulore.medhub.api.ScriptApi;
 import com.yulore.medhub.service.ASRService;
 import com.yulore.medhub.vo.WSCommandVO;
+import com.yulore.medhub.ws.HandlerUrlBuilder;
 import com.yulore.medhub.ws.actor.FsActor;
 import com.yulore.medhub.vo.WSEventVO;
 import com.yulore.medhub.ws.WsHandler;
@@ -63,6 +64,7 @@ public class FsActorBuilder implements WsHandlerBuilder {
                     _rms_cp_prefix,
                     _rms_tts_prefix,
                     _rms_wav_prefix,
+                    urlProvider.getObject(),
                     _test_enable_delay,
                     _test_delay_ms,
                     _test_enable_disconnect,
@@ -194,6 +196,7 @@ public class FsActorBuilder implements WsHandlerBuilder {
     private long _check_idle_interval_ms;
 
     private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
+    private final ObjectProvider<HandlerUrlBuilder> urlProvider;
 
     private ExecutorService _sessionExecutor;
 

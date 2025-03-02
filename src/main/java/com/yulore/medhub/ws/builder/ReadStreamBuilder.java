@@ -36,7 +36,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
-@Component("readStream")
+@Component("readRms")
 @RequiredArgsConstructor
 @Slf4j
 public class ReadStreamBuilder implements WsHandlerBuilder {
@@ -44,8 +44,6 @@ public class ReadStreamBuilder implements WsHandlerBuilder {
 
     @PostConstruct
     public void start() {
-//        _scheduledExecutor = Executors.newScheduledThreadPool(NettyRuntime.availableProcessors() * 2,
-//                new DefaultThreadFactory("scheduledExecutor"));
         _sessionExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
                 new DefaultThreadFactory("sessionExecutor"));
     }
@@ -53,7 +51,6 @@ public class ReadStreamBuilder implements WsHandlerBuilder {
     @PreDestroy
     public void stop() throws InterruptedException {
         _sessionExecutor.shutdownNow();
-//        _scheduledExecutor.shutdownNow();
     }
 
     @Override

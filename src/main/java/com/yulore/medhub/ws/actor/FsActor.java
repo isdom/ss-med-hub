@@ -8,6 +8,7 @@ import com.yulore.medhub.api.ApiResponse;
 import com.yulore.medhub.api.ScriptApi;
 import com.yulore.medhub.session.ASRActor;
 import com.yulore.medhub.vo.*;
+import com.yulore.medhub.ws.HandlerUrlBuilder;
 import com.yulore.medhub.ws.WsHandler;
 import com.yulore.util.ExceptionUtil;
 import io.netty.util.concurrent.DefaultThreadFactory;
@@ -54,6 +55,7 @@ public abstract class FsActor extends ASRActor implements WsHandler {
                    final String rms_cp_prefix,
                    final String rms_tts_prefix,
                    final String rms_wav_prefix,
+                   final HandlerUrlBuilder handlerUrlBuilder,
                    final boolean testEnableDelay,
                    final long testDelayMs,
                    final boolean testEnableDisconnect,
@@ -75,6 +77,7 @@ public abstract class FsActor extends ASRActor implements WsHandler {
         _rms_cp_prefix = rms_cp_prefix;
         _rms_tts_prefix = rms_tts_prefix;
         _rms_wav_prefix = rms_wav_prefix;
+        _handlerUrlBuilder = handlerUrlBuilder;
         if (testEnableDelay) {
             _delayExecutor = Executors.newSingleThreadScheduledExecutor(new DefaultThreadFactory("delayExecutor"));
             _testDelayMs = testDelayMs;
@@ -311,6 +314,7 @@ public abstract class FsActor extends ASRActor implements WsHandler {
         if ("cp".equals(vo.getVoiceMode())) {
             return _rms_cp_prefix.replace("{cpvars}", tryExtractCVOS(vo))
                     .replace("{uuid}", _uuid)
+                    .replace("{rrms}", _handlerUrlBuilder.get("readRms"))
                     .replace("{vars}", vars.get())
                     + playback_id + ".wav"
                     ;
@@ -319,6 +323,7 @@ public abstract class FsActor extends ASRActor implements WsHandler {
         if ("tts".equals(vo.getVoiceMode())) {
             return _rms_tts_prefix
                     .replace("{uuid}", _uuid)
+                    .replace("{rrms}", _handlerUrlBuilder.get("readRms"))
                     .replace("{vars}", String.format("text=%s,%s",
                             StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(vo.getReply_content()),
                             vars.get()))
@@ -329,6 +334,7 @@ public abstract class FsActor extends ASRActor implements WsHandler {
         if ("wav".equals(vo.getVoiceMode())) {
             return _rms_wav_prefix
                     .replace("{uuid}", _uuid)
+                    .replace("{rrms}", _handlerUrlBuilder.get("readRms"))
                     .replace("{vars}", vars.get())
                     + vo.getAi_speech_file();
         }
@@ -491,6 +497,7 @@ public abstract class FsActor extends ASRActor implements WsHandler {
     private final String _rms_cp_prefix;
     private final String _rms_tts_prefix;
     private final String _rms_wav_prefix;
+    private final HandlerUrlBuilder _handlerUrlBuilder;
 
     // private AIReplyVO _lastReply;
 
