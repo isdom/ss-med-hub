@@ -129,6 +129,7 @@ public class WsServerBuilder {
             try {
                 masterService.updateHubStatus(ipAndPort, configProps.pathMappings, System.currentTimeMillis());
                 rrmsUrls.set(masterService.getUrlsOf(READ_RMS));
+                log.debug("{}'s urls: {}", READ_RMS, rrmsUrls.get());
             } catch (Exception ex) {
                 log.warn("interact with masterService failed: {}", ExceptionUtil.exception2detail(ex));
             }
