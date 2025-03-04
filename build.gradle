@@ -13,7 +13,14 @@ repositories {
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter'
-    implementation 'com.alibaba.boot:nacos-config-spring-boot-starter:0.2.12'
+
+    // https://mvnrepository.com/artifact/org.springframework.cloud/spring-cloud-starter-bootstrap
+    implementation 'org.springframework.cloud:spring-cloud-starter-bootstrap:3.1.9'
+
+    // implementation 'com.alibaba.boot:nacos-config-spring-boot-starter:0.2.12'
+    // https://mvnrepository.com/artifact/com.alibaba.cloud/spring-cloud-starter-alibaba-nacos-config
+    implementation 'com.alibaba.cloud:spring-cloud-starter-alibaba-nacos-config:2021.0.6.2'
+
     implementation 'org.springframework.cloud:spring-cloud-dependencies:2021.0.8'
     implementation 'com.alibaba.cloud:spring-cloud-alibaba-dependencies:2021.0.5.0'
     implementation ("org.redisson:redisson-spring-boot-starter:3.43.0") {

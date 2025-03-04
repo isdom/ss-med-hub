@@ -19,8 +19,8 @@ import org.java_websocket.WebSocket;
 import org.java_websocket.exceptions.WebsocketNotConnectedException;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
@@ -33,13 +33,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 @Slf4j
-@Service
 @RequiredArgsConstructor
-//@ConditionalOnProperty(
-//        prefix = "nlscfg",  // 显式指定前缀
-//        name = "asrEnabled",  // 使用 kebab-case 格式
-//        havingValue = "true"
-//)
 class ASRServiceImpl implements ASRService {
     @Override
     public void startTranscription(final WSCommandVO cmd, final WebSocket webSocket) {
@@ -547,8 +541,11 @@ class ASRServiceImpl implements ASRService {
     final List<ASRAgent> _asrAgents = new ArrayList<>();
     final List<TxASRAgent> _txasrAgents = new ArrayList<>();
 
-    private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
-    private final RedissonClient redisson;
+    @Autowired
+    private ObjectProvider<ScheduledExecutorService> schedulerProvider;
+
+    @Autowired
+    private RedissonClient redisson;
 
     private NlsClient _nlsClient;
 

@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
@@ -22,11 +23,11 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-//@ConditionalOnProperty(
-//        prefix = "nlscfg",  // 显式指定前缀
-//        name = "ttsEnabled",  // 使用 kebab-case 格式
-//        havingValue = "true"
-//)
+@ConditionalOnProperty(
+        prefix = "nlscfg",  // 显式指定前缀
+        name = "ttsEnabled",  // 使用 kebab-case 格式
+        havingValue = "true"
+)
 class TTSServiceImpl implements TTSService {
     @PostConstruct
     public void start() {

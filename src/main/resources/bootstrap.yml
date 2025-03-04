@@ -1,0 +1,18 @@
+spring:
+  # config:
+  #  import: nacos:${NACOS_DATAID}?group=DEFAULT_GROUP&namespace=${NACOS_NAMESPACE}
+  main:
+    web-application-type: none
+  application:
+    name: med-hub
+  cloud:
+    nacos:
+      config:
+        server-addr: ${NACOS_ENDPOINT:127.0.0.1}:${NACOS_PORT:8848}
+        namespace: ${NACOS_NAMESPACE}
+        group: DEFAULT_GROUP
+        file-extension: yaml
+        data-id: ${NACOS_DATAID}
+        # 关闭自动拼接 profile（确保 DATAID 固定）
+        refresh-enabled: true
+        profile-enable: false
