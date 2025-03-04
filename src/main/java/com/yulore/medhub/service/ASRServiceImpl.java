@@ -35,6 +35,11 @@ import java.util.function.Consumer;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+//@ConditionalOnProperty(
+//        prefix = "nlscfg",  // 显式指定前缀
+//        name = "asrEnabled",  // 使用 kebab-case 格式
+//        havingValue = "true"
+//)
 class ASRServiceImpl implements ASRService {
     @Override
     public void startTranscription(final WSCommandVO cmd, final WebSocket webSocket) {

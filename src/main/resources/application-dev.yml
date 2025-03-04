@@ -10,6 +10,3 @@ spring:
     web-application-type: none
   application:
     name: med-hub
-#  cloud:
-#    openfeign:
-#      lazy-attributes-resolution: true

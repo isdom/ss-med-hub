@@ -41,6 +41,7 @@ import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.server.WebSocketServer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
@@ -61,6 +62,7 @@ import java.util.function.Consumer;
 
 @Slf4j
 @Component
+@ConditionalOnProperty(name = "ws_server.enabled", havingValue = "true")
 public class HubMain {
     public static final byte[] EMPTY_BYTES = new byte[0];
     @Value("${ws_server.host}")
@@ -146,9 +148,6 @@ public class HubMain {
 
     @Autowired
     private TTSService ttsService;
-
-    @Autowired
-    WebSocketServer  _ws2;
 
     @Autowired
     public HubMain(final OSS ossClient) {
