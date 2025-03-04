@@ -5,6 +5,7 @@ import com.yulore.medhub.nls.CosyAgent;
 import com.yulore.medhub.nls.TTSAgent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -43,7 +44,7 @@ class TTSServiceImpl implements TTSService {
                 log.info("tts: {} / {}", entry.getKey(), entry.getValue());
                 final String[] values = entry.getValue().split(" ");
                 log.info("tts values detail: {}", Arrays.toString(values));
-                final TTSAgent agent = TTSAgent.parse(entry.getKey(), entry.getValue());
+                final TTSAgent agent = TTSAgent.parse(_alitts_prefix + ":%s", redisson, entry.getKey(), entry.getValue());
                 if (null == agent) {
                     log.warn("tts init failed by: {}/{}", entry.getKey(), entry.getValue());
                 } else {
@@ -115,10 +116,14 @@ class TTSServiceImpl implements TTSService {
     @Value("#{${nls.cosy}}")
     private Map<String,String> _all_cosy;
 
+    @Value("${nls.alitts.prefix}")
+    private String _alitts_prefix;
+
     final List<TTSAgent> _ttsAgents = new ArrayList<>();
     final List<CosyAgent> _cosyAgents = new ArrayList<>();
 
     private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
+    private final RedissonClient redisson;
 
     private NlsClient _nlsClient;
 }

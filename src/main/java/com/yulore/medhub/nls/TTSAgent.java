@@ -7,6 +7,8 @@ import com.alibaba.nls.client.protocol.tts.SpeechSynthesizerListener;
 import lombok.Data;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RAtomicLong;
+import org.redisson.api.RedissonClient;
 
 import java.io.IOException;
 import java.text.SimpleDateFormat;
@@ -20,7 +22,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class TTSAgent {
     NlsClient client;
 
-    String name;
+    final String name;
     String appKey;
     String accessKeyId;
     String accessKeySecret;
@@ -33,10 +35,24 @@ public class TTSAgent {
 
     final AtomicReference<String> _currentToken = new AtomicReference<String>(null);
 
-    public static TTSAgent parse(final String accountName, final String values) {
+    final RAtomicLong _sharedCounter;
+
+    // 新增 Redisson 客户端引用
+    private final RedissonClient redisson;
+
+    public TTSAgent(final String name, final String sharedTemplate, final RedissonClient redisson) {
+        this.name = name;
+        this.redisson = redisson;
+
+        // 获取分布式计数器
+        final String counterKey = String.format(sharedTemplate, this.name);
+        log.info("TTSAgent: {} => shared counter: {}", this.name, counterKey);
+        this._sharedCounter = redisson.getAtomicLong(counterKey);
+    }
+
+    public static TTSAgent parse(final String sharedTemplate, final RedissonClient redisson, final String accountName, final String values) {
         final String[] kvs = values.split(" ");
-        final TTSAgent agent = new TTSAgent();
-        agent.setName(accountName);
+        final TTSAgent agent = new TTSAgent(accountName, sharedTemplate, redisson);
 
         for (String kv : kvs) {
             final String[] ss = kv.split("=");
@@ -69,12 +85,18 @@ public class TTSAgent {
 
     public TTSAgent checkAndSelectIfHasIdle() {
         while (true) {
-            int currentCount = _connectingOrConnectedCount.get();
-            if (currentCount >= limit) {
+            // int currentCount = _connectingOrConnectedCount.get();
+            long current = _sharedCounter.get();
+            if (current >= limit) {
                 // 已经超出限制的并发数
                 return null;
             }
-            if (_connectingOrConnectedCount.compareAndSet(currentCount, currentCount + 1)) {
+
+            //if (_connectingOrConnectedCount.compareAndSet(currentCount, currentCount + 1)) {
+            // 原子递增操作
+            if (_sharedCounter.compareAndSet(current, current + 1)) {
+                // 更新本地计数器用于监控
+                _connectingOrConnectedCount.set((int) current + 1);
                 // 当前的值设置成功，表示 已经成功占用了一个 并发数
                 return this;
             }
@@ -82,10 +104,12 @@ public class TTSAgent {
         }
     }
 
-    public void decConnection() {
+    public int decConnection() {
         // 减少 连接中或已连接的计数
-        final int count = _connectingOrConnectedCount.decrementAndGet();
-        log.info("release tts({}): {}/{}", name, count, limit);
+        final long current = _sharedCounter.decrementAndGet();
+        // 更新本地计数器用于监控
+        _connectingOrConnectedCount.decrementAndGet();
+        return (int)current;
     }
 
     public void incConnected() {

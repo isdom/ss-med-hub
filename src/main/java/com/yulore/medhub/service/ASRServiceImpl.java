@@ -17,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
 import org.java_websocket.exceptions.WebsocketNotConnectedException;
+import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -106,7 +107,7 @@ class ASRServiceImpl implements ASRService {
                 log.info("asr: {} / {}", entry.getKey(), entry.getValue());
                 final String[] values = entry.getValue().split(" ");
                 log.info("asr values detail: {}", Arrays.toString(values));
-                final ASRAgent agent = ASRAgent.parse(entry.getKey(), entry.getValue());
+                final ASRAgent agent = ASRAgent.parse(_aliasr_prefix + ":%s", redisson, entry.getKey(), entry.getValue());
                 if (null == agent) {
                     log.warn("asr init failed by: {}/{}", entry.getKey(), entry.getValue());
                 } else {
@@ -535,10 +536,14 @@ class ASRServiceImpl implements ASRService {
     @Value("#{${nls.txasr}}")
     private Map<String,String> _all_txasr;
 
+    @Value("${nls.aliasr.prefix}")
+    private String _aliasr_prefix;
+
     final List<ASRAgent> _asrAgents = new ArrayList<>();
     final List<TxASRAgent> _txasrAgents = new ArrayList<>();
 
     private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
+    private final RedissonClient redisson;
 
     private NlsClient _nlsClient;
 
