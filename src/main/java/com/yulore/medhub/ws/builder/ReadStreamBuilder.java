@@ -24,6 +24,7 @@ import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
@@ -36,9 +37,10 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
-@Component("readRms")
-@RequiredArgsConstructor
 @Slf4j
+@RequiredArgsConstructor
+@Component("readRms")
+@ConditionalOnProperty(prefix = "feature", name = "readRms", havingValue = "enabled")
 public class ReadStreamBuilder implements WsHandlerBuilder {
     public static final byte[] EMPTY_BYTES = new byte[0];
 

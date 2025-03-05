@@ -20,6 +20,7 @@ import org.java_websocket.handshake.ClientHandshake;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
@@ -30,9 +31,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
-@Component("fsHandler")
-@RequiredArgsConstructor
 @Slf4j
+@RequiredArgsConstructor
+@Component("fsHandler")
+@ConditionalOnProperty(prefix = "feature", name = "fsHandler", havingValue = "enabled")
 public class FsActorBuilder implements WsHandlerBuilder {
     @PostConstruct
     public void start() {

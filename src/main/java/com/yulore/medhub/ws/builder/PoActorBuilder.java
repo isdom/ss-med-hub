@@ -29,6 +29,7 @@ import org.java_websocket.handshake.ClientHandshake;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
@@ -40,9 +41,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-@Component("poHandler")
-@RequiredArgsConstructor
 @Slf4j
+@RequiredArgsConstructor
+@Component("poHandler")
+@ConditionalOnProperty(prefix = "feature", name = "poHandler", havingValue = "enabled")
 public class PoActorBuilder implements WsHandlerBuilder {
     @PostConstruct
     public void start() {

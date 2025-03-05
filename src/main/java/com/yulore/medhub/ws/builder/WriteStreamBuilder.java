@@ -17,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
@@ -29,9 +30,10 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
-@Component("writeRms")
-@RequiredArgsConstructor
 @Slf4j
+@RequiredArgsConstructor
+@Component("writeRms")
+@ConditionalOnProperty(prefix = "feature", name = "writeRms", havingValue = "enabled")
 public class WriteStreamBuilder implements WsHandlerBuilder {
     public static final byte[] EMPTY_BYTES = new byte[0];
 
