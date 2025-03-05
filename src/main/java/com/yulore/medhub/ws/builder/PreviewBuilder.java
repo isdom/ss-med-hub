@@ -49,8 +49,8 @@ import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @RequiredArgsConstructor
-@Component("previewHandler")
-@ConditionalOnProperty(prefix = "feature", name = "previewHandler", havingValue = "enabled")
+@Component("preview_io")
+@ConditionalOnProperty(prefix = "feature", name = "preview_io", havingValue = "enabled")
 public class PreviewBuilder implements WsHandlerBuilder {
     @Override
     public WsHandler build(final String prefix, final WebSocket webSocket, final ClientHandshake handshake) {

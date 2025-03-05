@@ -39,8 +39,8 @@ import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @RequiredArgsConstructor
-@Component("poHandler")
-@ConditionalOnProperty(prefix = "feature", name = "poHandler", havingValue = "enabled")
+@Component("po_io")
+@ConditionalOnProperty(prefix = "feature", name = "po_io", havingValue = "enabled")
 public class PoActorBuilder implements WsHandlerBuilder {
     @PostConstruct
     public void start() {

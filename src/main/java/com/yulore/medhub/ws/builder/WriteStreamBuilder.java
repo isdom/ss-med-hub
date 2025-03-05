@@ -32,8 +32,8 @@ import java.util.function.Consumer;
 
 @Slf4j
 @RequiredArgsConstructor
-@Component("writeRms")
-@ConditionalOnProperty(prefix = "feature", name = "writeRms", havingValue = "enabled")
+@Component("write_rms")
+@ConditionalOnProperty(prefix = "feature", name = "write_rms", havingValue = "enabled")
 public class WriteStreamBuilder implements WsHandlerBuilder {
     public static final byte[] EMPTY_BYTES = new byte[0];
 

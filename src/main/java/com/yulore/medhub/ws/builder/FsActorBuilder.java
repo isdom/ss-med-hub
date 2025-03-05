@@ -33,8 +33,8 @@ import java.util.concurrent.ScheduledExecutorService;
 
 @Slf4j
 @RequiredArgsConstructor
-@Component("fsHandler")
-@ConditionalOnProperty(prefix = "feature", name = "fsHandler", havingValue = "enabled")
+@Component("fs_io")
+@ConditionalOnProperty(prefix = "feature", name = "fs_io", havingValue = "enabled")
 public class FsActorBuilder implements WsHandlerBuilder {
     @PostConstruct
     public void start() {

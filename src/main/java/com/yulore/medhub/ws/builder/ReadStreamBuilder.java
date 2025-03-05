@@ -34,8 +34,8 @@ import java.util.function.Consumer;
 
 @Slf4j
 @RequiredArgsConstructor
-@Component("readRms")
-@ConditionalOnProperty(prefix = "feature", name = "readRms", havingValue = "enabled")
+@Component("read_rms")
+@ConditionalOnProperty(prefix = "feature", name = "read_rms", havingValue = "enabled")
 public class ReadStreamBuilder implements WsHandlerBuilder {
     public static final byte[] EMPTY_BYTES = new byte[0];
 
