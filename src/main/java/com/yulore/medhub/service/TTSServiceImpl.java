@@ -21,13 +21,9 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
-@Service
 @RequiredArgsConstructor
-@ConditionalOnProperty(
-        prefix = "nlscfg",  // 显式指定前缀
-        name = "ttsEnabled",  // 使用 kebab-case 格式
-        havingValue = "true"
-)
+@Service
+@ConditionalOnProperty(prefix = "nls", name = "tts-enabled", havingValue = "true")
 class TTSServiceImpl implements TTSService {
     @PostConstruct
     public void start() {
