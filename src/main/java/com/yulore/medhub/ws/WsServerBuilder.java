@@ -31,7 +31,7 @@ import java.util.function.Function;
 @Slf4j
 public class WsServerBuilder {
 
-    public static final String READ_RMS = "readRms";
+    public static final String READ_RMS = "read_rms";
 
     @Bean(destroyMethod = "stop")
     public WebSocketServer webSocketServer() {
