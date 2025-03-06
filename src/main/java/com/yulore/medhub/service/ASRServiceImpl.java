@@ -541,10 +541,10 @@ class ASRServiceImpl implements ASRService {
     @Value("#{${nls.txasr}}")
     private Map<String,String> _all_txasr;
 
-    @Value("${nls.aliasr.prefix}")
+    @Value("${nls.aliasr-prefix}")
     private String _aliasr_prefix;
 
-    @Value("${nls.txasr.prefix}")
+    @Value("${nls.txasr-prefix}")
     private String _txasr_prefix;
 
     final List<ASRAgent> _asrAgents = new ArrayList<>();

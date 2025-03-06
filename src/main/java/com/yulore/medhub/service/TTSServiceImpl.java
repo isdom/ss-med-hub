@@ -118,10 +118,10 @@ class TTSServiceImpl implements TTSService {
     @Value("#{${nls.cosy}}")
     private Map<String,String> _all_cosy;
 
-    @Value("${nls.alitts.prefix}")
+    @Value("${nls.alitts-prefix}")
     private String _alitts_prefix;
 
-    @Value("${nls.alicosy.prefix}")
+    @Value("${nls.alicosy-prefix}")
     private String _alicosy_prefix;
 
     final List<TTSAgent> _ttsAgents = new ArrayList<>();
