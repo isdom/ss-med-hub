@@ -9,12 +9,13 @@ import com.yulore.medhub.api.CompositeVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 @Slf4j
 @RequiredArgsConstructor
 @Service
-// @ConditionalOnProperty(prefix = "nls", name = "tts-enabled", havingValue = "true")
+@ConditionalOnProperty(prefix = "nls", name = "tts-enabled", havingValue = "true")
 public class BSTServiceImpl implements BSTService {
     @Override
     public BuildStreamTask getTaskOf(final String path, final boolean removeWavHdr, final int sampleRate) {
