@@ -114,7 +114,7 @@ class ASRServiceImpl implements ASRService {
                 if (null == agent) {
                     log.warn("asr init failed by: {}/{}", entry.getKey(), entry.getValue());
                 } else {
-                    agent.setClient(client);
+                    agent.client = client;
                     _asrAgents.add(agent);
                 }
             }
@@ -127,11 +127,11 @@ class ASRServiceImpl implements ASRService {
                 log.info("txasr: {} / {}", entry.getKey(), entry.getValue());
                 final String[] values = entry.getValue().split(" ");
                 log.info("txasr values detail: {}", Arrays.toString(values));
-                final TxASRAgent agent = TxASRAgent.parse(entry.getKey(), entry.getValue());
+                final TxASRAgent agent = TxASRAgent.parse(_txasr_prefix + ":%s", redisson, entry.getKey(), entry.getValue());
                 if (null == agent) {
                     log.warn("txasr init failed by: {}/{}", entry.getKey(), entry.getValue());
                 } else {
-                    agent.setClient(_txClient);
+                    agent.client = _txClient;
                     _txasrAgents.add(agent);
                 }
             }
@@ -146,7 +146,7 @@ class ASRServiceImpl implements ASRService {
         for (ASRAgent agent : _asrAgents) {
             final ASRAgent selected = agent.checkAndSelectIfHasIdle();
             if (null != selected) {
-                log.info("select asr({}): {}/{}", agent.getName(), agent.get_connectingOrConnectedCount().get(), agent.getLimit());
+                log.info("select asr({}): {}/{}", agent.getName(), agent.getConnectingOrConnectedCount().get(), agent.getLimit());
                 return selected;
             }
         }
@@ -158,7 +158,7 @@ class ASRServiceImpl implements ASRService {
         for (TxASRAgent agent : _txasrAgents) {
             final TxASRAgent selected = agent.checkAndSelectIfHasIdle();
             if (null != selected) {
-                log.info("select txasr({}): {}/{}", agent.getName(), agent.get_connectingOrConnectedCount().get(), agent.getLimit());
+                log.info("select txasr({}): {}/{}", agent.getName(), agent.getConnectingOrConnectedCount().get(), agent.getLimit());
                 return selected;
             }
         }
@@ -194,8 +194,9 @@ class ASRServiceImpl implements ASRService {
                 });
 
         session.setASR(()-> {
+            int dec_cnt = 0;
             try {
-                agent.decConnection();
+                dec_cnt = agent.decConnection();
                 try {
                     //通知服务端语音数据发送完毕，等待服务端处理完成。
                     long now = System.currentTimeMillis();
@@ -214,7 +215,7 @@ class ASRServiceImpl implements ASRService {
                 }
             } finally {
                 if (agent != null) {
-                    log.info("release txasr({}): {}/{}", agent.getName(), agent.get_connectingOrConnectedCount().get(), agent.getLimit());
+                    log.info("release txasr({}): {}/{}", agent.getName(), dec_cnt, agent.getLimit());
                 }
             }
         }, (bytes) -> speechRecognizer.write(bytes.array()));
@@ -324,8 +325,9 @@ class ASRServiceImpl implements ASRService {
         }
 
         session.setASR(()-> {
+            int dec_cnt = 0;
             try {
-                agent.decConnection();
+                dec_cnt = agent.decConnection();
                 try {
                     //通知服务端语音数据发送完毕，等待服务端处理完成。
                     long now = System.currentTimeMillis();
@@ -344,7 +346,7 @@ class ASRServiceImpl implements ASRService {
                 }
             } finally {
                 if (agent != null) {
-                    log.info("release asr({}): {}/{}", agent.getName(), agent.get_connectingOrConnectedCount().get(), agent.getLimit());
+                    log.info("release asr({}): {}/{}", agent.getName(), dec_cnt, agent.getLimit());
                 }
             }
         }, (bytes) -> speechTranscriber.send(bytes.array()));
@@ -541,6 +543,9 @@ class ASRServiceImpl implements ASRService {
 
     @Value("${nls.aliasr.prefix}")
     private String _aliasr_prefix;
+
+    @Value("${nls.txasr.prefix}")
+    private String _txasr_prefix;
 
     final List<ASRAgent> _asrAgents = new ArrayList<>();
     final List<TxASRAgent> _txasrAgents = new ArrayList<>();

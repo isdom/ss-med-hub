@@ -50,7 +50,7 @@ class TTSServiceImpl implements TTSService {
                 if (null == agent) {
                     log.warn("tts init failed by: {}/{}", entry.getKey(), entry.getValue());
                 } else {
-                    agent.setClient(client);
+                    agent.client = client;
                     _ttsAgents.add(agent);
                 }
             }
@@ -62,11 +62,11 @@ class TTSServiceImpl implements TTSService {
                 log.info("cosy: {} / {}", entry.getKey(), entry.getValue());
                 final String[] values = entry.getValue().split(" ");
                 log.info("cosy values detail: {}", Arrays.toString(values));
-                final CosyAgent agent = CosyAgent.parse(entry.getKey(), entry.getValue());
+                final CosyAgent agent = CosyAgent.parse(_alicosy_prefix + ":%s", redisson, entry.getKey(), entry.getValue());
                 if (null == agent) {
                     log.warn("cosy init failed by: {}/{}", entry.getKey(), entry.getValue());
                 } else {
-                    agent.setClient(client);
+                    agent.client = client;
                     _cosyAgents.add(agent);
                 }
             }
@@ -81,7 +81,7 @@ class TTSServiceImpl implements TTSService {
         for (TTSAgent agent : _ttsAgents) {
             final TTSAgent selected = agent.checkAndSelectIfHasIdle();
             if (null != selected) {
-                log.info("select tts({}): {}/{}", agent.getName(), agent.get_connectingOrConnectedCount().get(), agent.getLimit());
+                log.info("select tts({}): {}/{}", agent.getName(), agent.getConnectingOrConnectedCount().get(), agent.getLimit());
                 return selected;
             }
         }
@@ -93,7 +93,7 @@ class TTSServiceImpl implements TTSService {
         for (CosyAgent agent : _cosyAgents) {
             final CosyAgent selected = agent.checkAndSelectIfHasIdle();
             if (null != selected) {
-                log.info("select cosy({}): {}/{}", agent.getName(), agent.get_connectingOrConnectedCount().get(), agent.getLimit());
+                log.info("select cosy({}): {}/{}", agent.getName(), agent.getConnectingOrConnectedCount().get(), agent.getLimit());
                 return selected;
             }
         }
@@ -120,6 +120,9 @@ class TTSServiceImpl implements TTSService {
 
     @Value("${nls.alitts.prefix}")
     private String _alitts_prefix;
+
+    @Value("${nls.alicosy.prefix}")
+    private String _alicosy_prefix;
 
     final List<TTSAgent> _ttsAgents = new ArrayList<>();
     final List<CosyAgent> _cosyAgents = new ArrayList<>();

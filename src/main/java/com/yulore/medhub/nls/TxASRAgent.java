@@ -5,49 +5,45 @@ import com.tencent.asrv2.SpeechRecognizerListener;
 import com.tencent.asrv2.SpeechRecognizerRequest;
 import com.tencent.core.ws.Credential;
 import com.tencent.core.ws.SpeechClient;
-import lombok.Data;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RedissonClient;
 
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.UUID;
 import java.util.function.Consumer;
 
-@Data
 @ToString
 @Slf4j
-public class TxASRAgent {
-    SpeechClient client;
+public class TxASRAgent extends LimitAgent<TxASRAgent> {
+    public SpeechClient client;
 
-    String name;
     String appKey;
     String accessKeyId;
     String accessKeySecret;
-    int limit = 0;
-
-    final AtomicInteger _connectingOrConnectedCount = new AtomicInteger(0);
-    final AtomicInteger _connectedCount = new AtomicInteger(0);
 
     final AtomicReference<String> _currentToken = new AtomicReference<String>(null);
 
-    public static TxASRAgent parse(final String accountName, final String values) {
+    public TxASRAgent(final String name, final String sharedTemplate, final RedissonClient redisson) {
+        super(name, sharedTemplate, redisson);
+    }
+
+    public static TxASRAgent parse(final String sharedTemplate, final RedissonClient redisson, final String accountName, final String values) {
         final String[] kvs = values.split(" ");
-        final TxASRAgent agent = new TxASRAgent();
-        agent.setName(accountName);
+        final TxASRAgent agent = new TxASRAgent(accountName, sharedTemplate, redisson);
 
         for (String kv : kvs) {
             final String[] ss = kv.split("=");
             if (ss.length == 2) {
                 switch (ss[0]) {
-                    case "appkey" -> agent.setAppKey(ss[1]);
-                    case "ak_id" -> agent.setAccessKeyId(ss[1]);
-                    case "ak_secret" -> agent.setAccessKeySecret(ss[1]);
+                    case "appkey" -> agent.appKey = ss[1];
+                    case "ak_id" -> agent.accessKeyId = ss[1];
+                    case "ak_secret" -> agent.accessKeySecret = ss[1];
                     case "limit" -> agent.setLimit(Integer.parseInt(ss[1]));
                 }
             }
         }
-        if (agent.getAppKey() != null && agent.getAccessKeyId() != null && agent.getAccessKeySecret() != null && agent.getLimit() != 0) {
+        if (agent.appKey != null && agent.accessKeyId != null && agent.accessKeySecret != null && agent.getLimit() > 0) {
             return agent;
         } else {
             return null;
@@ -72,35 +68,5 @@ public class TxASRAgent {
         final SpeechRecognizer recognizer = new SpeechRecognizer(client, credential, request, listener);
         // recognizer.setAppKey(appKey);
         return recognizer;
-    }
-
-    public TxASRAgent checkAndSelectIfHasIdle() {
-        while (true) {
-            int currentCount = _connectingOrConnectedCount.get();
-            if (currentCount >= limit) {
-                // 已经超出限制的并发数
-                return null;
-            }
-            if (_connectingOrConnectedCount.compareAndSet(currentCount, currentCount + 1)) {
-                // 当前的值设置成功，表示 已经成功占用了一个 并发数
-                return this;
-            }
-            // 若未成功占用，表示有别的线程进行了分配，从头开始检查是否还满足可分配的条件
-        }
-    }
-
-    public void decConnection() {
-        // 减少 连接中或已连接的计数
-        _connectingOrConnectedCount.decrementAndGet();
-    }
-
-    public void incConnected() {
-        // 增加 已连接的计数
-        _connectedCount.incrementAndGet();
-    }
-
-    public void decConnected() {
-        // 减少 已连接的计数
-        _connectedCount.decrementAndGet();
     }
 }
