@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yulore.bst.*;
 import com.yulore.medhub.service.BSTService;
+import com.yulore.medhub.service.CommandExecutor;
 import com.yulore.medhub.session.StreamSession;
 import com.yulore.medhub.vo.*;
 import com.yulore.medhub.ws.WsHandler;
@@ -39,28 +40,19 @@ import java.util.function.Consumer;
 public class ReadStreamBuilder implements WsHandlerBuilder {
     public static final byte[] EMPTY_BYTES = new byte[0];
 
-    @PostConstruct
-    public void start() {
-        _sessionExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
-                new DefaultThreadFactory("sessionExecutor"));
-    }
-
-    @PreDestroy
-    public void stop() throws InterruptedException {
-        _sessionExecutor.shutdownNow();
-    }
-
     @Override
     public WsHandler build(final String prefix, final WebSocket webSocket, final ClientHandshake handshake) {
         final StreamActor actor = new StreamActor() {
             @Override
             public void onMessage(final WebSocket webSocket, final String message) {
-                try {
-                    handleCommand(new ObjectMapper().readValue(message, WSCommandVO.class), webSocket, this);
-                } catch (JsonProcessingException ex) {
-                    log.error("handleCommand {}: {}, an error occurred when parseAsJson: {}",
-                            webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
-                }
+                cmdExecutorProvider.getObject().submit(()-> {
+                    try {
+                        handleCommand(new ObjectMapper().readValue(message, WSCommandVO.class), webSocket, this);
+                    } catch (JsonProcessingException ex) {
+                        log.error("handleCommand {}: {}, an error occurred when parseAsJson: {}",
+                                webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
+                    }
+                });
             }
 
             @Override
@@ -74,16 +66,16 @@ public class ReadStreamBuilder implements WsHandlerBuilder {
 
     private void handleCommand(final WSCommandVO cmd, final WebSocket webSocket, final StreamActor actor) {
         if ("OpenStream".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handleOpenStreamCommand(cmd, webSocket, actor));
+            handleOpenStreamCommand(cmd, webSocket, actor);
         } else if ("GetFileLen".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handleGetFileLenCommand(cmd, webSocket, actor));
+            handleGetFileLenCommand(cmd, webSocket, actor);
         } else if ("FileSeek".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handleFileSeekCommand(cmd, webSocket, actor));
+            handleFileSeekCommand(cmd, webSocket, actor);
         } else if ("FileRead".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handleFileReadCommand(cmd, webSocket, actor));
+            handleFileReadCommand(cmd, webSocket, actor);
         } else if ("FileTell".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handleFileTellCommand(cmd, webSocket, actor));
-        }  else {
+            handleFileTellCommand(cmd, webSocket, actor);
+        } else {
             log.warn("handleCommand: Unknown Command: {}", cmd);
         }
     }
@@ -297,5 +289,5 @@ public class ReadStreamBuilder implements WsHandlerBuilder {
     private BSTService bstService;
 
     private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
-    private ExecutorService _sessionExecutor;
+    private final ObjectProvider<CommandExecutor> cmdExecutorProvider;
 }

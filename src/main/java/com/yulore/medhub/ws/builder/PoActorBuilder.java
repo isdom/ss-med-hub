@@ -8,6 +8,7 @@ import com.yulore.medhub.api.CallApi;
 import com.yulore.medhub.api.ScriptApi;
 import com.yulore.medhub.service.ASRService;
 import com.yulore.medhub.service.BSTService;
+import com.yulore.medhub.service.CommandExecutor;
 import com.yulore.medhub.task.PlayStreamPCMTask2;
 import com.yulore.medhub.task.SampleInfo;
 import com.yulore.medhub.vo.*;
@@ -46,13 +47,10 @@ public class PoActorBuilder implements WsHandlerBuilder {
     public void start() {
         _ossAccessExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
                 new DefaultThreadFactory("ossAccessExecutor"));
-        _sessionExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
-                new DefaultThreadFactory("sessionExecutor"));
     }
 
     @PreDestroy
     public void stop() throws InterruptedException {
-        _sessionExecutor.shutdownNow();
         _ossAccessExecutor.shutdownNow();
     }
 
@@ -95,12 +93,14 @@ public class PoActorBuilder implements WsHandlerBuilder {
                     (_sessionId) -> WSEventVO.sendEvent(webSocket, "CallStarted", new PayloadCallStarted(_sessionId))) {
                 @Override
                 public void onMessage(final WebSocket webSocket, final String message) {
-                    try {
-                        handleCommand(new ObjectMapper().readValue(message, WSCommandVO.class), webSocket, this);
-                    } catch (JsonProcessingException ex) {
-                        log.error("handleHubCommand {}: {}, an error occurred when parseAsJson: {}",
-                                webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
-                    }
+                    cmdExecutorProvider.getObject().submit(()-> {
+                        try {
+                            handleCommand(new ObjectMapper().readValue(message, WSCommandVO.class), webSocket, this);
+                        } catch (JsonProcessingException ex) {
+                            log.error("handleCommand {}: {}, an error occurred when parseAsJson: {}",
+                                    webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
+                        }
+                    });
                 }
 
                 @Override
@@ -149,19 +149,19 @@ public class PoActorBuilder implements WsHandlerBuilder {
 
     private void handleCommand(final WSCommandVO cmd, final WebSocket webSocket, final PoActor actor) {
         if ("StartTranscription".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> asrService.startTranscription(cmd, webSocket));
+            asrService.startTranscription(cmd, webSocket);
         } else if ("StopTranscription".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> asrService.stopTranscription(cmd, webSocket));
+            asrService.stopTranscription(cmd, webSocket);
         }else if ("PCMPlaybackStopped".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handlePCMPlaybackStoppedCommand(cmd, webSocket, actor));
+            handlePCMPlaybackStoppedCommand(cmd, webSocket, actor);
         } else if ("PCMPlaybackPaused".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handlePCMPlaybackPausedCommand(cmd, webSocket, actor));
+            handlePCMPlaybackPausedCommand(cmd, webSocket, actor);
         } else if ("PCMPlaybackResumed".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handlePCMPlaybackResumedCommand(cmd, webSocket, actor));
+            handlePCMPlaybackResumedCommand(cmd, webSocket, actor);
         } else if ("PCMPlaybackStarted".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handlePCMPlaybackStartedCommand(cmd, webSocket, actor));
+            handlePCMPlaybackStartedCommand(cmd, webSocket, actor);
         } else if ("UserAnswer".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handleUserAnswerCommand(cmd, webSocket, actor));
+            handleUserAnswerCommand(cmd, webSocket, actor);
         } else {
             log.warn("handleCommand: Unknown Command: {}", cmd);
         }
@@ -274,7 +274,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
     private String _oss_path;
 
     private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
-    private ExecutorService _sessionExecutor;
+    private final ObjectProvider<CommandExecutor> cmdExecutorProvider;
     private ExecutorService _ossAccessExecutor;
 
     @Autowired

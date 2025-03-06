@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yulore.medhub.api.ScriptApi;
 import com.yulore.medhub.service.ASRService;
+import com.yulore.medhub.service.CommandExecutor;
 import com.yulore.medhub.vo.WSCommandVO;
 import com.yulore.medhub.ws.HandlerUrlBuilder;
 import com.yulore.medhub.ws.actor.FsActor;
@@ -11,8 +12,6 @@ import com.yulore.medhub.vo.WSEventVO;
 import com.yulore.medhub.ws.WsHandler;
 import com.yulore.medhub.ws.WsHandlerBuilder;
 import com.yulore.util.ExceptionUtil;
-import io.netty.util.NettyRuntime;
-import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
@@ -23,12 +22,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
 import javax.annotation.Resource;
 import java.nio.ByteBuffer;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
 @Slf4j
@@ -36,17 +32,6 @@ import java.util.concurrent.ScheduledExecutorService;
 @Component("fs_io")
 @ConditionalOnProperty(prefix = "feature", name = "fs_io", havingValue = "enabled")
 public class FsActorBuilder implements WsHandlerBuilder {
-    @PostConstruct
-    public void start() {
-        _sessionExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
-                new DefaultThreadFactory("sessionExecutor"));
-    }
-
-    @PreDestroy
-    public void stop() throws InterruptedException {
-        _sessionExecutor.shutdownNow();
-    }
-
     @Override
     public WsHandler build(final String prefix, final WebSocket webSocket, final ClientHandshake handshake) {
         // init FsActor attach with webSocket
@@ -74,12 +59,14 @@ public class FsActorBuilder implements WsHandlerBuilder {
                     ()->webSocket.close(1006, "test_disconnect")) {
                 @Override
                 public void onMessage(final WebSocket webSocket, final String message) {
-                    try {
-                        handleCommand(new ObjectMapper().readValue(message, WSCommandVO.class), webSocket);
-                    } catch (JsonProcessingException ex) {
-                        log.error("handleHubCommand {}: {}, an error occurred when parseAsJson: {}",
-                                webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
-                    }
+                    cmdExecutorProvider.getObject().submit(()->{
+                        try {
+                            handleCommand(new ObjectMapper().readValue(message, WSCommandVO.class), webSocket);
+                        } catch (JsonProcessingException ex) {
+                            log.error("handleCommand {}: {}, an error occurred when parseAsJson: {}",
+                                    webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
+                        }
+                    });
                 }
 
                 @Override
@@ -122,20 +109,20 @@ public class FsActorBuilder implements WsHandlerBuilder {
 
     private void handleCommand(final WSCommandVO cmd, final WebSocket webSocket) {
         if ("StartTranscription".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> asrService.startTranscription(cmd, webSocket));
+            asrService.startTranscription(cmd, webSocket);
         } else if ("StopTranscription".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> asrService.stopTranscription(cmd, webSocket));
+            asrService.stopTranscription(cmd, webSocket);
         } else if ("FSPlaybackStarted".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handleFSPlaybackStartedCommand(cmd, webSocket));
+            handleFSPlaybackStartedCommand(cmd, webSocket);
         } else if ("FSPlaybackStopped".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handleFSPlaybackStoppedCommand(cmd, webSocket));
+            handleFSPlaybackStoppedCommand(cmd, webSocket);
         } else if ("FSPlaybackPaused".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handleFSPlaybackPausedCommand(cmd, webSocket));
+            handleFSPlaybackPausedCommand(cmd, webSocket);
         } else if ("FSPlaybackResumed".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handleFSPlaybackResumedCommand(cmd, webSocket));
+            handleFSPlaybackResumedCommand(cmd, webSocket);
         } else if ("FSRecordStarted".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handleFSRecordStartedCommand(cmd, webSocket));
-        }  else {
+            handleFSRecordStartedCommand(cmd, webSocket);
+        } else {
             log.warn("handleCommand: Unknown Command: {}", cmd);
         }
     }
@@ -199,8 +186,7 @@ public class FsActorBuilder implements WsHandlerBuilder {
 
     private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
     private final ObjectProvider<HandlerUrlBuilder> urlProvider;
-
-    private ExecutorService _sessionExecutor;
+    private final ObjectProvider<CommandExecutor> cmdExecutorProvider;
 
     @Autowired
     private ASRService asrService;

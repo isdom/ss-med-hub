@@ -3,6 +3,7 @@ package com.yulore.medhub.ws.builder;
 import com.aliyun.oss.OSS;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yulore.medhub.service.CommandExecutor;
 import com.yulore.medhub.session.StreamSession;
 import com.yulore.medhub.vo.*;
 import com.yulore.medhub.ws.WsHandler;
@@ -41,13 +42,10 @@ public class WriteStreamBuilder implements WsHandlerBuilder {
     public void start() {
         _ossAccessExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
                 new DefaultThreadFactory("ossAccessExecutor"));
-        _sessionExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
-                new DefaultThreadFactory("sessionExecutor"));
     }
 
     @PreDestroy
     public void stop() throws InterruptedException {
-        _sessionExecutor.shutdownNow();
         _ossAccessExecutor.shutdownNow();
     }
 
@@ -56,17 +54,19 @@ public class WriteStreamBuilder implements WsHandlerBuilder {
         final StreamActor actor = new StreamActor() {
             @Override
             public void onMessage(final WebSocket webSocket, final String message) {
-                try {
-                    handleCommand(new ObjectMapper().readValue(message, WSCommandVO.class), webSocket, this);
-                } catch (JsonProcessingException ex) {
-                    log.error("handleCommand {}: {}, an error occurred when parseAsJson: {}",
-                            webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
-                }
+                cmdExecutorProvider.getObject().submit(()-> {
+                    try {
+                        handleCommand(new ObjectMapper().readValue(message, WSCommandVO.class), webSocket, this);
+                    } catch (JsonProcessingException ex) {
+                        log.error("handleCommand {}: {}, an error occurred when parseAsJson: {}",
+                                webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
+                    }
+                });
             }
 
             @Override
             public void onMessage(final WebSocket webSocket, final ByteBuffer bytes) {
-                _sessionExecutor.submit(()-> handleFileWriteCommand(bytes, _ss, webSocket));
+                cmdExecutorProvider.getObject().submit(()-> handleFileWriteCommand(bytes, _ss, webSocket));
             }
         };
         webSocket.setAttachment(actor);
@@ -75,16 +75,16 @@ public class WriteStreamBuilder implements WsHandlerBuilder {
 
     private void handleCommand(final WSCommandVO cmd, final WebSocket webSocket, final StreamActor actor) {
         if ("OpenStream".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handleOpenStreamCommand(cmd, webSocket, actor));
+            handleOpenStreamCommand(cmd, webSocket, actor);
         } else if ("GetFileLen".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handleGetFileLenCommand(cmd, webSocket, actor));
+            handleGetFileLenCommand(cmd, webSocket, actor);
         } else if ("FileSeek".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handleFileSeekCommand(cmd, webSocket, actor));
+            handleFileSeekCommand(cmd, webSocket, actor);
         } else if ("FileRead".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handleFileReadCommand(cmd, webSocket, actor));
+            handleFileReadCommand(cmd, webSocket, actor);
         } else if ("FileTell".equals(cmd.getHeader().get("name"))) {
-            _sessionExecutor.submit(()-> handleFileTellCommand(cmd, webSocket, actor));
-        }  else {
+            handleFileTellCommand(cmd, webSocket, actor);
+        } else {
             log.warn("handleCommand: Unknown Command: {}", cmd);
         }
     }
@@ -294,8 +294,7 @@ public class WriteStreamBuilder implements WsHandlerBuilder {
     }
 
     private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
-
-    private ExecutorService _sessionExecutor;
+    private final ObjectProvider<CommandExecutor> cmdExecutorProvider;
     private ExecutorService _ossAccessExecutor;
 
     private final OSS _ossClient;
