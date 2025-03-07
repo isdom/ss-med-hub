@@ -8,6 +8,7 @@ import com.yulore.bst.*;
 import com.yulore.medhub.api.CompositeVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
@@ -41,7 +42,7 @@ public class BSTServiceImpl implements BSTService {
                 });
                 return bst.key() != null ? _scsService.asCache(bst) : bst;
             } else {
-                final BuildStreamTask bst = new OSSStreamTask(path, _ossClient, removeWavHdr);
+                final BuildStreamTask bst = new OSSStreamTask(path, _ossProvider.getObject(), removeWavHdr);
                 return bst.key() != null ? _scsService.asCache(bst) : bst;
             }
         } catch (Exception ex) {
@@ -55,7 +56,7 @@ public class BSTServiceImpl implements BSTService {
             log.info("support CVO => OSS Stream: {}", cvo);
             return new OSSStreamTask(
                     "{bucket=" + cvo.bucket + ",cache=" + cvo.cache + ",start=" + cvo.start + ",end=" + cvo.end + "}" + cvo.object,
-                    _ossClient, true);
+                    _ossProvider.getObject(), true);
         } else if (cvo.getType() != null && cvo.getType().equals("tts")) {
             log.info("support CVO => TTS Stream: {}", cvo);
             return genTtsStreamTask(cvo);
@@ -113,7 +114,7 @@ public class BSTServiceImpl implements BSTService {
     @Autowired
     private StreamCacheService _scsService;
 
-    private final OSS _ossClient;
+    private final ObjectProvider<OSS> _ossProvider;
 
     @Autowired
     private TTSService ttsService;

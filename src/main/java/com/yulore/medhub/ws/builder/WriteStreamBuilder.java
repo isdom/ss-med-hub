@@ -138,7 +138,7 @@ public class WriteStreamBuilder implements WsHandlerBuilder {
                 (ctx) -> {
                     final long startUploadInMs = System.currentTimeMillis();
                     _ossAccessExecutor.submit(()->{
-                        _ossClient.putObject(ctx.bucketName, ctx.objectName, ctx.content);
+                        _ossProvider.getObject().putObject(ctx.bucketName, ctx.objectName, ctx.content);
                         log.info("[{}]: upload content to oss => bucket:{}/object:{}, cost {} ms",
                                 sessionId, ctx.bucketName, ctx.objectName, System.currentTimeMillis() - startUploadInMs);
                     });
@@ -295,7 +295,6 @@ public class WriteStreamBuilder implements WsHandlerBuilder {
 
     private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
     private final ObjectProvider<CommandExecutor> cmdExecutorProvider;
+    private final ObjectProvider<OSS> _ossProvider;
     private ExecutorService _ossAccessExecutor;
-
-    private final OSS _ossClient;
 }

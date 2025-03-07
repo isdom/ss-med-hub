@@ -85,7 +85,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
                     (ctx) -> {
                         final long startUploadInMs = System.currentTimeMillis();
                         _ossAccessExecutor.submit(() -> {
-                            _ossClient.putObject(ctx.bucketName(), ctx.objectName(), ctx.content());
+                            _ossProvider.getObject().putObject(ctx.bucketName(), ctx.objectName(), ctx.content());
                             log.info("[{}]: upload record to oss => bucket:{}/object:{}, cost {} ms",
                                     ctx.sessionId(), ctx.bucketName(), ctx.objectName(), System.currentTimeMillis() - startUploadInMs);
                         });
@@ -250,7 +250,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
         return task::stop;
     }
 
-    private final OSS _ossClient;
+    private final ObjectProvider<OSS> _ossProvider;
 
     @Autowired
     private BSTService bstService;
