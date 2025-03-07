@@ -131,7 +131,7 @@ public class WsServerBuilder {
                 rrmsUrls.set(masterService.getUrlsOf(READ_RMS));
                 log.debug("{}'s urls: {}", READ_RMS, rrmsUrls.get());
             } catch (Exception ex) {
-                log.info("interact with masterService failed: {}", ex.toString());
+                log.warn("interact with masterService failed: {}", ex.toString());
             }
             return true;
         }, System.currentTimeMillis());
