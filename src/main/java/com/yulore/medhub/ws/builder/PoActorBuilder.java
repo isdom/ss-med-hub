@@ -54,17 +54,20 @@ public class PoActorBuilder implements WsHandlerBuilder {
         _ossAccessExecutor.shutdownNow();
     }
 
+    // wss://domain/path?uuid=XX&tid=XXX&role=call
+    // wss://domain/path?sessionId=xxx&role=playback
+
     @Override
     public WsHandler build(final String prefix, final WebSocket webSocket, final ClientHandshake handshake) {
         final String path = handshake.getResourceDescriptor();
         final int varsBegin = path.indexOf('?');
-        final String sessionId = varsBegin > 0 ? VarsUtil.extractValue(path.substring(varsBegin + 1), "sessionId") : null;
+        final String role = varsBegin > 0 ? VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "role", '&') : null;
 
-        if (sessionId == null) {
-            // means ws with path: /call
+        if ("call".equals(role)) {
+            // means ws with role: call
             // init PoActor attach with webSocket
-            final String uuid = varsBegin > 0 ? VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "uuid", '&') : "unknown";
-            final String tid = varsBegin > 0 ? VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "tid", '&') : "unknown";
+            final String uuid = VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "uuid", '&');
+            final String tid = VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "tid", '&');
             final String clientIp = handshake.getFieldValue("X-Forwarded-For");
             final PoActor actor = new PoActor(
                     clientIp,
@@ -119,12 +122,13 @@ public class PoActorBuilder implements WsHandlerBuilder {
             actor.scheduleCheckIdle(schedulerProvider.getObject(), _check_idle_interval_ms, actor::checkIdle);
             schedulerProvider.getObject().schedule(actor::notifyMockAnswer, _answer_timeout_ms, TimeUnit.MILLISECONDS);
 
-            log.info("ws path match: {}, using ws as PoActor", prefix);
+            log.info("ws path match: {}, using ws as PoActor with role: {}", prefix, role);
             return actor;
         } else {
+            final String sessionId = varsBegin > 0 ? VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "sessionId", '&') : null;
             // init PlaybackSession attach with webSocket
             // final PlaybackActor playbackSession = new PlaybackActor(sessionId);
-            log.info("ws path match: {}, using ws as PoActor's playback ws: [{}]", prefix, sessionId);
+            log.info("ws path match: {}, role: {}, using ws as PoActor's playback ws: [{}]", prefix, role, sessionId);
             final PoActor actor = PoActor.findBy(sessionId);
             if (actor == null) {
                 log.info("can't find callSession by sessionId: {}, ignore", sessionId);
