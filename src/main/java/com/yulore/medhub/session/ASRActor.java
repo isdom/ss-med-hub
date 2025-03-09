@@ -102,7 +102,6 @@ public class ASRActor {
             try {
                 lock();
                 stopASR.run();
-
             } finally {
                 unlock();
             }

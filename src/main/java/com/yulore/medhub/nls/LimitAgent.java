@@ -1,20 +1,15 @@
 package com.yulore.medhub.nls;
 
-import com.alibaba.nls.client.AccessToken;
-import com.alibaba.nls.client.protocol.NlsClient;
-import com.alibaba.nls.client.protocol.asr.SpeechTranscriber;
-import com.alibaba.nls.client.protocol.asr.SpeechTranscriberListener;
 import lombok.Data;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RAtomicLong;
+import org.redisson.api.RFuture;
 import org.redisson.api.RedissonClient;
 
-import java.io.IOException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 @Data
 @ToString
@@ -39,7 +34,6 @@ public class LimitAgent<AGENT extends LimitAgent<?>> {
 
     public AGENT checkAndSelectIfHasIdle() {
         while (true) {
-            // int currentCount = _connectingOrConnectedCount.get();
             long current = _sharedCounter.get();
             if (current >= limit) {
                 // 已经超出限制的并发数
@@ -57,12 +51,56 @@ public class LimitAgent<AGENT extends LimitAgent<?>> {
         }
     }
 
+    public CompletionStage<AGENT> checkAndSelectIfHasIdleAsync() {
+        return attemptSelectAsync(new CompletableFuture<>());
+    }
+
+    private CompletionStage<AGENT> attemptSelectAsync(final CompletableFuture<AGENT> resultFuture) {
+        // 异步获取当前计数器值
+        _sharedCounter.getAsync().whenComplete((current, ex) -> {
+            if (ex != null) {
+                log.warn("attemptSelectAsync: Failed to get current value", ex);
+                attemptSelectAsync(resultFuture); // 重试
+                return;
+            }
+            if (current >= limit) {
+                resultFuture.complete(null); // 资源已耗尽
+                return;
+            }
+            // 异步尝试 CAS 操作
+            _sharedCounter.compareAndSetAsync(current, current + 1)
+                    .whenComplete((success, casEx) -> {
+                        if (casEx != null) {
+                            log.warn("attemptSelectAsync: CAS operation failed", casEx);
+                            attemptSelectAsync(resultFuture); // 重试
+                            return;
+                        }
+                        if (success) {
+                            connectingOrConnectedCount.set(current.intValue() + 1);
+                            resultFuture.complete((AGENT)this); // 选择成功
+                        } else {
+                            attemptSelectAsync(resultFuture); // CAS 失败，继续重试
+                        }
+                    });
+        });
+        return resultFuture;
+    }
+
     public int decConnection() {
         // 减少 连接中或已连接的计数
         final long current = _sharedCounter.decrementAndGet();
         // 更新本地计数器用于监控
         connectingOrConnectedCount.decrementAndGet();
         return (int)current;
+    }
+
+    public CompletionStage<Long> decConnectionAsync() {
+        return _sharedCounter.decrementAndGetAsync()
+                .whenComplete((current, ex) -> {
+                    if (ex == null) {
+                        connectingOrConnectedCount.decrementAndGet();
+                    }
+                });
     }
 
     public void incConnected() {

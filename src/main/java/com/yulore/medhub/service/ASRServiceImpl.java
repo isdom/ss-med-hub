@@ -26,13 +26,12 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.concurrent.CompletableFuture;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -141,6 +140,7 @@ class ASRServiceImpl implements ASRService {
         schedulerProvider.getObject().scheduleAtFixedRate(this::checkAndUpdateASRToken, 0, 10, TimeUnit.MINUTES);
     }
 
+    /*
     @Override
     public ASRAgent selectASRAgent() {
         for (ASRAgent agent : _asrAgents) {
@@ -151,6 +151,35 @@ class ASRServiceImpl implements ASRService {
             }
         }
         throw new RuntimeException("all asr agent has full");
+    }
+    */
+
+    public CompletionStage<ASRAgent> selectASRAgentAsync() {
+        return attemptSelectAgentAsync(new ArrayList<>(_asrAgents).iterator(), new CompletableFuture<>());
+    }
+
+    private CompletionStage<ASRAgent> attemptSelectAgentAsync(final Iterator<ASRAgent> iterator,
+                                                              final CompletableFuture<ASRAgent> resultFuture) {
+        if (!iterator.hasNext()) {
+            resultFuture.completeExceptionally(new RuntimeException("All ASR agents are full"));
+            return resultFuture;
+        }
+        final ASRAgent agent = iterator.next();
+        agent.checkAndSelectIfHasIdleAsync().whenComplete((selected, ex) -> {
+            if (ex != null) {
+                log.error("Error selecting agent", ex);
+                attemptSelectAgentAsync(iterator, resultFuture); // 继续下一个代理
+                return;
+            }
+            if (selected != null) {
+                //log.info("Selected ASR agent: {}", agent.getName());
+                log.info("select asr({}): {}/{}", agent.getName(), agent.getConnectingOrConnectedCount().get(), agent.getLimit());
+                resultFuture.complete(selected); // 成功选择
+            } else {
+                attemptSelectAgentAsync(iterator, resultFuture); // 当前代理无资源，尝试下一个
+            }
+        });
+        return resultFuture;
     }
 
     @Override
@@ -312,7 +341,8 @@ class ASRServiceImpl implements ASRService {
         };
     }
 
-    private void startWithAliasr(final WebSocket webSocket, final ASRActor session, final WSCommandVO cmd) throws Exception {
+    private void startWithAliasr(final WebSocket webSocket, final ASRActor actor, final WSCommandVO cmd) {
+        /*
         final long startConnectingInMs = System.currentTimeMillis();
         final ASRAgent agent = selectASRAgent();
 
@@ -356,6 +386,61 @@ class ASRServiceImpl implements ASRService {
         } catch (Exception ex) {
             log.error("speechTranscriber.start() error: {}", ex.toString());
         }
+         */
+        final long startConnectingInMs = System.currentTimeMillis();
+        selectASRAgentAsync().whenComplete((agent, ex) -> {
+            if (ex != null) {
+                log.error("Failed to select ASR agent", ex);
+                webSocket.close();
+                return;
+            }
+
+            try {
+                final SpeechTranscriber transcriber = actor.onSpeechTranscriberCreated(
+                        buildSpeechTranscriber(agent, buildTranscriberListener(actor, webSocket, agent, actor.sessionId(), startConnectingInMs)));
+
+                if (cmd.getPayload() != null && cmd.getPayload().get("speech_noise_threshold") != null) {
+                    // ref: https://help.aliyun.com/zh/isi/developer-reference/websocket#sectiondiv-rz2-i36-2gv
+                    transcriber.addCustomedParam("speech_noise_threshold", Float.parseFloat(cmd.getPayload().get("speech_noise_threshold")));
+                }
+
+                actor.setASR(() -> {
+                    // int dec_cnt = 0;
+                    try {
+                        /*dec_cnt = */
+                        agent.decConnectionAsync().whenComplete((current, ex2) -> {
+                            log.info("release asr({}): {}/{}", agent.getName(), current, agent.getLimit());
+                        });
+                        try {
+                            //通知服务端语音数据发送完毕，等待服务端处理完成。
+                            long now = System.currentTimeMillis();
+                            log.info("transcriber wait for complete");
+                            transcriber.stop();
+                            log.info("transcriber stop() latency : {} ms", System.currentTimeMillis() - now);
+                        } catch (final Exception ex2) {
+                            log.warn("handleStopAsrCommand error", ex2);
+                        }
+
+                        transcriber.close();
+
+                        if (actor.isTranscriptionStarted()) {
+                            // 对于已经标记了 TranscriptionStarted 的会话, 将其使用的 ASR Account 已连接通道减少一
+                            agent.decConnected();
+                        }
+                    } finally {
+                    }
+                }, (bytes) -> transcriber.send(bytes.array()));
+
+                try {
+                    transcriber.start();
+                } catch (Exception ex2) {
+                    log.error("speechTranscriber.start() error", ex2);
+                }
+            } catch (Exception ex2) {
+                log.error("buildSpeechTranscriber error", ex2);
+            }
+        });
+
     }
 
     private SpeechTranscriber buildSpeechTranscriber(final ASRAgent agent, final SpeechTranscriberListener listener) throws Exception {

@@ -314,7 +314,7 @@ public abstract class FsActor extends ASRActor implements WsHandler {
         if ("cp".equals(vo.getVoiceMode())) {
             return _rms_cp_prefix.replace("{cpvars}", tryExtractCVOS(vo))
                     .replace("{uuid}", _uuid)
-                    .replace("{rrms}", _handlerUrlBuilder.get("readRms"))
+                    .replace("{rrms}", _handlerUrlBuilder.get("read_rms"))
                     .replace("{vars}", vars.get())
                     + playback_id + ".wav"
                     ;
@@ -323,7 +323,7 @@ public abstract class FsActor extends ASRActor implements WsHandler {
         if ("tts".equals(vo.getVoiceMode())) {
             return _rms_tts_prefix
                     .replace("{uuid}", _uuid)
-                    .replace("{rrms}", _handlerUrlBuilder.get("readRms"))
+                    .replace("{rrms}", _handlerUrlBuilder.get("read_rms"))
                     .replace("{vars}", String.format("text=%s,%s",
                             StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(vo.getReply_content()),
                             vars.get()))
@@ -334,7 +334,7 @@ public abstract class FsActor extends ASRActor implements WsHandler {
         if ("wav".equals(vo.getVoiceMode())) {
             return _rms_wav_prefix
                     .replace("{uuid}", _uuid)
-                    .replace("{rrms}", _handlerUrlBuilder.get("readRms"))
+                    .replace("{rrms}", _handlerUrlBuilder.get("read_rms"))
                     .replace("{vars}", vars.get())
                     + vo.getAi_speech_file();
         }
