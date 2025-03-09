@@ -13,7 +13,8 @@ repositories {
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter'
-    // implementation 'com.alibaba.boot:nacos-config-spring-boot-starter:0.2.12'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
     // https://mvnrepository.com/artifact/com.alibaba.cloud/spring-cloud-starter-alibaba-nacos-config
     implementation 'com.alibaba.cloud:spring-cloud-starter-alibaba-nacos-config:2021.0.6.2'
 
@@ -32,6 +33,10 @@ dependencies {
 
     // https://mvnrepository.com/artifact/javax.xml.bind/jaxb-api
     implementation 'javax.xml.bind:jaxb-api:2.3.1'
+
+    implementation 'io.micrometer:micrometer-registry-prometheus:1.9.17'
+    // https://mvnrepository.com/artifact/io.prometheus/simpleclient_pushgateway
+    implementation 'io.prometheus:simpleclient_pushgateway:0.16.0'
 
     compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.20'
     annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.20'

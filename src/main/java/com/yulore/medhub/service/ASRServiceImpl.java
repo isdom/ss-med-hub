@@ -9,6 +9,7 @@ import com.alibaba.nls.client.protocol.asr.SpeechTranscriberListener;
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriberResponse;
 import com.tencent.asrv2.*;
 import com.tencent.core.ws.SpeechClient;
+import com.yulore.medhub.metric.AsyncTaskMetrics;
 import com.yulore.medhub.nls.ASRAgent;
 import com.yulore.medhub.nls.TxASRAgent;
 import com.yulore.medhub.session.*;
@@ -388,12 +389,15 @@ class ASRServiceImpl implements ASRService {
         }
          */
         final long startConnectingInMs = System.currentTimeMillis();
+        final io.micrometer.core.instrument.Timer.Sample sample =
+                io.micrometer.core.instrument.Timer.start();
         selectASRAgentAsync().whenComplete((agent, ex) -> {
             if (ex != null) {
                 log.error("Failed to select ASR agent", ex);
                 webSocket.close();
                 return;
             }
+            sample.stop(asyncTaskMetrics.getTimer());
 
             try {
                 final SpeechTranscriber transcriber = actor.onSpeechTranscriberCreated(
@@ -616,6 +620,9 @@ class ASRServiceImpl implements ASRService {
             log.info("ws disconnected when sendEvent TranscriptionCompleted: {}", ex.toString());
         }
     }
+
+    @Autowired
+    private AsyncTaskMetrics asyncTaskMetrics;
 
     @Value("${nls.url}")
     private String _nls_url;
