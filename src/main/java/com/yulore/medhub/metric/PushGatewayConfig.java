@@ -6,7 +6,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-public class PushgatewayConfig {
+public class PushGatewayConfig {
     @Value("${prometheus.pushgateway.url}")
     private String pushgatewayUrl;
 

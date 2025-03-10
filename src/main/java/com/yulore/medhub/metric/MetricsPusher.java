@@ -3,9 +3,11 @@ package com.yulore.medhub.metric;
 import io.micrometer.prometheus.PrometheusMeterRegistry;
 import io.prometheus.client.CollectorRegistry;
 import io.prometheus.client.exporter.PushGateway;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+@Slf4j
 @Component
 public class MetricsPusher {
     private final PushGateway pushGateway;
@@ -20,10 +22,12 @@ public class MetricsPusher {
     @Scheduled(fixedRate = 30_000)  // 每30秒推送一次
     public void pushMetrics() {
         try {
-            CollectorRegistry promRegistry = registry.getPrometheusRegistry();
+            final CollectorRegistry promRegistry = registry.getPrometheusRegistry();
             pushGateway.pushAdd(promRegistry, jobName);
-        } catch (Exception e) {
+            log.info("pushMetrics: pushGateway.pushAdd with {}/{}", promRegistry, jobName);
+        } catch (Exception ex) {
             // 处理异常（如重试或日志报警）
+            log.warn("pushMetrics: pushGateway.pushAdd failed", ex);
         }
     }
 }
