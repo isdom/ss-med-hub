@@ -3,9 +3,12 @@ package com.yulore.medhub.metric;
 import io.micrometer.prometheus.PrometheusMeterRegistry;
 import io.prometheus.client.CollectorRegistry;
 import io.prometheus.client.exporter.PushGateway;
+import io.prometheus.client.exporter.common.TextFormat;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+
+import java.io.StringWriter;
 
 @Slf4j
 @Component
@@ -23,6 +26,12 @@ public class MetricsPusher {
     public void pushMetrics() {
         try {
             final CollectorRegistry promRegistry = registry.getPrometheusRegistry();
+            {
+                StringWriter writer = new StringWriter();
+                TextFormat.write004(writer, promRegistry.metricFamilySamples());
+                log.debug("pushMetrics: metricFamilySamples \n {}", writer);
+            }
+
             pushGateway.pushAdd(promRegistry, jobName);
             log.info("pushMetrics: pushGateway.pushAdd with {}/{}", promRegistry, jobName);
         } catch (Exception ex) {

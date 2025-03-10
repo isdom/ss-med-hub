@@ -1,5 +1,7 @@
 package com.yulore.medhub.nls;
 
+import com.yulore.medhub.metric.AsyncTaskMetrics;
+import io.micrometer.core.instrument.Timer;
 import lombok.Data;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
@@ -51,8 +53,11 @@ public class LimitAgent<AGENT extends LimitAgent<?>> {
         }
     }
 
-    public CompletionStage<AGENT> checkAndSelectIfHasIdleAsync() {
-        return attemptSelectAsync(new CompletableFuture<>());
+    public CompletionStage<AGENT> checkAndSelectIfHasIdleAsync(final Timer timer) {
+        final Timer.Sample sample = Timer.start();
+        return attemptSelectAsync(new CompletableFuture<>()).whenComplete((agent, ex)->{
+            sample.stop(timer);
+        });
     }
 
     private CompletionStage<AGENT> attemptSelectAsync(final CompletableFuture<AGENT> resultFuture) {

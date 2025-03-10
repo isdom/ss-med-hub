@@ -14,13 +14,13 @@ import com.yulore.medhub.nls.ASRAgent;
 import com.yulore.medhub.nls.TxASRAgent;
 import com.yulore.medhub.session.*;
 import com.yulore.medhub.vo.*;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
 import org.java_websocket.exceptions.WebsocketNotConnectedException;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
@@ -35,7 +35,6 @@ import java.util.function.Consumer;
 import java.util.concurrent.CompletableFuture;
 
 @Slf4j
-@RequiredArgsConstructor
 @Service
 @ConditionalOnProperty(prefix = "nls", name = "asr-enabled", havingValue = "true")
 class ASRServiceImpl implements ASRService {
@@ -166,7 +165,7 @@ class ASRServiceImpl implements ASRService {
             return resultFuture;
         }
         final ASRAgent agent = iterator.next();
-        agent.checkAndSelectIfHasIdleAsync().whenComplete((selected, ex) -> {
+        agent.checkAndSelectIfHasIdleAsync(selectIdleMetrics.getTimer()).whenComplete((selected, ex) -> {
             if (ex != null) {
                 log.error("Error selecting agent", ex);
                 attemptSelectAgentAsync(iterator, resultFuture); // 继续下一个代理
@@ -392,12 +391,12 @@ class ASRServiceImpl implements ASRService {
         final io.micrometer.core.instrument.Timer.Sample sample =
                 io.micrometer.core.instrument.Timer.start();
         selectASRAgentAsync().whenComplete((agent, ex) -> {
+            sample.stop(selectASRAgentMetrics.getTimer());
             if (ex != null) {
                 log.error("Failed to select ASR agent", ex);
                 webSocket.close();
                 return;
             }
-            sample.stop(asyncTaskMetrics.getTimer());
 
             try {
                 final SpeechTranscriber transcriber = actor.onSpeechTranscriberCreated(
@@ -621,8 +620,13 @@ class ASRServiceImpl implements ASRService {
         }
     }
 
+    @Qualifier("selectIfIdle")
     @Autowired
-    private AsyncTaskMetrics asyncTaskMetrics;
+    private AsyncTaskMetrics selectIdleMetrics;
+
+    @Qualifier("selectASRAgent")
+    @Autowired
+    private AsyncTaskMetrics selectASRAgentMetrics;
 
     @Value("${nls.url}")
     private String _nls_url;
