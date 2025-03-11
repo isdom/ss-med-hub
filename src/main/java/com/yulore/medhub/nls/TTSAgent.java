@@ -13,6 +13,7 @@ import org.redisson.api.RedissonClient;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -101,9 +102,9 @@ public class TTSAgent extends LimitAgent<TTSAgent> {
     }
 
     @Override
-    public int decConnection() {
-        final int count = super.decConnection();
-        log.info("release tts({}): {}/{}", getName(), count, getLimit());
-        return count;
+    public CompletionStage<Long> decConnectionAsync() {
+        return super.decConnectionAsync().whenComplete((current, ex)->{
+            log.info("release tts({}): {}/{}", getName(), current, getLimit());
+        });
     }
 }

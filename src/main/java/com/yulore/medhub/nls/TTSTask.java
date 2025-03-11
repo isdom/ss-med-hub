@@ -1,7 +1,5 @@
 package com.yulore.medhub.nls;
 
-import com.alibaba.nls.client.protocol.OutputFormatEnum;
-import com.alibaba.nls.client.protocol.SampleRateEnum;
 import com.alibaba.nls.client.protocol.tts.SpeechSynthesizer;
 import com.alibaba.nls.client.protocol.tts.SpeechSynthesizerListener;
 import com.alibaba.nls.client.protocol.tts.SpeechSynthesizerResponse;
@@ -28,7 +26,7 @@ public class TTSTask {
                     //调用onComplete时表示所有TTS数据已接收完成，因此为整个合成数据的延迟。该延迟可能较大，不一定满足实时场景。
                     log.info("onComplete: name:{}, status:{}", response.getName(), response.getStatus());
                     _synthesizer.close();
-                    agent.decConnection();
+                    agent.decConnectionAsync();
                     onComplete.accept(response);
                 }
 
@@ -43,7 +41,7 @@ public class TTSTask {
                     //task_id是调用方和服务端通信的唯一标识，当遇到问题时需要提供task_id以便排查。
                     log.info("onFail: task_id:{}, status:{}, status_text:{}",
                             response.getTaskId(), response.getStatus(), response.getStatusText());
-                    agent.decConnection();
+                    agent.decConnectionAsync();
                     onFail.accept(response);
                 }
             });

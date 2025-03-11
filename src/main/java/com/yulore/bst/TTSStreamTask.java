@@ -11,15 +11,15 @@ import com.yulore.medhub.nls.TTSTask;
 import com.yulore.util.VarsUtil;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 
 @Slf4j
 public class TTSStreamTask implements BuildStreamTask {
     final HashFunction _MD5 = Hashing.md5();
 
-    public TTSStreamTask(final String path, final Supplier<TTSAgent> getTTSAgent, final Consumer<SpeechSynthesizer> onSynthesizer) {
+    public TTSStreamTask(final String path, final CompletionStage<TTSAgent> getTTSAgent, final Consumer<SpeechSynthesizer> onSynthesizer) {
         _getTTSAgent = getTTSAgent;
         _onSynthesizer = onSynthesizer;
 
@@ -79,44 +79,50 @@ public class TTSStreamTask implements BuildStreamTask {
         final AtomicInteger idx = new AtomicInteger(0);
         final long startInMs = System.currentTimeMillis();
 
-        final TTSTask task = new TTSTask(_getTTSAgent.get(),
-                (synthesizer)->{
-                    synthesizer.setText(_text);
-                    if (null != _voice && !_voice.isEmpty()) {
-                        synthesizer.setVoice(_voice);
-                    }
-                    if (null != _pitch_rate && !_pitch_rate.isEmpty()) {
-                        synthesizer.setPitchRate(Integer.parseInt(_pitch_rate));
-                    }
-                    if (null != _speech_rate && !_speech_rate.isEmpty()) {
-                        synthesizer.setSpeechRate(Integer.parseInt(_speech_rate));
-                    }
-                    if (null != _volume && !_volume.isEmpty()) {
-                        synthesizer.setVolume(Integer.parseInt(_volume));
-                    }
+        _getTTSAgent.whenComplete((agent, ex)->{
+            if (ex != null) {
+                log.error("failed to get tts agent", ex);
+                return;
+            }
+            final TTSTask task = new TTSTask(agent,
+                    (synthesizer)->{
+                        synthesizer.setText(_text);
+                        if (null != _voice && !_voice.isEmpty()) {
+                            synthesizer.setVoice(_voice);
+                        }
+                        if (null != _pitch_rate && !_pitch_rate.isEmpty()) {
+                            synthesizer.setPitchRate(Integer.parseInt(_pitch_rate));
+                        }
+                        if (null != _speech_rate && !_speech_rate.isEmpty()) {
+                            synthesizer.setSpeechRate(Integer.parseInt(_speech_rate));
+                        }
+                        if (null != _volume && !_volume.isEmpty()) {
+                            synthesizer.setVolume(Integer.parseInt(_volume));
+                        }
 
-                    if (_onSynthesizer != null) {
-                        _onSynthesizer.accept(synthesizer);
-                    }
-                },
-                (bytes) -> {
-                    final byte[] bytesArray = new byte[bytes.remaining()];
-                    bytes.get(bytesArray, 0, bytesArray.length);
-                    onPart.accept(bytesArray);
-                    log.info("TTSStreamTask: {}: onData {} bytes", idx.incrementAndGet(), bytesArray.length);
-                },
-                (response)->{
-                    onCompleted.accept(true);
-                    log.info("TTSStreamTask: gen wav stream cost={} ms", System.currentTimeMillis() - startInMs);
-                },
-                (response)-> {
-                    onCompleted.accept(false);
-                    log.warn("tts failed: {}", response);
-                });
-        task.start();
+                        if (_onSynthesizer != null) {
+                            _onSynthesizer.accept(synthesizer);
+                        }
+                    },
+                    (bytes) -> {
+                        final byte[] bytesArray = new byte[bytes.remaining()];
+                        bytes.get(bytesArray, 0, bytesArray.length);
+                        onPart.accept(bytesArray);
+                        log.info("TTSStreamTask: {}: onData {} bytes", idx.incrementAndGet(), bytesArray.length);
+                    },
+                    (response)->{
+                        onCompleted.accept(true);
+                        log.info("TTSStreamTask: gen wav stream cost={} ms", System.currentTimeMillis() - startInMs);
+                    },
+                    (response)-> {
+                        onCompleted.accept(false);
+                        log.warn("tts failed: {}", response);
+                    });
+            task.start();
+        });
     }
 
-    private final Supplier<TTSAgent> _getTTSAgent;
+    private final CompletionStage<TTSAgent> _getTTSAgent;
     private final Consumer<SpeechSynthesizer> _onSynthesizer;
     private final String _key;
     private final String _text;

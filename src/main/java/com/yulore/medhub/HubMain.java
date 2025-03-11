@@ -3,6 +3,7 @@ package com.yulore.medhub;
 import com.alibaba.nls.client.protocol.OutputFormatEnum;
 import com.alibaba.nls.client.protocol.SampleRateEnum;
 import com.aliyun.oss.OSS;
+import com.aliyun.oss.model.OSSObject;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Charsets;
@@ -50,6 +51,7 @@ import javax.annotation.Resource;
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.UnsupportedAudioFileException;
 import java.io.*;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
@@ -886,13 +888,13 @@ public class HubMain {
                     return null;
                 }, removeWavHdr);
             } else if (path.contains("type=tts")) {
-                final BuildStreamTask bst = new TTSStreamTask(path, ttsService::selectTTSAgent, (synthesizer) -> {
+                final BuildStreamTask bst = new TTSStreamTask(path, ttsService.selectTTSAgentAsync(), (synthesizer) -> {
                     synthesizer.setFormat(removeWavHdr ? OutputFormatEnum.PCM : OutputFormatEnum.WAV);
                     synthesizer.setSampleRate(sampleRate);
                 });
                 return bst.key() != null ? _scsService.asCache(bst) : bst;
             } else if (path.contains("type=cosy")) {
-                final BuildStreamTask bst = new CosyStreamTask(path, ttsService::selectCosyAgent, (synthesizer) -> {
+                final BuildStreamTask bst = new CosyStreamTask(path, ttsService.selectCosyAgentAsync(), (synthesizer) -> {
                     synthesizer.setFormat(removeWavHdr ? OutputFormatEnum.PCM : OutputFormatEnum.WAV);
                     synthesizer.setSampleRate(sampleRate);
                 });
@@ -926,7 +928,7 @@ public class HubMain {
     }
 
     private BuildStreamTask genCosyStreamTask(final CompositeVO cvo) {
-        return new CosyStreamTask(cvo2cosy(cvo), ttsService::selectCosyAgent, (synthesizer) -> {
+        return new CosyStreamTask(cvo2cosy(cvo), ttsService.selectCosyAgentAsync(), (synthesizer) -> {
             //设置返回音频的编码格式
             synthesizer.setFormat(OutputFormatEnum.PCM);
             //设置返回音频的采样率。
@@ -935,7 +937,7 @@ public class HubMain {
     }
 
     private BuildStreamTask genTtsStreamTask(final CompositeVO cvo) {
-        return new TTSStreamTask(cvo2tts(cvo), ttsService::selectTTSAgent, (synthesizer) -> {
+        return new TTSStreamTask(cvo2tts(cvo), ttsService.selectTTSAgentAsync(), (synthesizer) -> {
             //设置返回音频的编码格式
             synthesizer.setFormat(OutputFormatEnum.PCM);
             //设置返回音频的采样率
@@ -1110,6 +1112,7 @@ public class HubMain {
         ss.sendEvent(startInMs, "FileTellResult", new PayloadFileSeekResult(ss.tell()));
     }
 
+    /*
     private void handlePlayTTSCommand(final WSCommandVO cmd, final WebSocket webSocket) {
         final String text = cmd.getPayload().get("text");
         if (text == null ) {
@@ -1147,7 +1150,6 @@ public class HubMain {
         task.start();
     }
 
-    /*
     private void handlePlaybackCommand(final WSCommandVO cmd, final WebSocket webSocket) {
         final MediaSession session = webSocket.getAttachment();
         if (session == null) {

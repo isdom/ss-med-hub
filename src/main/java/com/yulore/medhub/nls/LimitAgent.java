@@ -60,6 +60,7 @@ public class LimitAgent<AGENT extends LimitAgent<?>> {
         this._sharedCounter = redisson.getAtomicLong(counterKey);
     }
 
+    /*
     public AGENT checkAndSelectIfHasIdle() {
         while (true) {
             long current = _sharedCounter.get();
@@ -78,6 +79,7 @@ public class LimitAgent<AGENT extends LimitAgent<?>> {
             // 若未成功占用，表示有别的线程进行了分配，从头开始检查是否还满足可分配的条件
         }
     }
+    */
 
     public CompletionStage<AGENT> checkAndSelectIfHasIdleAsync(final Timer timer) {
         final Timer.Sample sample = Timer.start();
@@ -117,6 +119,7 @@ public class LimitAgent<AGENT extends LimitAgent<?>> {
         return resultFuture;
     }
 
+    /*
     public int decConnection() {
         // 减少 连接中或已连接的计数
         final long current = _sharedCounter.decrementAndGet();
@@ -124,6 +127,7 @@ public class LimitAgent<AGENT extends LimitAgent<?>> {
         connectingOrConnectedCount.decrementAndGet();
         return (int)current;
     }
+    */
 
     public CompletionStage<Long> decConnectionAsync() {
         return _sharedCounter.decrementAndGetAsync()

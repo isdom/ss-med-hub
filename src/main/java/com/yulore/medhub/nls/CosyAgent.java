@@ -11,6 +11,7 @@ import org.redisson.api.RedissonClient;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicReference;
 
 @ToString
@@ -98,9 +99,9 @@ public class CosyAgent extends LimitAgent<CosyAgent> {
     }
 
     @Override
-    public int decConnection() {
-        final int count = super.decConnection();
-        log.info("release cosy({}): {}/{}", getName(), count, getLimit());
-        return count;
+    public CompletionStage<Long> decConnectionAsync() {
+        return super.decConnectionAsync().whenComplete((current, ex)->{
+            log.info("release cosy({}): {}/{}", getName(), current, getLimit());
+        });
     }
 }

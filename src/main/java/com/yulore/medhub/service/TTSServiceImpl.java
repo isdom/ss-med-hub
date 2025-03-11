@@ -1,12 +1,15 @@
 package com.yulore.medhub.service;
 
 import com.alibaba.nls.client.protocol.NlsClient;
+import com.yulore.medhub.metric.AsyncTaskMetrics;
 import com.yulore.medhub.nls.CosyAgent;
+import com.yulore.medhub.nls.LimitAgent;
 import com.yulore.medhub.nls.TTSAgent;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
@@ -17,11 +20,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
-@RequiredArgsConstructor
 @Service
 @ConditionalOnProperty(prefix = "nls", name = "tts-enabled", havingValue = "true")
 class TTSServiceImpl implements TTSService {
@@ -76,28 +80,38 @@ class TTSServiceImpl implements TTSService {
         schedulerProvider.getObject().scheduleAtFixedRate(this::checkAndUpdateTTSToken, 0, 10, TimeUnit.MINUTES);
     }
 
+//    @Override
+//    public TTSAgent selectTTSAgent() {
+//        for (TTSAgent agent : _ttsAgents) {
+//            final TTSAgent selected = agent.checkAndSelectIfHasIdle();
+//            if (null != selected) {
+//                log.info("select tts({}): {}/{}", agent.getName(), agent.getConnectingOrConnectedCount().get(), agent.getLimit());
+//                return selected;
+//            }
+//        }
+//        throw new RuntimeException("all tts agent has full");
+//    }
+//
+//    @Override
+//    public CosyAgent selectCosyAgent() {
+//        for (CosyAgent agent : _cosyAgents) {
+//            final CosyAgent selected = agent.checkAndSelectIfHasIdle();
+//            if (null != selected) {
+//                log.info("select cosy({}): {}/{}", agent.getName(), agent.getConnectingOrConnectedCount().get(), agent.getLimit());
+//                return selected;
+//            }
+//        }
+//        throw new RuntimeException("all cosy agent has full");
+//    }
+
     @Override
-    public TTSAgent selectTTSAgent() {
-        for (TTSAgent agent : _ttsAgents) {
-            final TTSAgent selected = agent.checkAndSelectIfHasIdle();
-            if (null != selected) {
-                log.info("select tts({}): {}/{}", agent.getName(), agent.getConnectingOrConnectedCount().get(), agent.getLimit());
-                return selected;
-            }
-        }
-        throw new RuntimeException("all tts agent has full");
+    public CompletionStage<TTSAgent> selectTTSAgentAsync() {
+        return LimitAgent.attemptSelectAgentAsync(new ArrayList<>(_ttsAgents).iterator(), new CompletableFuture<>(), selectIdleTTS.getTimer());
     }
 
     @Override
-    public CosyAgent selectCosyAgent() {
-        for (CosyAgent agent : _cosyAgents) {
-            final CosyAgent selected = agent.checkAndSelectIfHasIdle();
-            if (null != selected) {
-                log.info("select cosy({}): {}/{}", agent.getName(), agent.getConnectingOrConnectedCount().get(), agent.getLimit());
-                return selected;
-            }
-        }
-        throw new RuntimeException("all cosy agent has full");
+    public CompletionStage<CosyAgent> selectCosyAgentAsync() {
+        return LimitAgent.attemptSelectAgentAsync(new ArrayList<>(_cosyAgents).iterator(), new CompletableFuture<>(), selectIdleCosy.getTimer());
     }
 
     private void checkAndUpdateTTSToken() {
@@ -108,6 +122,22 @@ class TTSServiceImpl implements TTSService {
             agent.checkAndUpdateAccessToken();
         }
     }
+
+    @Qualifier("selectIdleTTS")
+    @Autowired
+    private AsyncTaskMetrics selectIdleTTS;
+
+    @Qualifier("selectIdleCosy")
+    @Autowired
+    private AsyncTaskMetrics selectIdleCosy;
+
+    @Qualifier("selectTTSAgent")
+    @Autowired
+    private AsyncTaskMetrics selectTTSAgent;
+
+    @Qualifier("selectCosyAgent")
+    @Autowired
+    private AsyncTaskMetrics selectCosyAgent;
 
     @Value("${nls.url}")
     private String _nls_url;
@@ -127,8 +157,11 @@ class TTSServiceImpl implements TTSService {
     final List<TTSAgent> _ttsAgents = new ArrayList<>();
     final List<CosyAgent> _cosyAgents = new ArrayList<>();
 
-    private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
-    private final RedissonClient redisson;
+    @Autowired
+    private ObjectProvider<ScheduledExecutorService> schedulerProvider;
+
+    @Autowired
+    private RedissonClient redisson;
 
     private NlsClient _nlsClient;
 }
