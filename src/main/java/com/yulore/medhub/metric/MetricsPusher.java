@@ -15,7 +15,7 @@ import java.io.StringWriter;
 public class MetricsPusher {
     private final PushGateway pushGateway;
     private final PrometheusMeterRegistry registry;
-    private final String jobName = "redisson_async_tasks";
+    private final String jobName = "medhub_tasks";
 
     public MetricsPusher(final PushGateway pushGateway, final PrometheusMeterRegistry registry) {
         this.pushGateway = pushGateway;
@@ -29,11 +29,10 @@ public class MetricsPusher {
             {
                 StringWriter writer = new StringWriter();
                 TextFormat.write004(writer, promRegistry.metricFamilySamples());
-                log.debug("pushMetrics: metricFamilySamples \n {}", writer);
+                log.info("pushMetrics: pushGateway.pushAdd metricFamilySamples \n {}\n with {}", writer, jobName);
             }
-
             pushGateway.pushAdd(promRegistry, jobName);
-            log.info("pushMetrics: pushGateway.pushAdd with {}/{}", promRegistry, jobName);
+            log.info("pushMetrics: pushGateway.pushAdd ended for {}", jobName);
         } catch (Exception ex) {
             // 处理异常（如重试或日志报警）
             log.warn("pushMetrics: pushGateway.pushAdd failed", ex);
