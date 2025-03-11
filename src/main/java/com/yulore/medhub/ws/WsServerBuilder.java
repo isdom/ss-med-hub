@@ -19,6 +19,7 @@ import java.net.*;
 import java.nio.ByteBuffer;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -113,38 +114,46 @@ public class WsServerBuilder {
         };
         server.start();
         log.info("WS Server Started -- {}:{}", server.getAddress(), server.getPort());
-        updateHubStatus();
+        launchUpdateHubStatus();
         return server;
     }
 
-    private void updateHubStatus() {
-        final MasterService masterService = redisson.getRemoteService(_service_master)
-                .get(MasterService.class, RemoteInvocationOptions.defaults()
+    private void launchUpdateHubStatus() {
+        final MasterServiceAsync masterService = redisson.getRemoteService(_service_master)
+                .get(MasterServiceAsync.class, RemoteInvocationOptions.defaults()
                         .noAck()
                         .expectResultWithin(3, TimeUnit.SECONDS));
 
         final String ipAndPort = ipv4Provider.getObject().getHostAddress() + ":" + configProps.port;
 
-        checkAndScheduleNext((startedTimestamp)-> {
-            try {
-                masterService.updateHubStatus(ipAndPort, configProps.pathMappings, System.currentTimeMillis());
-                rrmsUrls.set(masterService.getUrlsOf(READ_RMS));
-                log.debug("{}'s urls: {}", READ_RMS, rrmsUrls.get());
-            } catch (Exception ex) {
-                log.warn("interact with masterService failed: {}", ex.toString());
-            }
-            return true;
-        }, System.currentTimeMillis());
+        checkAndScheduleNext(startedTimestamp ->
+            masterService.updateHubStatus(ipAndPort, configProps.pathMappings, System.currentTimeMillis())
+                .thenCompose(v-> masterService.getUrlsOf(READ_RMS))
+                .handle((urls, ex) -> {
+                    if (ex != null) {
+                        log.warn("interact with masterService failed: {}", ex.toString());
+                    } else {
+                        rrmsUrls.set(urls);
+                        log.info("{}'s urls: {}", READ_RMS, rrmsUrls.get());
+                    }
+                    return true;
+                })
+        , System.currentTimeMillis());
     }
 
-    private void checkAndScheduleNext(final Function<Long, Boolean> doCheck, final long timestamp) {
-        try {
-            if (doCheck.apply(timestamp)) {
+    private void checkAndScheduleNext(final Function<Long, CompletionStage<Boolean>> doCheck, final long timestamp) {
+        doCheck.apply(timestamp).whenComplete((isContinue, ex)->{
+            if (ex != null) {
+                log.warn("checkAndScheduleNext: failed", ex);
                 schedulerProvider.getObject().schedule(()->checkAndScheduleNext(doCheck, timestamp), _check_interval, TimeUnit.MILLISECONDS);
+            } else {
+                if (isContinue) {
+                    schedulerProvider.getObject().schedule(()->checkAndScheduleNext(doCheck, timestamp), _check_interval, TimeUnit.MILLISECONDS);
+                } else {
+                    log.warn("checkAndScheduleNext: isContinue is false, stop schedule next");
+                }
             }
-        } catch (final Exception ex) {
-            log.warn("checkAndScheduleNext: exception: {}", ExceptionUtil.exception2detail(ex));
-        }
+        });
     }
 
     @Bean
