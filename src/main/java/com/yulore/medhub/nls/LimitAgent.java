@@ -9,6 +9,7 @@ import org.redisson.api.RAtomicLong;
 import org.redisson.api.RFuture;
 import org.redisson.api.RedissonClient;
 
+import java.util.Iterator;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -24,6 +25,31 @@ public class LimitAgent<AGENT extends LimitAgent<?>> {
     private final AtomicInteger connectedCount = new AtomicInteger(0);
 
     private final RAtomicLong _sharedCounter;
+
+    public static <AGENT extends LimitAgent<?>> CompletionStage<AGENT> attemptSelectAgentAsync(
+            final Iterator<AGENT> iterator,
+            final CompletableFuture<AGENT> resultFuture,
+            final Timer timer) {
+        if (!iterator.hasNext()) {
+            resultFuture.completeExceptionally(new RuntimeException("All Agents are full"));
+            return resultFuture;
+        }
+        final AGENT agent = iterator.next();
+        agent.checkAndSelectIfHasIdleAsync(timer).whenComplete((selected, ex) -> {
+            if (ex != null) {
+                log.error("Error selecting agent", ex);
+                attemptSelectAgentAsync(iterator, resultFuture, timer); // 继续下一个代理
+                return;
+            }
+            if (selected != null) {
+                log.info("select agent({}): {}/{}", agent.getName(), agent.getConnectingOrConnectedCount().get(), agent.getLimit());
+                resultFuture.complete((AGENT)selected); // 成功选择
+            } else {
+                attemptSelectAgentAsync(iterator, resultFuture, timer); // 当前代理无资源，尝试下一个
+            }
+        });
+        return resultFuture;
+    }
 
     public LimitAgent(final String name, final String sharedTemplate, final RedissonClient redisson) {
         this.name = name;

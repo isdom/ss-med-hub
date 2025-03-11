@@ -11,9 +11,11 @@ import com.tencent.asrv2.*;
 import com.tencent.core.ws.SpeechClient;
 import com.yulore.medhub.metric.AsyncTaskMetrics;
 import com.yulore.medhub.nls.ASRAgent;
+import com.yulore.medhub.nls.LimitAgent;
 import com.yulore.medhub.nls.TxASRAgent;
 import com.yulore.medhub.session.*;
 import com.yulore.medhub.vo.*;
+import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
 import org.java_websocket.exceptions.WebsocketNotConnectedException;
@@ -41,32 +43,42 @@ class ASRServiceImpl implements ASRService {
     @Override
     public void startTranscription(final WSCommandVO cmd, final WebSocket webSocket) {
         final String provider = cmd.getPayload() != null ? cmd.getPayload().get("provider") : null;
-        final ASRActor session = webSocket.getAttachment();
-        if (session == null) {
+        final ASRActor actor = webSocket.getAttachment();
+        if (actor == null) {
             log.error("StartTranscription: {} without ASRSession, abort", webSocket.getRemoteSocketAddress());
             return;
         }
 
-        try {
-            session.lock();
+        {
+            actor.lock();
 
-            if (!session.startTranscription()) {
+            if (!actor.startTranscription()) {
+                actor.unlock();
                 log.warn("StartTranscription: {}'s Session startTranscription already, ignore", webSocket.getRemoteSocketAddress());
                 return;
             }
 
             if ("tx".equals(provider)) {
-                startWithTxasr(webSocket, session, cmd);
+                startWithTxasr(webSocket, actor, cmd).whenComplete( (v,ex) -> {
+                    actor.unlock();
+                    if (ex != null) {
+                        log.error("StartTranscription: failed: {}", ex.toString());
+                        // throw new RuntimeException(ex);
+                    }
+                });
             } else {
-                startWithAliasr(webSocket, session, cmd);
+                startWithAliasr(webSocket, actor, cmd).whenComplete( (v,ex) -> {
+                    actor.unlock();
+                    if (ex != null) {
+                        log.error("StartTranscription: failed: {}", ex.toString());
+                        // throw new RuntimeException(ex);
+                    }
+                });
             }
-        } catch (Exception ex) {
+        } /*catch (Exception ex) {*/
             // TODO: close websocket?
-            log.error("StartTranscription: failed: {}", ex.toString());
-            throw new RuntimeException(ex);
-        } finally {
-            session.unlock();
-        }
+//            log.error("StartTranscription: failed: {}", ex.toString());
+//            throw new RuntimeException(ex);
     }
 
     @Override
@@ -140,58 +152,12 @@ class ASRServiceImpl implements ASRService {
         schedulerProvider.getObject().scheduleAtFixedRate(this::checkAndUpdateASRToken, 0, 10, TimeUnit.MINUTES);
     }
 
-    /*
-    @Override
-    public ASRAgent selectASRAgent() {
-        for (ASRAgent agent : _asrAgents) {
-            final ASRAgent selected = agent.checkAndSelectIfHasIdle();
-            if (null != selected) {
-                log.info("select asr({}): {}/{}", agent.getName(), agent.getConnectingOrConnectedCount().get(), agent.getLimit());
-                return selected;
-            }
-        }
-        throw new RuntimeException("all asr agent has full");
-    }
-    */
-
     public CompletionStage<ASRAgent> selectASRAgentAsync() {
-        return attemptSelectAgentAsync(new ArrayList<>(_asrAgents).iterator(), new CompletableFuture<>());
+        return LimitAgent.attemptSelectAgentAsync(new ArrayList<>(_asrAgents).iterator(), new CompletableFuture<>(), selectIdleASR.getTimer());
     }
 
-    private CompletionStage<ASRAgent> attemptSelectAgentAsync(final Iterator<ASRAgent> iterator,
-                                                              final CompletableFuture<ASRAgent> resultFuture) {
-        if (!iterator.hasNext()) {
-            resultFuture.completeExceptionally(new RuntimeException("All ASR agents are full"));
-            return resultFuture;
-        }
-        final ASRAgent agent = iterator.next();
-        agent.checkAndSelectIfHasIdleAsync(selectIdleMetrics.getTimer()).whenComplete((selected, ex) -> {
-            if (ex != null) {
-                log.error("Error selecting agent", ex);
-                attemptSelectAgentAsync(iterator, resultFuture); // 继续下一个代理
-                return;
-            }
-            if (selected != null) {
-                //log.info("Selected ASR agent: {}", agent.getName());
-                log.info("select asr({}): {}/{}", agent.getName(), agent.getConnectingOrConnectedCount().get(), agent.getLimit());
-                resultFuture.complete(selected); // 成功选择
-            } else {
-                attemptSelectAgentAsync(iterator, resultFuture); // 当前代理无资源，尝试下一个
-            }
-        });
-        return resultFuture;
-    }
-
-    @Override
-    public TxASRAgent selectTxASRAgent() {
-        for (TxASRAgent agent : _txasrAgents) {
-            final TxASRAgent selected = agent.checkAndSelectIfHasIdle();
-            if (null != selected) {
-                log.info("select txasr({}): {}/{}", agent.getName(), agent.getConnectingOrConnectedCount().get(), agent.getLimit());
-                return selected;
-            }
-        }
-        throw new RuntimeException("all txasr agent has full");
+    public CompletionStage<TxASRAgent> selectTxASRAgentAsync() {
+        return LimitAgent.attemptSelectAgentAsync(new ArrayList<>(_txasrAgents).iterator(), new CompletableFuture<>(), selectIdleTxASR.getTimer());
     }
 
     private void checkAndUpdateASRToken() {
@@ -200,66 +166,72 @@ class ASRServiceImpl implements ASRService {
         }
     }
 
-    private void startWithTxasr(final WebSocket webSocket, final ASRActor session, final WSCommandVO cmd) throws Exception {
+    private CompletionStage<Void> startWithTxasr(final WebSocket webSocket, final ASRActor session, final WSCommandVO cmd) {
         final long startConnectingInMs = System.currentTimeMillis();
-        final TxASRAgent agent = selectTxASRAgent();
-
-        final SpeechRecognizer speechRecognizer = buildSpeechRecognizer(agent,
-                buildRecognizerListener(session, webSocket, agent, session.sessionId(), startConnectingInMs),
-                (request)-> {
-                    // https://cloud.tencent.com/document/product/1093/48982
-                    if (cmd.getPayload().get("noise_threshold") != null) {
-                        request.setNoiseThreshold(Float.parseFloat(cmd.getPayload().get("noise_threshold")));
-                    }
-                    if (cmd.getPayload().get("engine_model_type") != null) {
-                        request.setEngineModelType(cmd.getPayload().get("engine_model_type"));
-                    }
-                    if (cmd.getPayload().get("input_sample_rate") != null) {
-                        request.setInputSampleRate(Integer.parseInt(cmd.getPayload().get("input_sample_rate")));
-                    }
-                    if (cmd.getPayload().get("vad_silence_time") != null) {
-                        request.setVadSilenceTime(Integer.parseInt(cmd.getPayload().get("vad_silence_time")));
-                    }
-                });
-
-        session.setASR(()-> {
-            int dec_cnt = 0;
-            try {
-                dec_cnt = agent.decConnection();
-                try {
-                    //通知服务端语音数据发送完毕，等待服务端处理完成。
-                    long now = System.currentTimeMillis();
-                    log.info("recognizer wait for complete");
-                    speechRecognizer.stop();
-                    log.info("recognizer stop() latency : {} ms", System.currentTimeMillis() - now);
-                } catch (final Exception ex) {
-                    log.warn("handleStopAsrCommand error: {}", ex.toString());
-                }
-
-                speechRecognizer.close();
-
-                if (session.isTranscriptionStarted()) {
-                    // 对于已经标记了 TranscriptionStarted 的会话, 将其使用的 ASR Account 已连接通道减少一
-                    agent.decConnected();
-                }
-            } finally {
-                if (agent != null) {
-                    log.info("release txasr({}): {}/{}", agent.getName(), dec_cnt, agent.getLimit());
-                }
+        final io.micrometer.core.instrument.Timer.Sample sample =
+                io.micrometer.core.instrument.Timer.start();
+        return selectTxASRAgentAsync().whenComplete((agent, ex) -> {
+            sample.stop(selectTxASRAgent.getTimer());
+            if (ex != null) {
+                log.error("Failed to select TxASR agent", ex);
+                webSocket.close();
+                return;
             }
-        }, (bytes) -> speechRecognizer.write(bytes.array()));
 
-        try {
-            speechRecognizer.start();
-        } catch (Exception ex) {
-            log.error("recognizer.start() error: {}", ex.toString());
-        }
-    }
+            try {
+                final SpeechRecognizer speechRecognizer = agent.buildSpeechRecognizer(
+                        buildRecognizerListener(session, webSocket, agent, session.sessionId(), startConnectingInMs),
+                        (request) -> {
+                            // https://cloud.tencent.com/document/product/1093/48982
+                            if (cmd.getPayload().get("noise_threshold") != null) {
+                                request.setNoiseThreshold(Float.parseFloat(cmd.getPayload().get("noise_threshold")));
+                            }
+                            if (cmd.getPayload().get("engine_model_type") != null) {
+                                request.setEngineModelType(cmd.getPayload().get("engine_model_type"));
+                            }
+                            if (cmd.getPayload().get("input_sample_rate") != null) {
+                                request.setInputSampleRate(Integer.parseInt(cmd.getPayload().get("input_sample_rate")));
+                            }
+                            if (cmd.getPayload().get("vad_silence_time") != null) {
+                                request.setVadSilenceTime(Integer.parseInt(cmd.getPayload().get("vad_silence_time")));
+                            }
+                        });
 
-    private SpeechRecognizer buildSpeechRecognizer(final TxASRAgent agent, final SpeechRecognizerListener listener, final Consumer<SpeechRecognizerRequest> onRequest) throws Exception {
-        //创建实例、建立连接。
-        final SpeechRecognizer recognizer = agent.buildSpeechRecognizer(listener, onRequest);
-        return recognizer;
+                session.setASR(() -> {
+                    // int dec_cnt = 0;
+                    try {
+                        agent.decConnectionAsync().whenComplete((current, ex2) -> {
+                            log.info("release txasr({}): {}/{}", agent.getName(), current, agent.getLimit());
+                        });
+                        try {
+                            //通知服务端语音数据发送完毕，等待服务端处理完成。
+                            long now = System.currentTimeMillis();
+                            log.info("recognizer wait for complete");
+                            speechRecognizer.stop();
+                            log.info("recognizer stop() latency : {} ms", System.currentTimeMillis() - now);
+                        } catch (final Exception ex2) {
+                            log.warn("handleStopAsrCommand error", ex2);
+                        }
+
+                        speechRecognizer.close();
+
+                        if (session.isTranscriptionStarted()) {
+                            // 对于已经标记了 TranscriptionStarted 的会话, 将其使用的 ASR Account 已连接通道减少一
+                            agent.decConnected();
+                        }
+                    } finally {
+                    }
+                }, (bytes) -> speechRecognizer.write(bytes.array()));
+
+                try {
+                    speechRecognizer.start();
+                } catch (Exception ex2) {
+                    log.error("recognizer.start() error", ex2);
+                }
+            } catch (Exception ex2) {
+                log.error("buildSpeechRecognizer error", ex2);
+            }
+        }).thenAccept(agent->{});
     }
 
     private SpeechRecognizerListener buildRecognizerListener(final ASRActor session,
@@ -341,57 +313,12 @@ class ASRServiceImpl implements ASRService {
         };
     }
 
-    private void startWithAliasr(final WebSocket webSocket, final ASRActor actor, final WSCommandVO cmd) {
-        /*
-        final long startConnectingInMs = System.currentTimeMillis();
-        final ASRAgent agent = selectASRAgent();
-
-        final SpeechTranscriber speechTranscriber = session.onSpeechTranscriberCreated(
-                buildSpeechTranscriber(agent, buildTranscriberListener(session, webSocket, agent, session.sessionId(), startConnectingInMs)));
-
-        if (cmd.getPayload() != null && cmd.getPayload().get("speech_noise_threshold") != null) {
-            // ref: https://help.aliyun.com/zh/isi/developer-reference/websocket#sectiondiv-rz2-i36-2gv
-            speechTranscriber.addCustomedParam("speech_noise_threshold", Float.parseFloat(cmd.getPayload().get("speech_noise_threshold")));
-        }
-
-        session.setASR(()-> {
-            int dec_cnt = 0;
-            try {
-                dec_cnt = agent.decConnection();
-                try {
-                    //通知服务端语音数据发送完毕，等待服务端处理完成。
-                    long now = System.currentTimeMillis();
-                    log.info("transcriber wait for complete");
-                    speechTranscriber.stop();
-                    log.info("transcriber stop() latency : {} ms", System.currentTimeMillis() - now);
-                } catch (final Exception ex) {
-                    log.warn("handleStopAsrCommand error: {}", ex.toString());
-                }
-
-                speechTranscriber.close();
-
-                if (session.isTranscriptionStarted()) {
-                    // 对于已经标记了 TranscriptionStarted 的会话, 将其使用的 ASR Account 已连接通道减少一
-                    agent.decConnected();
-                }
-            } finally {
-                if (agent != null) {
-                    log.info("release asr({}): {}/{}", agent.getName(), dec_cnt, agent.getLimit());
-                }
-            }
-        }, (bytes) -> speechTranscriber.send(bytes.array()));
-
-        try {
-            speechTranscriber.start();
-        } catch (Exception ex) {
-            log.error("speechTranscriber.start() error: {}", ex.toString());
-        }
-         */
+    private CompletionStage<Void> startWithAliasr(final WebSocket webSocket, final ASRActor actor, final WSCommandVO cmd) {
         final long startConnectingInMs = System.currentTimeMillis();
         final io.micrometer.core.instrument.Timer.Sample sample =
                 io.micrometer.core.instrument.Timer.start();
-        selectASRAgentAsync().whenComplete((agent, ex) -> {
-            sample.stop(selectASRAgentMetrics.getTimer());
+        return selectASRAgentAsync().whenComplete((agent, ex) -> {
+            sample.stop(selectASRAgent.getTimer());
             if (ex != null) {
                 log.error("Failed to select ASR agent", ex);
                 webSocket.close();
@@ -410,7 +337,6 @@ class ASRServiceImpl implements ASRService {
                 actor.setASR(() -> {
                     // int dec_cnt = 0;
                     try {
-                        /*dec_cnt = */
                         agent.decConnectionAsync().whenComplete((current, ex2) -> {
                             log.info("release asr({}): {}/{}", agent.getName(), current, agent.getLimit());
                         });
@@ -442,8 +368,7 @@ class ASRServiceImpl implements ASRService {
             } catch (Exception ex2) {
                 log.error("buildSpeechTranscriber error", ex2);
             }
-        });
-
+        }).thenAccept(agent->{});
     }
 
     private SpeechTranscriber buildSpeechTranscriber(final ASRAgent agent, final SpeechTranscriberListener listener) throws Exception {
@@ -620,13 +545,21 @@ class ASRServiceImpl implements ASRService {
         }
     }
 
-    @Qualifier("selectIfIdle")
+    @Qualifier("selectIdleASR")
     @Autowired
-    private AsyncTaskMetrics selectIdleMetrics;
+    private AsyncTaskMetrics selectIdleASR;
+
+    @Qualifier("selectIdleTxASR")
+    @Autowired
+    private AsyncTaskMetrics selectIdleTxASR;
 
     @Qualifier("selectASRAgent")
     @Autowired
-    private AsyncTaskMetrics selectASRAgentMetrics;
+    private AsyncTaskMetrics selectASRAgent;
+
+    @Qualifier("selectTxASRAgent")
+    @Autowired
+    private AsyncTaskMetrics selectTxASRAgent;
 
     @Value("${nls.url}")
     private String _nls_url;
