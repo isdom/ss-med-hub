@@ -43,8 +43,16 @@ public abstract class FsActor extends ASRActor implements WsHandler {
 
     @Override
     public void onClose(final WebSocket webSocket) {
-        stopAndCloseTranscriber();
-        close();
+        lock();
+        try {
+            // detatch
+            webSocket.setAttachment(null);
+
+            stopAndCloseTranscriber();
+            close();
+        } finally {
+            unlock();
+        }
     }
 
     public FsActor(final String uuid,

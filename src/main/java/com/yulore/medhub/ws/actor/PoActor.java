@@ -55,8 +55,16 @@ public abstract class PoActor extends ASRActor implements WsHandler {
     @Override
     public void onClose(final WebSocket webSocket) {
         if (_ws == webSocket) {
-            stopAndCloseTranscriber();
-            close();
+            lock();
+            try {
+                // detatch
+                webSocket.setAttachment(null);
+
+                stopAndCloseTranscriber();
+                close();
+            } finally {
+                unlock();
+            }
         }
     }
 

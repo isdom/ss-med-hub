@@ -1,17 +1,16 @@
 package com.yulore.medhub.nls;
 
-import com.yulore.medhub.metric.AsyncTaskMetrics;
 import io.micrometer.core.instrument.Timer;
 import lombok.Data;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RAtomicLong;
-import org.redisson.api.RFuture;
 import org.redisson.api.RedissonClient;
 
 import java.util.Iterator;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Data
@@ -29,23 +28,36 @@ public class LimitAgent<AGENT extends LimitAgent<?>> {
     public static <AGENT extends LimitAgent<?>> CompletionStage<AGENT> attemptSelectAgentAsync(
             final Iterator<AGENT> iterator,
             final CompletableFuture<AGENT> resultFuture,
-            final Timer timer) {
+            final Timer timer,
+            final Executor executor) {
         if (!iterator.hasNext()) {
-            resultFuture.completeExceptionally(new RuntimeException("All Agents are full"));
+            final RuntimeException ex = new RuntimeException("All Agents are full");
+            if (null != executor) {
+                executor.execute(()->resultFuture.completeExceptionally(ex));
+            } else {
+                resultFuture.completeExceptionally(ex);
+            }
             return resultFuture;
         }
         final AGENT agent = iterator.next();
         agent.checkAndSelectIfHasIdleAsync(timer).whenComplete((selected, ex) -> {
             if (ex != null) {
                 log.error("Error selecting agent", ex);
-                attemptSelectAgentAsync(iterator, resultFuture, timer); // 继续下一个代理
+                attemptSelectAgentAsync(iterator, resultFuture, timer, executor); // 继续下一个代理
                 return;
             }
             if (selected != null) {
-                log.info("select agent({}): {}/{}", agent.getName(), agent.getConnectingOrConnectedCount().get(), agent.getLimit());
-                resultFuture.complete((AGENT)selected); // 成功选择
+                final Runnable doComplete = () -> {
+                    log.info("select agent({}): {}/{}", agent.getName(), agent.getConnectingOrConnectedCount().get(), agent.getLimit());
+                    resultFuture.complete((AGENT) selected); // 成功选择
+                };
+                if (null != executor) {
+                    executor.execute(doComplete);
+                } else {
+                    doComplete.run();
+                }
             } else {
-                attemptSelectAgentAsync(iterator, resultFuture, timer); // 当前代理无资源，尝试下一个
+                attemptSelectAgentAsync(iterator, resultFuture, timer, executor); // 当前代理无资源，尝试下一个
             }
         });
         return resultFuture;
@@ -59,27 +71,6 @@ public class LimitAgent<AGENT extends LimitAgent<?>> {
         log.info("{}: {} => shared counter: {}", this.getClass().getSimpleName(), this.name, counterKey);
         this._sharedCounter = redisson.getAtomicLong(counterKey);
     }
-
-    /*
-    public AGENT checkAndSelectIfHasIdle() {
-        while (true) {
-            long current = _sharedCounter.get();
-            if (current >= limit) {
-                // 已经超出限制的并发数
-                return null;
-            }
-
-            // 原子递增操作
-            if (_sharedCounter.compareAndSet(current, current + 1)) {
-                // 更新本地计数器用于监控
-                connectingOrConnectedCount.set((int) current + 1);
-                // 当前的值设置成功，表示 已经成功占用了一个 并发数
-                return (AGENT) this;
-            }
-            // 若未成功占用，表示有别的线程进行了分配，从头开始检查是否还满足可分配的条件
-        }
-    }
-    */
 
     public CompletionStage<AGENT> checkAndSelectIfHasIdleAsync(final Timer timer) {
         final Timer.Sample sample = Timer.start();
@@ -118,16 +109,6 @@ public class LimitAgent<AGENT extends LimitAgent<?>> {
         });
         return resultFuture;
     }
-
-    /*
-    public int decConnection() {
-        // 减少 连接中或已连接的计数
-        final long current = _sharedCounter.decrementAndGet();
-        // 更新本地计数器用于监控
-        connectingOrConnectedCount.decrementAndGet();
-        return (int)current;
-    }
-    */
 
     public CompletionStage<Long> decConnectionAsync() {
         return _sharedCounter.decrementAndGetAsync()

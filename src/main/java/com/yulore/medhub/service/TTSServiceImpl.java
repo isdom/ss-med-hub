@@ -20,10 +20,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 @Slf4j
 @Service
@@ -82,12 +79,14 @@ class TTSServiceImpl implements TTSService {
 
     @Override
     public CompletionStage<TTSAgent> selectTTSAgentAsync() {
-        return LimitAgent.attemptSelectAgentAsync(new ArrayList<>(_ttsAgents).iterator(), new CompletableFuture<>(), selectIdleTTS.getTimer());
+        return LimitAgent.attemptSelectAgentAsync(new ArrayList<>(_ttsAgents).iterator(), new CompletableFuture<>(),
+                selectIdleTTS.getTimer(), executorProvider.getObject());
     }
 
     @Override
     public CompletionStage<CosyAgent> selectCosyAgentAsync() {
-        return LimitAgent.attemptSelectAgentAsync(new ArrayList<>(_cosyAgents).iterator(), new CompletableFuture<>(), selectIdleCosy.getTimer());
+        return LimitAgent.attemptSelectAgentAsync(new ArrayList<>(_cosyAgents).iterator(), new CompletableFuture<>(),
+                selectIdleCosy.getTimer(), executorProvider.getObject());
     }
 
     private void checkAndUpdateTTSToken() {
@@ -138,6 +137,10 @@ class TTSServiceImpl implements TTSService {
 
     @Autowired
     private RedissonClient redisson;
+
+    @Autowired
+    @Qualifier("commonExecutor")
+    private ObjectProvider<Executor> executorProvider;
 
     private NlsClient _nlsClient;
 }

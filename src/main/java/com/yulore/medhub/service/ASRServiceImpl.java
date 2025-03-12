@@ -44,34 +44,28 @@ class ASRServiceImpl implements ASRService {
             return;
         }
 
-        {
-            // actor.lock();
-            if (!actor.startTranscription()) {
-                // actor.unlock();
-                log.warn("StartTranscription: {}'s Session startTranscription already, ignore", webSocket.getRemoteSocketAddress());
-                return;
-            }
+//        {
+        if (!actor.startTranscription()) {
+            log.warn("StartTranscription: {}'s Session startTranscription already, ignore", webSocket.getRemoteSocketAddress());
+            return;
+        }
 
-            if ("tx".equals(provider)) {
-                startWithTxasr(webSocket, actor, cmd).whenComplete( (v,ex) -> {
-                    // actor.unlock();
-                    if (ex != null) {
-                        log.error("StartTranscription: failed: {}", ex.toString());
-                        // throw new RuntimeException(ex);
-                    }
-                });
-            } else {
-                startWithAliasr(webSocket, actor, cmd).whenComplete( (v,ex) -> {
-                    log.info("startWithAliasr.whenComplete --1");
-                    // actor.unlock();
-                    log.info("startWithAliasr.whenComplete --2");
-                    if (ex != null) {
-                        log.error("StartTranscription: failed: {}", ex.toString());
-                        // throw new RuntimeException(ex);
-                    }
-                });
-            }
-        } /*catch (Exception ex) {*/
+        if ("tx".equals(provider)) {
+            startWithTxasr(webSocket, actor, cmd).whenComplete( (v,ex) -> {
+                if (ex != null) {
+                    log.warn("StartTranscription with Tx: failed", ex);
+                    // throw new RuntimeException(ex);
+                }
+            });
+        } else {
+            startWithAliasr(webSocket, actor, cmd).whenComplete( (v,ex) -> {
+                if (ex != null) {
+                    log.warn("StartTranscription with Ali: failed", ex);
+                    // throw new RuntimeException(ex);
+                }
+            });
+        }
+//        } /*catch (Exception ex) {*/
             // TODO: close websocket?
 //            log.error("StartTranscription: failed: {}", ex.toString());
 //            throw new RuntimeException(ex);
@@ -149,11 +143,13 @@ class ASRServiceImpl implements ASRService {
     }
 
     public CompletionStage<ASRAgent> selectASRAgentAsync() {
-        return LimitAgent.attemptSelectAgentAsync(new ArrayList<>(_asrAgents).iterator(), new CompletableFuture<>(), selectIdleASR.getTimer());
+        return LimitAgent.attemptSelectAgentAsync(new ArrayList<>(_asrAgents).iterator(), new CompletableFuture<>(),
+                selectIdleASR.getTimer(), executorProvider.getObject());
     }
 
     public CompletionStage<TxASRAgent> selectTxASRAgentAsync() {
-        return LimitAgent.attemptSelectAgentAsync(new ArrayList<>(_txasrAgents).iterator(), new CompletableFuture<>(), selectIdleTxASR.getTimer());
+        return LimitAgent.attemptSelectAgentAsync(new ArrayList<>(_txasrAgents).iterator(), new CompletableFuture<>(),
+                selectIdleTxASR.getTimer(), executorProvider.getObject());
     }
 
     private void checkAndUpdateASRToken() {
@@ -162,11 +158,10 @@ class ASRServiceImpl implements ASRService {
         }
     }
 
-    private CompletionStage<Void> startWithTxasr(final WebSocket webSocket, final ASRActor session, final WSCommandVO cmd) {
+    private CompletionStage<Void> startWithTxasr(final WebSocket webSocket, final ASRActor actor, final WSCommandVO cmd) {
         final long startConnectingInMs = System.currentTimeMillis();
         final io.micrometer.core.instrument.Timer.Sample sample =
                 io.micrometer.core.instrument.Timer.start();
-        //return selectTxASRAgentAsync().whenCompleteAsync((agent, ex) -> {
         return selectTxASRAgentAsync().whenComplete((agent, ex) -> {
             sample.stop(selectTxASRAgent.getTimer());
             if (ex != null) {
@@ -175,9 +170,19 @@ class ASRServiceImpl implements ASRService {
                 return;
             }
 
+            actor.lock();
+
             try {
+                if (webSocket.getAttachment() != actor) {
+                    // detached already
+                    agent.decConnectionAsync().whenComplete((current, ex2) -> {
+                        log.info("release asr({}): {}/{}", agent.getName(), current, agent.getLimit());
+                    });
+                    return;
+                }
+
                 final SpeechRecognizer speechRecognizer = agent.buildSpeechRecognizer(
-                        buildRecognizerListener(session, webSocket, agent, session.sessionId(), startConnectingInMs),
+                        buildRecognizerListener(actor, webSocket, agent, actor.sessionId(), startConnectingInMs),
                         (request) -> {
                             // https://cloud.tencent.com/document/product/1093/48982
                             if (cmd.getPayload().get("noise_threshold") != null) {
@@ -194,7 +199,7 @@ class ASRServiceImpl implements ASRService {
                             }
                         });
 
-                session.setASR(() -> {
+                actor.setASR(() -> {
                     // int dec_cnt = 0;
                     try {
                         agent.decConnectionAsync().whenComplete((current, ex2) -> {
@@ -212,7 +217,7 @@ class ASRServiceImpl implements ASRService {
 
                         speechRecognizer.close();
 
-                        if (session.isTranscriptionStarted()) {
+                        if (actor.isTranscriptionStarted()) {
                             // 对于已经标记了 TranscriptionStarted 的会话, 将其使用的 ASR Account 已连接通道减少一
                             agent.decConnected();
                         }
@@ -227,8 +232,10 @@ class ASRServiceImpl implements ASRService {
                 }
             } catch (Exception ex2) {
                 log.error("buildSpeechRecognizer error", ex2);
+            } finally {
+                actor.unlock();
             }
-        }/*, executorProvider.getObject()*/).thenAccept(agent->{});
+        }).thenAccept(agent->{});
     }
 
     private SpeechRecognizerListener buildRecognizerListener(final ASRActor session,
@@ -314,8 +321,6 @@ class ASRServiceImpl implements ASRService {
         final long startConnectingInMs = System.currentTimeMillis();
         final io.micrometer.core.instrument.Timer.Sample sample =
                 io.micrometer.core.instrument.Timer.start();
-        log.info("startWithAliasr --1");
-        //return selectASRAgentAsync().whenCompleteAsync((agent, ex) -> {
         return selectASRAgentAsync().whenComplete((agent, ex) -> {
             sample.stop(selectASRAgent.getTimer());
             if (ex != null) {
@@ -324,9 +329,17 @@ class ASRServiceImpl implements ASRService {
                 return;
             }
 
-            log.info("startWithAliasr --2");
+            actor.lock();
 
             try {
+                if (webSocket.getAttachment() != actor) {
+                    // detached already
+                    agent.decConnectionAsync().whenComplete((current, ex2) -> {
+                        log.info("release asr({}): {}/{}", agent.getName(), current, agent.getLimit());
+                    });
+                    return;
+                }
+
                 final SpeechTranscriber transcriber = actor.onSpeechTranscriberCreated(
                         buildSpeechTranscriber(agent, buildTranscriberListener(actor, webSocket, agent, actor.sessionId(), startConnectingInMs)));
 
@@ -334,8 +347,6 @@ class ASRServiceImpl implements ASRService {
                     // ref: https://help.aliyun.com/zh/isi/developer-reference/websocket#sectiondiv-rz2-i36-2gv
                     transcriber.addCustomedParam("speech_noise_threshold", Float.parseFloat(cmd.getPayload().get("speech_noise_threshold")));
                 }
-
-                log.info("startWithAliasr --3");
 
                 actor.setASR(() -> {
                     // int dec_cnt = 0;
@@ -363,7 +374,6 @@ class ASRServiceImpl implements ASRService {
                     }
                 }, (bytes) -> transcriber.send(bytes.array()));
 
-                log.info("startWithAliasr --4");
                 try {
                     transcriber.start();
                 } catch (Exception ex2) {
@@ -371,9 +381,10 @@ class ASRServiceImpl implements ASRService {
                 }
             } catch (Exception ex2) {
                 log.error("buildSpeechTranscriber error", ex2);
+            } finally {
+                actor.unlock();
             }
-            log.info("startWithAliasr --5");
-        }/*, executorProvider.getObject()*/).thenAccept(agent->{});
+        }).thenAccept(agent->{});
     }
 
     private SpeechTranscriber buildSpeechTranscriber(final ASRAgent agent, final SpeechTranscriberListener listener) throws Exception {
