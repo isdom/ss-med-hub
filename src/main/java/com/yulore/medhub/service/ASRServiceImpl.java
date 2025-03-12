@@ -176,7 +176,7 @@ class ASRServiceImpl implements ASRService {
                 if (webSocket.getAttachment() != actor) {
                     // detached already
                     agent.decConnectionAsync().whenComplete((current, ex2) -> {
-                        log.info("release asr({}): {}/{}", agent.getName(), current, agent.getLimit());
+                        log.warn("ws({}) detached, so release asr({}): {}/{}", webSocket.getRemoteSocketAddress(), agent.getName(), current, agent.getLimit());
                     });
                     return;
                 }
@@ -335,7 +335,7 @@ class ASRServiceImpl implements ASRService {
                 if (webSocket.getAttachment() != actor) {
                     // detached already
                     agent.decConnectionAsync().whenComplete((current, ex2) -> {
-                        log.info("release asr({}): {}/{}", agent.getName(), current, agent.getLimit());
+                        log.warn("ws({}) detached, so release asr({}): {}/{}", webSocket.getRemoteSocketAddress(), agent.getName(), current, agent.getLimit());
                     });
                     return;
                 }
