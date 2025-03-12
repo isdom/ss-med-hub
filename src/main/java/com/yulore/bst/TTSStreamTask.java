@@ -14,12 +14,13 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 @Slf4j
 public class TTSStreamTask implements BuildStreamTask {
     final HashFunction _MD5 = Hashing.md5();
 
-    public TTSStreamTask(final String path, final CompletionStage<TTSAgent> getTTSAgent, final Consumer<SpeechSynthesizer> onSynthesizer) {
+    public TTSStreamTask(final String path, final Supplier<CompletionStage<TTSAgent>> getTTSAgent, final Consumer<SpeechSynthesizer> onSynthesizer) {
         _getTTSAgent = getTTSAgent;
         _onSynthesizer = onSynthesizer;
 
@@ -79,7 +80,7 @@ public class TTSStreamTask implements BuildStreamTask {
         final AtomicInteger idx = new AtomicInteger(0);
         final long startInMs = System.currentTimeMillis();
 
-        _getTTSAgent.whenComplete((agent, ex)->{
+        _getTTSAgent.get().whenComplete((agent, ex)->{
             if (ex != null) {
                 log.error("failed to get tts agent", ex);
                 return;
@@ -122,7 +123,7 @@ public class TTSStreamTask implements BuildStreamTask {
         });
     }
 
-    private final CompletionStage<TTSAgent> _getTTSAgent;
+    private final Supplier<CompletionStage<TTSAgent>> _getTTSAgent;
     private final Consumer<SpeechSynthesizer> _onSynthesizer;
     private final String _key;
     private final String _text;

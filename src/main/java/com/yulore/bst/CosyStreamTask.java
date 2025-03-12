@@ -15,12 +15,13 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 @Slf4j
 public class CosyStreamTask implements BuildStreamTask {
     final HashFunction _MD5 = Hashing.md5();
 
-    public CosyStreamTask(final String path, final CompletionStage<CosyAgent> getCosyAgent, final Consumer<StreamInputTts> onSynthesizer) {
+    public CosyStreamTask(final String path, final Supplier<CompletionStage<CosyAgent>> getCosyAgent, final Consumer<StreamInputTts> onSynthesizer) {
         _getCosyAgent = getCosyAgent;
         _onSynthesizer = onSynthesizer;
         // eg: {type=cosy,voice=xxx,url=ws://172.18.86.131:6789/cosy,vars_playback_id=<uuid>,content_id=2088788,vars_start_timestamp=1732028219711854}
@@ -77,7 +78,7 @@ public class CosyStreamTask implements BuildStreamTask {
         final AtomicInteger idx = new AtomicInteger(0);
         final long startInMs = System.currentTimeMillis();
 
-        _getCosyAgent.whenComplete((agent, ex) -> {
+        _getCosyAgent.get().whenComplete((agent, ex) -> {
             if (ex != null) {
                 log.error("failed to get cosy agent", ex);
                 return;
@@ -176,7 +177,7 @@ public class CosyStreamTask implements BuildStreamTask {
         });
     }
 
-    private final CompletionStage<CosyAgent> _getCosyAgent;
+    private final Supplier<CompletionStage<CosyAgent>> _getCosyAgent;
     private final Consumer<StreamInputTts> _onSynthesizer;
     private final String _key;
     private final String _text;

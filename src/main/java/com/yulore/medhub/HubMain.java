@@ -888,13 +888,13 @@ public class HubMain {
                     return null;
                 }, removeWavHdr);
             } else if (path.contains("type=tts")) {
-                final BuildStreamTask bst = new TTSStreamTask(path, ttsService.selectTTSAgentAsync(), (synthesizer) -> {
+                final BuildStreamTask bst = new TTSStreamTask(path, ttsService::selectTTSAgentAsync, (synthesizer) -> {
                     synthesizer.setFormat(removeWavHdr ? OutputFormatEnum.PCM : OutputFormatEnum.WAV);
                     synthesizer.setSampleRate(sampleRate);
                 });
                 return bst.key() != null ? _scsService.asCache(bst) : bst;
             } else if (path.contains("type=cosy")) {
-                final BuildStreamTask bst = new CosyStreamTask(path, ttsService.selectCosyAgentAsync(), (synthesizer) -> {
+                final BuildStreamTask bst = new CosyStreamTask(path, ttsService::selectCosyAgentAsync, (synthesizer) -> {
                     synthesizer.setFormat(removeWavHdr ? OutputFormatEnum.PCM : OutputFormatEnum.WAV);
                     synthesizer.setSampleRate(sampleRate);
                 });
@@ -928,7 +928,7 @@ public class HubMain {
     }
 
     private BuildStreamTask genCosyStreamTask(final CompositeVO cvo) {
-        return new CosyStreamTask(cvo2cosy(cvo), ttsService.selectCosyAgentAsync(), (synthesizer) -> {
+        return new CosyStreamTask(cvo2cosy(cvo), ttsService::selectCosyAgentAsync, (synthesizer) -> {
             //设置返回音频的编码格式
             synthesizer.setFormat(OutputFormatEnum.PCM);
             //设置返回音频的采样率。
@@ -937,7 +937,7 @@ public class HubMain {
     }
 
     private BuildStreamTask genTtsStreamTask(final CompositeVO cvo) {
-        return new TTSStreamTask(cvo2tts(cvo), ttsService.selectTTSAgentAsync(), (synthesizer) -> {
+        return new TTSStreamTask(cvo2tts(cvo), ttsService::selectTTSAgentAsync, (synthesizer) -> {
             //设置返回音频的编码格式
             synthesizer.setFormat(OutputFormatEnum.PCM);
             //设置返回音频的采样率

@@ -111,7 +111,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
                     if (transmit(bytes)) {
                         // transmit success
                         if ((transmitCount() % 50) == 0) {
-                            log.debug("{}: transmit 50 times.", sessionId());
+                            log.info("{}: transmit 50 times.", sessionId());
                         }
                     }
                 }
