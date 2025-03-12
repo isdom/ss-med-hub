@@ -4,6 +4,7 @@ import com.alibaba.nls.client.AccessToken;
 import com.alibaba.nls.client.protocol.NlsClient;
 import com.alibaba.nls.client.protocol.tts.StreamInputTts;
 import com.alibaba.nls.client.protocol.tts.StreamInputTtsListener;
+import io.micrometer.core.instrument.Timer;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RedissonClient;
@@ -27,13 +28,13 @@ public class CosyAgent extends LimitAgent<CosyAgent> {
 
     final AtomicReference<String> _currentToken = new AtomicReference<String>(null);
 
-    public CosyAgent(final String name, final String sharedTemplate, final RedissonClient redisson) {
-        super(name, sharedTemplate, redisson);
+    public CosyAgent(final String name, final String sharedTemplate, final RedissonClient redisson, final Timer timer) {
+        super(name, sharedTemplate, redisson, timer);
     }
 
-    public static CosyAgent parse(final String sharedTemplate, final RedissonClient redisson, final String accountName, final String values) {
+    public static CosyAgent parse(final String sharedTemplate, final RedissonClient redisson, final String accountName, final Timer timer, final String values) {
         final String[] kvs = values.split(" ");
-        final CosyAgent agent = new CosyAgent(accountName, sharedTemplate, redisson);
+        final CosyAgent agent = new CosyAgent(accountName, sharedTemplate, redisson, timer);
 
         for (String kv : kvs) {
             final String[] ss = kv.split("=");

@@ -5,6 +5,7 @@ import com.yulore.medhub.metric.AsyncTaskMetrics;
 import com.yulore.medhub.nls.CosyAgent;
 import com.yulore.medhub.nls.LimitAgent;
 import com.yulore.medhub.nls.TTSAgent;
+import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.ObjectProvider;
@@ -47,7 +48,15 @@ class TTSServiceImpl implements TTSService {
                 log.info("tts: {} / {}", entry.getKey(), entry.getValue());
                 final String[] values = entry.getValue().split(" ");
                 log.info("tts values detail: {}", Arrays.toString(values));
-                final TTSAgent agent = TTSAgent.parse(_alitts_prefix + ":%s", redisson, entry.getKey(), entry.getValue());
+                final TTSAgent agent = TTSAgent.parse(
+                        _alitts_prefix + ":%s",
+                        redisson,
+                        entry.getKey(),
+                        metricsProvider.getObject(
+                                "nls.tts.idle.select.duration",
+                                "单个 TTSAgent checkAndSelectIfHasIdleAsync 执行时长",
+                                new String[]{"account", entry.getKey()}),
+                        entry.getValue());
                 if (null == agent) {
                     log.warn("tts init failed by: {}/{}", entry.getKey(), entry.getValue());
                 } else {
@@ -63,7 +72,15 @@ class TTSServiceImpl implements TTSService {
                 log.info("cosy: {} / {}", entry.getKey(), entry.getValue());
                 final String[] values = entry.getValue().split(" ");
                 log.info("cosy values detail: {}", Arrays.toString(values));
-                final CosyAgent agent = CosyAgent.parse(_alicosy_prefix + ":%s", redisson, entry.getKey(), entry.getValue());
+                final CosyAgent agent = CosyAgent.parse(
+                        _alicosy_prefix + ":%s",
+                        redisson,
+                        entry.getKey(),
+                        metricsProvider.getObject(
+                                "nls.cosy.idle.select.duration",
+                                "单个 CosyAgent checkAndSelectIfHasIdleAsync 执行时长",
+                                new String[]{"account", entry.getKey()}),
+                        entry.getValue());
                 if (null == agent) {
                     log.warn("cosy init failed by: {}/{}", entry.getKey(), entry.getValue());
                 } else {
@@ -80,13 +97,13 @@ class TTSServiceImpl implements TTSService {
     @Override
     public CompletionStage<TTSAgent> selectTTSAgentAsync() {
         return LimitAgent.attemptSelectAgentAsync(new ArrayList<>(_ttsAgents).iterator(), new CompletableFuture<>(),
-                selectIdleTTS.getTimer(), executorProvider.getObject());
+                /*selectIdleTTS.getTimer(),*/ executorProvider.getObject());
     }
 
     @Override
     public CompletionStage<CosyAgent> selectCosyAgentAsync() {
         return LimitAgent.attemptSelectAgentAsync(new ArrayList<>(_cosyAgents).iterator(), new CompletableFuture<>(),
-                selectIdleCosy.getTimer(), executorProvider.getObject());
+                /*selectIdleCosy.getTimer(),*/ executorProvider.getObject());
     }
 
     private void checkAndUpdateTTSToken() {
@@ -98,21 +115,21 @@ class TTSServiceImpl implements TTSService {
         }
     }
 
-    @Qualifier("selectIdleTTS")
-    @Autowired
-    private AsyncTaskMetrics selectIdleTTS;
-
-    @Qualifier("selectIdleCosy")
-    @Autowired
-    private AsyncTaskMetrics selectIdleCosy;
-
-    @Qualifier("selectTTSAgent")
-    @Autowired
-    private AsyncTaskMetrics selectTTSAgent;
-
-    @Qualifier("selectCosyAgent")
-    @Autowired
-    private AsyncTaskMetrics selectCosyAgent;
+//    @Qualifier("selectIdleTTS")
+//    @Autowired
+//    private AsyncTaskMetrics selectIdleTTS;
+//
+//    @Qualifier("selectIdleCosy")
+//    @Autowired
+//    private AsyncTaskMetrics selectIdleCosy;
+//
+//    @Qualifier("selectTTSAgent")
+//    @Autowired
+//    private AsyncTaskMetrics selectTTSAgent;
+//
+//    @Qualifier("selectCosyAgent")
+//    @Autowired
+//    private AsyncTaskMetrics selectCosyAgent;
 
     @Value("${nls.url}")
     private String _nls_url;
@@ -141,6 +158,9 @@ class TTSServiceImpl implements TTSService {
     @Autowired
     @Qualifier("commonExecutor")
     private ObjectProvider<Executor> executorProvider;
+
+    @Autowired
+    private ObjectProvider<Timer> metricsProvider;
 
     private NlsClient _nlsClient;
 }

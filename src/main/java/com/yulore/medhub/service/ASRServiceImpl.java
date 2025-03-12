@@ -15,6 +15,7 @@ import com.yulore.medhub.nls.LimitAgent;
 import com.yulore.medhub.nls.TxASRAgent;
 import com.yulore.medhub.session.*;
 import com.yulore.medhub.vo.*;
+import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
 import org.java_websocket.exceptions.WebsocketNotConnectedException;
@@ -111,7 +112,15 @@ class ASRServiceImpl implements ASRService {
                 log.info("asr: {} / {}", entry.getKey(), entry.getValue());
                 final String[] values = entry.getValue().split(" ");
                 log.info("asr values detail: {}", Arrays.toString(values));
-                final ASRAgent agent = ASRAgent.parse(_aliasr_prefix + ":%s", redisson, entry.getKey(), entry.getValue());
+                final ASRAgent agent = ASRAgent.parse(
+                        _aliasr_prefix + ":%s",
+                        redisson,
+                        entry.getKey(),
+                        metricsProvider.getObject(
+                                "nls.asr.idle.select.duration",
+                                "单个 ASRAgent checkAndSelectIfHasIdleAsync 执行时长",
+                                new String[]{"account", entry.getKey()}),
+                        entry.getValue());
                 if (null == agent) {
                     log.warn("asr init failed by: {}/{}", entry.getKey(), entry.getValue());
                 } else {
@@ -128,7 +137,15 @@ class ASRServiceImpl implements ASRService {
                 log.info("txasr: {} / {}", entry.getKey(), entry.getValue());
                 final String[] values = entry.getValue().split(" ");
                 log.info("txasr values detail: {}", Arrays.toString(values));
-                final TxASRAgent agent = TxASRAgent.parse(_txasr_prefix + ":%s", redisson, entry.getKey(), entry.getValue());
+                final TxASRAgent agent = TxASRAgent.parse(
+                        _txasr_prefix + ":%s",
+                        redisson,
+                        entry.getKey(),
+                        metricsProvider.getObject(
+                                "nls.txasr.idle.select.duration",
+                                "单个 TxASRAgent checkAndSelectIfHasIdleAsync 执行时长",
+                                new String[]{"account", entry.getKey()}),
+                        entry.getValue());
                 if (null == agent) {
                     log.warn("txasr init failed by: {}/{}", entry.getKey(), entry.getValue());
                 } else {
@@ -144,12 +161,12 @@ class ASRServiceImpl implements ASRService {
 
     public CompletionStage<ASRAgent> selectASRAgentAsync() {
         return LimitAgent.attemptSelectAgentAsync(new ArrayList<>(_asrAgents).iterator(), new CompletableFuture<>(),
-                selectIdleASR.getTimer(), executorProvider.getObject());
+                /*selectIdleASR.getTimer(),*/ executorProvider.getObject());
     }
 
     public CompletionStage<TxASRAgent> selectTxASRAgentAsync() {
         return LimitAgent.attemptSelectAgentAsync(new ArrayList<>(_txasrAgents).iterator(), new CompletableFuture<>(),
-                selectIdleTxASR.getTimer(), executorProvider.getObject());
+                /*selectIdleTxASR.getTimer(),*/ executorProvider.getObject());
     }
 
     private void checkAndUpdateASRToken() {
@@ -561,13 +578,13 @@ class ASRServiceImpl implements ASRService {
         }
     }
 
-    @Qualifier("selectIdleASR")
-    @Autowired
-    private AsyncTaskMetrics selectIdleASR;
-
-    @Qualifier("selectIdleTxASR")
-    @Autowired
-    private AsyncTaskMetrics selectIdleTxASR;
+//    @Qualifier("selectIdleASR")
+//    @Autowired
+//    private AsyncTaskMetrics selectIdleASR;
+//
+//    @Qualifier("selectIdleTxASR")
+//    @Autowired
+//    private AsyncTaskMetrics selectIdleTxASR;
 
     @Qualifier("selectASRAgent")
     @Autowired
@@ -604,6 +621,9 @@ class ASRServiceImpl implements ASRService {
     @Autowired
     @Qualifier("commonExecutor")
     private ObjectProvider<Executor> executorProvider;
+
+    @Autowired
+    private ObjectProvider<Timer> metricsProvider;
 
     private NlsClient _nlsClient;
 

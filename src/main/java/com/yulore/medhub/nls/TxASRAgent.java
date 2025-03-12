@@ -5,6 +5,7 @@ import com.tencent.asrv2.SpeechRecognizerListener;
 import com.tencent.asrv2.SpeechRecognizerRequest;
 import com.tencent.core.ws.Credential;
 import com.tencent.core.ws.SpeechClient;
+import io.micrometer.core.instrument.Timer;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RedissonClient;
@@ -24,13 +25,13 @@ public class TxASRAgent extends LimitAgent<TxASRAgent> {
 
     final AtomicReference<String> _currentToken = new AtomicReference<String>(null);
 
-    public TxASRAgent(final String name, final String sharedTemplate, final RedissonClient redisson) {
-        super(name, sharedTemplate, redisson);
+    public TxASRAgent(final String name, final String sharedTemplate, final RedissonClient redisson, final Timer timer) {
+        super(name, sharedTemplate, redisson, timer);
     }
 
-    public static TxASRAgent parse(final String sharedTemplate, final RedissonClient redisson, final String accountName, final String values) {
+    public static TxASRAgent parse(final String sharedTemplate, final RedissonClient redisson, final String accountName, final Timer timer, final String values) {
         final String[] kvs = values.split(" ");
-        final TxASRAgent agent = new TxASRAgent(accountName, sharedTemplate, redisson);
+        final TxASRAgent agent = new TxASRAgent(accountName, sharedTemplate, redisson, timer);
 
         for (String kv : kvs) {
             final String[] ss = kv.split("=");

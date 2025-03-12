@@ -4,6 +4,7 @@ import com.alibaba.nls.client.AccessToken;
 import com.alibaba.nls.client.protocol.NlsClient;
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriber;
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriberListener;
+import io.micrometer.core.instrument.Timer;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RedissonClient;
@@ -26,13 +27,13 @@ public class ASRAgent extends LimitAgent<ASRAgent> {
 
     final AtomicReference<String> _currentToken = new AtomicReference<String>(null);
 
-    public ASRAgent(final String name, final String sharedTemplate, final RedissonClient redisson) {
-        super(name, sharedTemplate, redisson);
+    public ASRAgent(final String name, final String sharedTemplate, final RedissonClient redisson, final Timer timer) {
+        super(name, sharedTemplate, redisson, timer);
     }
 
-    public static ASRAgent parse(final String sharedTemplate, final RedissonClient redisson, final String accountName, final String values) {
+    public static ASRAgent parse(final String sharedTemplate, final RedissonClient redisson, final String accountName, final Timer timer, final String values) {
         final String[] kvs = values.split(" ");
-        final ASRAgent agent = new ASRAgent(accountName, sharedTemplate, redisson);
+        final ASRAgent agent = new ASRAgent(accountName, sharedTemplate, redisson, timer);
 
         for (String kv : kvs) {
             final String[] ss = kv.split("=");
