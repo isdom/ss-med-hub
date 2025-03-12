@@ -15,7 +15,6 @@ import com.yulore.medhub.nls.LimitAgent;
 import com.yulore.medhub.nls.TxASRAgent;
 import com.yulore.medhub.session.*;
 import com.yulore.medhub.vo.*;
-import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
 import org.java_websocket.exceptions.WebsocketNotConnectedException;
@@ -30,11 +29,7 @@ import org.springframework.stereotype.Service;
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import java.util.*;
-import java.util.concurrent.CompletionStage;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.*;
 
 @Slf4j
 @Service
@@ -170,7 +165,7 @@ class ASRServiceImpl implements ASRService {
         final long startConnectingInMs = System.currentTimeMillis();
         final io.micrometer.core.instrument.Timer.Sample sample =
                 io.micrometer.core.instrument.Timer.start();
-        return selectTxASRAgentAsync().whenComplete((agent, ex) -> {
+        return selectTxASRAgentAsync().whenCompleteAsync((agent, ex) -> {
             sample.stop(selectTxASRAgent.getTimer());
             if (ex != null) {
                 log.error("Failed to select TxASR agent", ex);
@@ -231,7 +226,7 @@ class ASRServiceImpl implements ASRService {
             } catch (Exception ex2) {
                 log.error("buildSpeechRecognizer error", ex2);
             }
-        }).thenAccept(agent->{});
+        }, executorProvider.getObject()).thenAccept(agent->{});
     }
 
     private SpeechRecognizerListener buildRecognizerListener(final ASRActor session,
@@ -317,7 +312,7 @@ class ASRServiceImpl implements ASRService {
         final long startConnectingInMs = System.currentTimeMillis();
         final io.micrometer.core.instrument.Timer.Sample sample =
                 io.micrometer.core.instrument.Timer.start();
-        return selectASRAgentAsync().whenComplete((agent, ex) -> {
+        return selectASRAgentAsync().whenCompleteAsync((agent, ex) -> {
             sample.stop(selectASRAgent.getTimer());
             if (ex != null) {
                 log.error("Failed to select ASR agent", ex);
@@ -368,7 +363,7 @@ class ASRServiceImpl implements ASRService {
             } catch (Exception ex2) {
                 log.error("buildSpeechTranscriber error", ex2);
             }
-        }).thenAccept(agent->{});
+        }, executorProvider.getObject()).thenAccept(agent->{});
     }
 
     private SpeechTranscriber buildSpeechTranscriber(final ASRAgent agent, final SpeechTranscriberListener listener) throws Exception {
@@ -584,6 +579,10 @@ class ASRServiceImpl implements ASRService {
 
     @Autowired
     private RedissonClient redisson;
+
+    @Autowired
+    @Qualifier("commonExecutor")
+    private ObjectProvider<Executor> executorProvider;
 
     private NlsClient _nlsClient;
 

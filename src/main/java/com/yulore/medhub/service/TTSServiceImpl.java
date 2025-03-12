@@ -80,30 +80,6 @@ class TTSServiceImpl implements TTSService {
         schedulerProvider.getObject().scheduleAtFixedRate(this::checkAndUpdateTTSToken, 0, 10, TimeUnit.MINUTES);
     }
 
-//    @Override
-//    public TTSAgent selectTTSAgent() {
-//        for (TTSAgent agent : _ttsAgents) {
-//            final TTSAgent selected = agent.checkAndSelectIfHasIdle();
-//            if (null != selected) {
-//                log.info("select tts({}): {}/{}", agent.getName(), agent.getConnectingOrConnectedCount().get(), agent.getLimit());
-//                return selected;
-//            }
-//        }
-//        throw new RuntimeException("all tts agent has full");
-//    }
-//
-//    @Override
-//    public CosyAgent selectCosyAgent() {
-//        for (CosyAgent agent : _cosyAgents) {
-//            final CosyAgent selected = agent.checkAndSelectIfHasIdle();
-//            if (null != selected) {
-//                log.info("select cosy({}): {}/{}", agent.getName(), agent.getConnectingOrConnectedCount().get(), agent.getLimit());
-//                return selected;
-//            }
-//        }
-//        throw new RuntimeException("all cosy agent has full");
-//    }
-
     @Override
     public CompletionStage<TTSAgent> selectTTSAgentAsync() {
         return LimitAgent.attemptSelectAgentAsync(new ArrayList<>(_ttsAgents).iterator(), new CompletableFuture<>(), selectIdleTTS.getTimer());

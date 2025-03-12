@@ -6,10 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Component;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.*;
 
 @Component
 @Slf4j
@@ -37,5 +34,12 @@ public class ExecutorRepo {
                 executor.shutdownNow();
             }
         };
+    }
+
+    @Bean(name = "commonExecutor", destroyMethod = "shutdown")
+    public Executor commonExecutor() {
+        log.info("create Common Executor");
+        return Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
+                new DefaultThreadFactory("commonExecutor"));
     }
 }
