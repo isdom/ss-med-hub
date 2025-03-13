@@ -18,7 +18,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Slf4j
 public class LimitAgent<AGENT extends LimitAgent<?>> {
     private final String name;
-    private final Timer timer;
+    private Timer selectIdleTimer;
+    private Timer selectAgentTimer;
     private int limit = 0;
 
     private final AtomicInteger connectingOrConnectedCount = new AtomicInteger(0);
@@ -29,22 +30,22 @@ public class LimitAgent<AGENT extends LimitAgent<?>> {
     public static <AGENT extends LimitAgent<?>> CompletionStage<AGENT> attemptSelectAgentAsync(
             final Iterator<AGENT> iterator,
             final CompletableFuture<AGENT> resultFuture,
-            // final Timer timer,
             final Executor executor) {
         if (!iterator.hasNext()) {
             final RuntimeException ex = new RuntimeException("All Agents are full");
+            final Runnable doCompleteExceptionally = () -> resultFuture.completeExceptionally(ex);
             if (null != executor) {
-                executor.execute(()->resultFuture.completeExceptionally(ex));
+                executor.execute(doCompleteExceptionally);
             } else {
-                resultFuture.completeExceptionally(ex);
+                doCompleteExceptionally.run();
             }
             return resultFuture;
         }
         final AGENT agent = iterator.next();
-        agent.checkAndSelectIfHasIdleAsync(/*timer*/).whenComplete((selected, ex) -> {
+        agent.checkAndSelectIfHasIdleAsync().whenComplete((selected, ex) -> {
             if (ex != null) {
                 log.error("Error selecting agent", ex);
-                attemptSelectAgentAsync(iterator, resultFuture, /*timer,*/ executor); // 继续下一个代理
+                attemptSelectAgentAsync(iterator, resultFuture, executor); // 继续下一个代理
                 return;
             }
             if (selected != null) {
@@ -58,25 +59,26 @@ public class LimitAgent<AGENT extends LimitAgent<?>> {
                     doComplete.run();
                 }
             } else {
-                attemptSelectAgentAsync(iterator, resultFuture, /*timer,*/ executor); // 当前代理无资源，尝试下一个
+                attemptSelectAgentAsync(iterator, resultFuture, executor); // 当前代理无资源，尝试下一个
             }
         });
         return resultFuture;
     }
 
-    public LimitAgent(final String name, final String sharedTemplate, final RedissonClient redisson, final Timer timer) {
+    public LimitAgent(final String name,
+                      final String sharedTemplate,
+                      final RedissonClient redisson) {
         this.name = name;
-        this.timer = timer;
         // 获取分布式计数器
         final String counterKey = String.format(sharedTemplate, this.name);
         log.info("{}: {} => shared counter: {}", this.getClass().getSimpleName(), this.name, counterKey);
         this._sharedCounter = redisson.getAtomicLong(counterKey);
     }
 
-    public CompletionStage<AGENT> checkAndSelectIfHasIdleAsync(/*final Timer timer*/) {
+    public CompletionStage<AGENT> checkAndSelectIfHasIdleAsync() {
         final Timer.Sample sample = Timer.start();
         return attemptSelectAsync(new CompletableFuture<>()).whenComplete((agent, ex)->{
-            sample.stop(timer);
+            sample.stop(selectIdleTimer);
         });
     }
 

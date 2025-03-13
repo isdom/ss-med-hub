@@ -1,7 +1,6 @@
 package com.yulore.medhub.service;
 
 import com.alibaba.nls.client.protocol.NlsClient;
-import com.yulore.medhub.metric.AsyncTaskMetrics;
 import com.yulore.medhub.nls.CosyAgent;
 import com.yulore.medhub.nls.LimitAgent;
 import com.yulore.medhub.nls.TTSAgent;
@@ -52,15 +51,23 @@ class TTSServiceImpl implements TTSService {
                         _alitts_prefix + ":%s",
                         redisson,
                         entry.getKey(),
-                        metricsProvider.getObject(
-                                "nls.tts.idle.select.duration",
-                                "单个 TTSAgent checkAndSelectIfHasIdleAsync 执行时长",
-                                new String[]{"account", entry.getKey()}),
                         entry.getValue());
                 if (null == agent) {
                     log.warn("tts init failed by: {}/{}", entry.getKey(), entry.getValue());
                 } else {
                     agent.client = client;
+                    agent.setSelectIdleTimer(
+                            timerProvider.getObject(
+                                    "nls.tts.idle.select.duration",
+                                    "单个 TTSAgent checkAndSelectIfHasIdleAsync 执行时长",
+                                    new String[]{"account", entry.getKey()})
+                    );
+                    agent.setSelectAgentTimer(
+                            timerProvider.getObject(
+                                    "nls.tts.agent.select.duration",
+                                    "从所有 TTSAgent 中 selectTTSAgent 执行时长",
+                                    new String[]{"account", entry.getKey()})
+                    );
                     _ttsAgents.add(agent);
                 }
             }
@@ -76,15 +83,23 @@ class TTSServiceImpl implements TTSService {
                         _alicosy_prefix + ":%s",
                         redisson,
                         entry.getKey(),
-                        metricsProvider.getObject(
-                                "nls.cosy.idle.select.duration",
-                                "单个 CosyAgent checkAndSelectIfHasIdleAsync 执行时长",
-                                new String[]{"account", entry.getKey()}),
                         entry.getValue());
                 if (null == agent) {
                     log.warn("cosy init failed by: {}/{}", entry.getKey(), entry.getValue());
                 } else {
                     agent.client = client;
+                    agent.setSelectIdleTimer(
+                            timerProvider.getObject(
+                                    "nls.cosy.idle.select.duration",
+                                    "单个 CosyAgent checkAndSelectIfHasIdleAsync 执行时长",
+                                    new String[]{"account", entry.getKey()})
+                    );
+                    agent.setSelectAgentTimer(
+                            timerProvider.getObject(
+                                    "nls.cosy.agent.select.duration",
+                                    "从所有 CosyAgent 中 selectCosyAgent 执行时长",
+                                    new String[]{"account", entry.getKey()})
+                    );
                     _cosyAgents.add(agent);
                 }
             }
@@ -96,14 +111,28 @@ class TTSServiceImpl implements TTSService {
 
     @Override
     public CompletionStage<TTSAgent> selectTTSAgentAsync() {
-        return LimitAgent.attemptSelectAgentAsync(new ArrayList<>(_ttsAgents).iterator(), new CompletableFuture<>(),
-                /*selectIdleTTS.getTimer(),*/ executorProvider.getObject());
+        final io.micrometer.core.instrument.Timer.Sample sample =
+                io.micrometer.core.instrument.Timer.start();
+        return LimitAgent.attemptSelectAgentAsync(new ArrayList<>(_ttsAgents).iterator(),
+                new CompletableFuture<>(),
+                executorProvider.getObject()).whenComplete((agent,ex) -> {
+                    if (agent != null) {
+                        sample.stop(agent.getSelectAgentTimer());
+                    }
+                });
     }
 
     @Override
     public CompletionStage<CosyAgent> selectCosyAgentAsync() {
-        return LimitAgent.attemptSelectAgentAsync(new ArrayList<>(_cosyAgents).iterator(), new CompletableFuture<>(),
-                /*selectIdleCosy.getTimer(),*/ executorProvider.getObject());
+        final io.micrometer.core.instrument.Timer.Sample sample =
+                io.micrometer.core.instrument.Timer.start();
+        return LimitAgent.attemptSelectAgentAsync(new ArrayList<>(_cosyAgents).iterator(),
+                new CompletableFuture<>(),
+                executorProvider.getObject()).whenComplete((agent,ex) -> {
+                    if (agent != null) {
+                        sample.stop(agent.getSelectAgentTimer());
+                    }
+                });
     }
 
     private void checkAndUpdateTTSToken() {
@@ -114,22 +143,6 @@ class TTSServiceImpl implements TTSService {
             agent.checkAndUpdateAccessToken();
         }
     }
-
-//    @Qualifier("selectIdleTTS")
-//    @Autowired
-//    private AsyncTaskMetrics selectIdleTTS;
-//
-//    @Qualifier("selectIdleCosy")
-//    @Autowired
-//    private AsyncTaskMetrics selectIdleCosy;
-//
-//    @Qualifier("selectTTSAgent")
-//    @Autowired
-//    private AsyncTaskMetrics selectTTSAgent;
-//
-//    @Qualifier("selectCosyAgent")
-//    @Autowired
-//    private AsyncTaskMetrics selectCosyAgent;
 
     @Value("${nls.url}")
     private String _nls_url;
@@ -160,7 +173,7 @@ class TTSServiceImpl implements TTSService {
     private ObjectProvider<Executor> executorProvider;
 
     @Autowired
-    private ObjectProvider<Timer> metricsProvider;
+    private ObjectProvider<Timer> timerProvider;
 
     private NlsClient _nlsClient;
 }

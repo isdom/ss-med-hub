@@ -31,13 +31,13 @@ public class TTSAgent extends LimitAgent<TTSAgent> {
 
     final AtomicReference<String> _currentToken = new AtomicReference<String>(null);
 
-    public TTSAgent(final String name, final String sharedTemplate, final RedissonClient redisson, final Timer timer) {
-        super(name, sharedTemplate, redisson, timer);
+    public TTSAgent(final String name, final String sharedTemplate, final RedissonClient redisson) {
+        super(name, sharedTemplate, redisson);
     }
 
-    public static TTSAgent parse(final String sharedTemplate, final RedissonClient redisson, final String accountName, final Timer timer, final String values) {
+    public static TTSAgent parse(final String sharedTemplate, final RedissonClient redisson, final String accountName, final String values) {
         final String[] kvs = values.split(" ");
-        final TTSAgent agent = new TTSAgent(accountName, sharedTemplate, redisson, timer);
+        final TTSAgent agent = new TTSAgent(accountName, sharedTemplate, redisson);
 
         for (String kv : kvs) {
             final String[] ss = kv.split("=");

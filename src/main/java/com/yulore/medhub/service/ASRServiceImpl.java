@@ -9,7 +9,6 @@ import com.alibaba.nls.client.protocol.asr.SpeechTranscriberListener;
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriberResponse;
 import com.tencent.asrv2.*;
 import com.tencent.core.ws.SpeechClient;
-import com.yulore.medhub.metric.AsyncTaskMetrics;
 import com.yulore.medhub.nls.ASRAgent;
 import com.yulore.medhub.nls.LimitAgent;
 import com.yulore.medhub.nls.TxASRAgent;
@@ -116,15 +115,23 @@ class ASRServiceImpl implements ASRService {
                         _aliasr_prefix + ":%s",
                         redisson,
                         entry.getKey(),
-                        metricsProvider.getObject(
-                                "nls.asr.idle.select.duration",
-                                "单个 ASRAgent checkAndSelectIfHasIdleAsync 执行时长",
-                                new String[]{"account", entry.getKey()}),
                         entry.getValue());
                 if (null == agent) {
                     log.warn("asr init failed by: {}/{}", entry.getKey(), entry.getValue());
                 } else {
                     agent.client = client;
+                    agent.setSelectIdleTimer(
+                            metricsProvider.getObject(
+                                    "nls.asr.idle.select.duration",
+                                    "单个 ASRAgent checkAndSelectIfHasIdleAsync 执行时长",
+                                    new String[]{"account", entry.getKey()})
+                            );
+                    agent.setSelectAgentTimer(
+                            metricsProvider.getObject(
+                                    "nls.asr.agent.select.duration",
+                                    "从所有 ASRAgent 中 selectASRAgent 执行时长",
+                                    new String[]{"account", entry.getKey()})
+                    );
                     _asrAgents.add(agent);
                 }
             }
@@ -141,15 +148,23 @@ class ASRServiceImpl implements ASRService {
                         _txasr_prefix + ":%s",
                         redisson,
                         entry.getKey(),
-                        metricsProvider.getObject(
-                                "nls.txasr.idle.select.duration",
-                                "单个 TxASRAgent checkAndSelectIfHasIdleAsync 执行时长",
-                                new String[]{"account", entry.getKey()}),
                         entry.getValue());
                 if (null == agent) {
                     log.warn("txasr init failed by: {}/{}", entry.getKey(), entry.getValue());
                 } else {
                     agent.client = _txClient;
+                    agent.setSelectIdleTimer(
+                            metricsProvider.getObject(
+                                    "nls.txasr.idle.select.duration",
+                                    "单个 TxASRAgent checkAndSelectIfHasIdleAsync 执行时长",
+                                    new String[]{"account", entry.getKey()})
+                    );
+                    agent.setSelectAgentTimer(
+                            metricsProvider.getObject(
+                                    "nls.txasr.agent.select.duration",
+                                    "从所有 TxASRAgent 中 selectTxASRAgent 执行时长",
+                                    new String[]{"account", entry.getKey()})
+                    );
                     _txasrAgents.add(agent);
                 }
             }
@@ -160,13 +175,27 @@ class ASRServiceImpl implements ASRService {
     }
 
     public CompletionStage<ASRAgent> selectASRAgentAsync() {
-        return LimitAgent.attemptSelectAgentAsync(new ArrayList<>(_asrAgents).iterator(), new CompletableFuture<>(),
-                /*selectIdleASR.getTimer(),*/ executorProvider.getObject());
+        final io.micrometer.core.instrument.Timer.Sample sample =
+                io.micrometer.core.instrument.Timer.start();
+        return LimitAgent.attemptSelectAgentAsync(new ArrayList<>(_asrAgents).iterator(),
+                new CompletableFuture<>(),
+                executorProvider.getObject()).whenComplete((agent,ex) -> {
+                    if (agent != null) {
+                        sample.stop(agent.getSelectAgentTimer());
+                    }
+                });
     }
 
     public CompletionStage<TxASRAgent> selectTxASRAgentAsync() {
-        return LimitAgent.attemptSelectAgentAsync(new ArrayList<>(_txasrAgents).iterator(), new CompletableFuture<>(),
-                /*selectIdleTxASR.getTimer(),*/ executorProvider.getObject());
+        final io.micrometer.core.instrument.Timer.Sample sample =
+                io.micrometer.core.instrument.Timer.start();
+        return LimitAgent.attemptSelectAgentAsync(new ArrayList<>(_txasrAgents).iterator(),
+                new CompletableFuture<>(),
+                executorProvider.getObject()).whenComplete((agent,ex) -> {
+                    if (agent != null) {
+                        sample.stop(agent.getSelectAgentTimer());
+                    }
+                });
     }
 
     private void checkAndUpdateASRToken() {
@@ -177,10 +206,7 @@ class ASRServiceImpl implements ASRService {
 
     private CompletionStage<Void> startWithTxasr(final WebSocket webSocket, final ASRActor actor, final WSCommandVO cmd) {
         final long startConnectingInMs = System.currentTimeMillis();
-        final io.micrometer.core.instrument.Timer.Sample sample =
-                io.micrometer.core.instrument.Timer.start();
         return selectTxASRAgentAsync().whenComplete((agent, ex) -> {
-            sample.stop(selectTxASRAgent.getTimer());
             if (ex != null) {
                 log.error("Failed to select TxASR agent", ex);
                 webSocket.close();
@@ -336,10 +362,7 @@ class ASRServiceImpl implements ASRService {
 
     private CompletionStage<Void> startWithAliasr(final WebSocket webSocket, final ASRActor actor, final WSCommandVO cmd) {
         final long startConnectingInMs = System.currentTimeMillis();
-        final io.micrometer.core.instrument.Timer.Sample sample =
-                io.micrometer.core.instrument.Timer.start();
         return selectASRAgentAsync().whenComplete((agent, ex) -> {
-            sample.stop(selectASRAgent.getTimer());
             if (ex != null) {
                 log.error("Failed to select ASR agent", ex);
                 webSocket.close();
@@ -577,22 +600,6 @@ class ASRServiceImpl implements ASRService {
             log.info("ws disconnected when sendEvent TranscriptionCompleted: {}", ex.toString());
         }
     }
-
-//    @Qualifier("selectIdleASR")
-//    @Autowired
-//    private AsyncTaskMetrics selectIdleASR;
-//
-//    @Qualifier("selectIdleTxASR")
-//    @Autowired
-//    private AsyncTaskMetrics selectIdleTxASR;
-
-    @Qualifier("selectASRAgent")
-    @Autowired
-    private AsyncTaskMetrics selectASRAgent;
-
-    @Qualifier("selectTxASRAgent")
-    @Autowired
-    private AsyncTaskMetrics selectTxASRAgent;
 
     @Value("${nls.url}")
     private String _nls_url;
