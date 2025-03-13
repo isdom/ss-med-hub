@@ -1,51 +1,29 @@
 package com.yulore.medhub.ws.builder;
 
-import com.alibaba.nls.client.protocol.OutputFormatEnum;
-import com.alibaba.nls.client.protocol.SampleRateEnum;
-import com.aliyun.oss.OSS;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Charsets;
-import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.bst.*;
-import com.yulore.medhub.api.CallApi;
-import com.yulore.medhub.api.CompositeVO;
-import com.yulore.medhub.api.ScriptApi;
-import com.yulore.medhub.service.ASRService;
 import com.yulore.medhub.service.BSTService;
-import com.yulore.medhub.service.TTSService;
-import com.yulore.medhub.session.PreviewSession;
 import com.yulore.medhub.task.PlayStreamPCMTask;
-import com.yulore.medhub.task.PlayStreamPCMTask2;
 import com.yulore.medhub.task.SampleInfo;
 import com.yulore.medhub.vo.*;
+import com.yulore.medhub.vo.cmd.VOPreview;
 import com.yulore.medhub.ws.WsHandler;
 import com.yulore.medhub.ws.WsHandlerBuilder;
-import com.yulore.medhub.ws.actor.PoActor;
 import com.yulore.medhub.ws.actor.PreviewActor;
 import com.yulore.util.ExceptionUtil;
-import com.yulore.util.VarsUtil;
-import io.netty.util.NettyRuntime;
-import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
-import javax.annotation.Resource;
 import java.net.URLDecoder;
 import java.nio.ByteBuffer;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -58,7 +36,7 @@ public class PreviewBuilder implements WsHandlerBuilder {
             @Override
             public void onMessage(WebSocket webSocket, String message) {
                 try {
-                    handleCommand(new ObjectMapper().readValue(message, WSCommandVO.class), webSocket, this);
+                    handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, webSocket, this);
                 } catch (JsonProcessingException ex) {
                     log.error("handleHubCommand {}: {}, an error occurred when parseAsJson: {}",
                             webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
@@ -73,16 +51,16 @@ public class PreviewBuilder implements WsHandlerBuilder {
         return actor;
     }
 
-    private void handleCommand(final WSCommandVO cmd, final WebSocket webSocket, final PreviewActor actor) {
+    private void handleCommand(final WSCommandVO<Void> cmd, final String message, final WebSocket webSocket, final PreviewActor actor) throws JsonProcessingException {
         if ("Preview".equals(cmd.getHeader().get("name"))) {
-            handlePreviewCommand(cmd, webSocket, actor);
+            handlePreviewCommand(VOPreview.of(message), webSocket, actor);
         } else {
             log.warn("handleCommand: Unknown Command: {}", cmd);
         }
     }
 
-    private void handlePreviewCommand(final WSCommandVO cmd, final WebSocket webSocket, final PreviewActor actor) {
-        final String cps = URLDecoder.decode(cmd.getPayload().get("cps"), Charsets.UTF_8);
+    private void handlePreviewCommand(final VOPreview vo, final WebSocket webSocket, final PreviewActor actor) {
+        final String cps = URLDecoder.decode(vo.cps, Charsets.UTF_8);
 
         if (actor.isPlaying()) {
             log.error("Preview: {} has already playing, ignore: {}", actor, cps);

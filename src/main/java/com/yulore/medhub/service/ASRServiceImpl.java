@@ -14,6 +14,7 @@ import com.yulore.medhub.nls.LimitAgent;
 import com.yulore.medhub.nls.TxASRAgent;
 import com.yulore.medhub.session.*;
 import com.yulore.medhub.vo.*;
+import com.yulore.medhub.vo.cmd.VOStartTranscription;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
@@ -36,8 +37,7 @@ import java.util.concurrent.*;
 @ConditionalOnProperty(prefix = "nls", name = "asr-enabled", havingValue = "true")
 class ASRServiceImpl implements ASRService {
     @Override
-    public void startTranscription(final WSCommandVO cmd, final WebSocket webSocket) {
-        final String provider = cmd.getPayload() != null ? cmd.getPayload().get("provider") : null;
+    public void startTranscription(final VOStartTranscription vo, final WebSocket webSocket) {
         final ASRActor actor = webSocket.getAttachment();
         if (actor == null) {
             log.error("StartTranscription: {} without ASRSession, abort", webSocket.getRemoteSocketAddress());
@@ -50,15 +50,15 @@ class ASRServiceImpl implements ASRService {
             return;
         }
 
-        if ("tx".equals(provider)) {
-            startWithTxasr(webSocket, actor, cmd).whenComplete( (v,ex) -> {
+        if ("tx".equals(vo.provider)) {
+            startWithTxasr(webSocket, actor, vo).whenComplete( (v,ex) -> {
                 if (ex != null) {
                     log.warn("StartTranscription with Tx: failed", ex);
                     // throw new RuntimeException(ex);
                 }
             });
         } else {
-            startWithAliasr(webSocket, actor, cmd).whenComplete( (v,ex) -> {
+            startWithAliasr(webSocket, actor, vo).whenComplete( (v,ex) -> {
                 if (ex != null) {
                     log.warn("StartTranscription with Ali: failed", ex);
                     // throw new RuntimeException(ex);
@@ -72,7 +72,7 @@ class ASRServiceImpl implements ASRService {
     }
 
     @Override
-    public void stopTranscription(final WSCommandVO cmd, final WebSocket webSocket) {
+    public void stopTranscription(final WebSocket webSocket) {
         stopAndCloseTranscriber(webSocket);
         webSocket.close();
     }
@@ -204,7 +204,7 @@ class ASRServiceImpl implements ASRService {
         }
     }
 
-    private CompletionStage<Void> startWithTxasr(final WebSocket webSocket, final ASRActor actor, final WSCommandVO cmd) {
+    private CompletionStage<Void> startWithTxasr(final WebSocket webSocket, final ASRActor actor, final VOStartTranscription vo) {
         final long startConnectingInMs = System.currentTimeMillis();
         return selectTxASRAgentAsync().whenComplete((agent, ex) -> {
             if (ex != null) {
@@ -228,17 +228,17 @@ class ASRServiceImpl implements ASRService {
                         buildRecognizerListener(actor, webSocket, agent, actor.sessionId(), startConnectingInMs),
                         (request) -> {
                             // https://cloud.tencent.com/document/product/1093/48982
-                            if (cmd.getPayload().get("noise_threshold") != null) {
-                                request.setNoiseThreshold(Float.parseFloat(cmd.getPayload().get("noise_threshold")));
+                            if (vo.noise_threshold != null) {
+                                request.setNoiseThreshold(Float.parseFloat(vo.noise_threshold));
                             }
-                            if (cmd.getPayload().get("engine_model_type") != null) {
-                                request.setEngineModelType(cmd.getPayload().get("engine_model_type"));
+                            if (vo.engine_model_type != null) {
+                                request.setEngineModelType(vo.engine_model_type);
                             }
-                            if (cmd.getPayload().get("input_sample_rate") != null) {
-                                request.setInputSampleRate(Integer.parseInt(cmd.getPayload().get("input_sample_rate")));
+                            if (vo.input_sample_rate != null) {
+                                request.setInputSampleRate(Integer.parseInt(vo.input_sample_rate));
                             }
-                            if (cmd.getPayload().get("vad_silence_time") != null) {
-                                request.setVadSilenceTime(Integer.parseInt(cmd.getPayload().get("vad_silence_time")));
+                            if (vo.vad_silence_time != null) {
+                                request.setVadSilenceTime(Integer.parseInt(vo.vad_silence_time));
                             }
                         });
 
@@ -360,7 +360,7 @@ class ASRServiceImpl implements ASRService {
         };
     }
 
-    private CompletionStage<Void> startWithAliasr(final WebSocket webSocket, final ASRActor actor, final WSCommandVO cmd) {
+    private CompletionStage<Void> startWithAliasr(final WebSocket webSocket, final ASRActor actor, final VOStartTranscription vo) {
         final long startConnectingInMs = System.currentTimeMillis();
         return selectASRAgentAsync().whenComplete((agent, ex) -> {
             if (ex != null) {
@@ -383,9 +383,9 @@ class ASRServiceImpl implements ASRService {
                 final SpeechTranscriber transcriber = actor.onSpeechTranscriberCreated(
                         buildSpeechTranscriber(agent, buildTranscriberListener(actor, webSocket, agent, actor.sessionId(), startConnectingInMs)));
 
-                if (cmd.getPayload() != null && cmd.getPayload().get("speech_noise_threshold") != null) {
+                if (vo.speech_noise_threshold != null) {
                     // ref: https://help.aliyun.com/zh/isi/developer-reference/websocket#sectiondiv-rz2-i36-2gv
-                    transcriber.addCustomedParam("speech_noise_threshold", Float.parseFloat(cmd.getPayload().get("speech_noise_threshold")));
+                    transcriber.addCustomedParam("speech_noise_threshold", Float.parseFloat(vo.speech_noise_threshold));
                 }
 
                 actor.setASR(() -> {

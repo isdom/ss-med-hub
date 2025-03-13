@@ -8,6 +8,7 @@ import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.medhub.api.*;
 import com.yulore.medhub.session.ASRActor;
 import com.yulore.medhub.vo.*;
+import com.yulore.medhub.vo.cmd.VOUserAnswer;
 import com.yulore.medhub.ws.WsHandler;
 import com.yulore.util.ByteArrayListInputStream;
 import com.yulore.util.ExceptionUtil;
@@ -142,7 +143,7 @@ public abstract class PoActor extends ASRActor implements WsHandler {
         }
     }
 
-    public void notifyUserAnswer(final WSCommandVO cmd) {
+    public void notifyUserAnswer(final VOUserAnswer vo) {
         if (!_isUserAnswered.compareAndSet(false, true)) {
             log.warn("[{}]: [{}]-[{}]: notifyUserAnswer called already, ignore!", _clientIp, _sessionId, _uuid);
             return;
@@ -152,23 +153,17 @@ public abstract class PoActor extends ASRActor implements WsHandler {
             return;
         }
         try {
-            final String kid = cmd.getPayload() != null ? cmd.getPayload().get("kid") : "";
-            final String tid = cmd.getPayload() != null ? cmd.getPayload().get("tid") : "";
-            final String realName = cmd.getPayload() != null ? cmd.getPayload().get("realName") : "";
-            final String aesMobile = cmd.getPayload() != null ? cmd.getPayload().get("aesMobile") : "";
-            final String genderStr = cmd.getPayload() != null ? cmd.getPayload().get("genderStr") : "";
-
             final ApiResponse<UserAnswerVO> response = _callApi.user_answer(CallApi.UserAnswerRequest.builder()
                             .sessionId(_sessionId)
-                            .kid(kid)
-                            .tid(tid)
-                            .realName(realName)
-                            .genderStr(genderStr)
-                            .aesMobile(aesMobile)
+                            .kid(vo.kid)
+                            .tid(vo.tid)
+                            .realName(vo.realName)
+                            .genderStr(vo.genderStr)
+                            .aesMobile(vo.aesMobile)
                             .answerTime(System.currentTimeMillis())
                             .build());
             log.info("[{}]: [{}]-[{}]: userAnswer: kid:{}/tid:{}/realName:{}/gender:{}/aesMobile:{} => response: {}",
-                    _clientIp, _sessionId, _uuid, kid, tid, realName, genderStr, aesMobile, response);
+                    _clientIp, _sessionId, _uuid, vo.kid, vo.tid, vo.realName, vo.genderStr, vo.aesMobile, response);
 
             saveAndPlayWelcome(response);
         } catch (Exception ex) {

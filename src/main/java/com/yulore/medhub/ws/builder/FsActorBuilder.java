@@ -1,11 +1,11 @@
 package com.yulore.medhub.ws.builder;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yulore.medhub.api.ScriptApi;
 import com.yulore.medhub.service.ASRService;
 import com.yulore.medhub.service.CommandExecutor;
 import com.yulore.medhub.vo.WSCommandVO;
+import com.yulore.medhub.vo.cmd.*;
 import com.yulore.medhub.ws.HandlerUrlBuilder;
 import com.yulore.medhub.ws.actor.FsActor;
 import com.yulore.medhub.vo.WSEventVO;
@@ -60,7 +60,7 @@ public class FsActorBuilder implements WsHandlerBuilder {
                 public void onMessage(final WebSocket webSocket, final String message) {
                     cmdExecutorProvider.getObject().submit(()->{
                         try {
-                            handleCommand(new ObjectMapper().readValue(message, WSCommandVO.class), webSocket);
+                            handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket);
                         } catch (JsonProcessingException ex) {
                             log.error("handleCommand {}: {}, an error occurred when parseAsJson: {}",
                                     webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
@@ -106,53 +106,23 @@ public class FsActorBuilder implements WsHandlerBuilder {
         }
     }
 
-    private void handleCommand(final WSCommandVO cmd, final WebSocket webSocket) {
+    private void handleCommand(final WSCommandVO<Void> cmd, final String message, final FsActor actor, final WebSocket webSocket) throws JsonProcessingException {
         if ("StartTranscription".equals(cmd.getHeader().get("name"))) {
-            asrService.startTranscription(cmd, webSocket);
+            asrService.startTranscription(VOStartTranscription.of(message), webSocket);
         } else if ("StopTranscription".equals(cmd.getHeader().get("name"))) {
-            asrService.stopTranscription(cmd, webSocket);
+            asrService.stopTranscription(webSocket);
         } else if ("FSPlaybackStarted".equals(cmd.getHeader().get("name"))) {
-            handleFSPlaybackStartedCommand(cmd, webSocket);
+            actor.notifyFSPlaybackStarted(VOFSPlaybackStarted.of(message));
         } else if ("FSPlaybackStopped".equals(cmd.getHeader().get("name"))) {
-            handleFSPlaybackStoppedCommand(cmd, webSocket);
+            actor.notifyFSPlaybackStopped(VOFSPlaybackStopped.of(message));
         } else if ("FSPlaybackPaused".equals(cmd.getHeader().get("name"))) {
-            handleFSPlaybackPausedCommand(cmd, webSocket);
+            actor.notifyPlaybackPaused(VOFSPlaybackPaused.of(message));
         } else if ("FSPlaybackResumed".equals(cmd.getHeader().get("name"))) {
-            handleFSPlaybackResumedCommand(cmd, webSocket);
+            actor.notifyPlaybackResumed(VOFSPlaybackResumed.of(message));
         } else if ("FSRecordStarted".equals(cmd.getHeader().get("name"))) {
-            handleFSRecordStartedCommand(cmd, webSocket);
+            actor.notifyFSRecordStarted(VOFSRecordStarted.of(message));
         } else {
             log.warn("handleCommand: Unknown Command: {}", cmd);
-        }
-    }
-
-    private void handleFSRecordStartedCommand(final WSCommandVO cmd, final WebSocket webSocket) {
-        if (webSocket.getAttachment() instanceof FsActor session) {
-            session.notifyFSRecordStarted(cmd);
-        }
-    }
-
-    private void handleFSPlaybackStartedCommand(final WSCommandVO cmd, final WebSocket webSocket) {
-        if (webSocket.getAttachment() instanceof FsActor session) {
-            session.notifyFSPlaybackStarted(cmd);
-        }
-    }
-
-    private void handleFSPlaybackStoppedCommand(final WSCommandVO cmd, final WebSocket webSocket) {
-        if (webSocket.getAttachment() instanceof FsActor session) {
-            session.notifyFSPlaybackStopped(cmd);
-        }
-    }
-
-    private void handleFSPlaybackResumedCommand(final WSCommandVO cmd, final WebSocket webSocket) {
-        if (webSocket.getAttachment() instanceof FsActor fsActor) {
-            fsActor.notifyPlaybackResumed(cmd);
-        }
-    }
-
-    private void handleFSPlaybackPausedCommand(final WSCommandVO cmd, final WebSocket webSocket) {
-        if (webSocket.getAttachment() instanceof FsActor fsActor) {
-            fsActor.notifyPlaybackPaused(cmd);
         }
     }
 

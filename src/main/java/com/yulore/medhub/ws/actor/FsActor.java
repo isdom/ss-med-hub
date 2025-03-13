@@ -8,6 +8,7 @@ import com.yulore.medhub.api.ApiResponse;
 import com.yulore.medhub.api.ScriptApi;
 import com.yulore.medhub.session.ASRActor;
 import com.yulore.medhub.vo.*;
+import com.yulore.medhub.vo.cmd.*;
 import com.yulore.medhub.ws.HandlerUrlBuilder;
 import com.yulore.medhub.ws.WsHandler;
 import com.yulore.util.ExceptionUtil;
@@ -205,80 +206,76 @@ public abstract class FsActor extends ASRActor implements WsHandler {
         }
     }
 
-    public void notifyFSPlaybackStarted(final WSCommandVO cmd) {
-        final String playbackId = cmd.getPayload().get("playback_id");
+    public void notifyFSPlaybackStarted(final VOFSPlaybackStarted vo) {
         final long playbackStartedInMs = System.currentTimeMillis();
-        memoFor(playbackId).setBeginInMs(playbackStartedInMs);
+        memoFor(vo.playback_id).setBeginInMs(playbackStartedInMs);
 
         final String currentPlaybackId = _currentPlaybackId.get();
         if (currentPlaybackId != null) {
-            if (currentPlaybackId.equals(playbackId)) {
+            if (currentPlaybackId.equals(vo.playback_id)) {
                 _currentPlaybackDuration.set(()->System.currentTimeMillis() - playbackStartedInMs);
                 log.info("[{}]: notifyFSPlaybackStarted => current playbackid: {} Matched",
-                        _sessionId, playbackId);
+                        _sessionId, vo.playback_id);
             } else {
                 log.info("[{}]: notifyFSPlaybackStarted => current playbackid: {} mismatch started playbackid: {}, ignore",
-                        _sessionId, currentPlaybackId, playbackId);
+                        _sessionId, currentPlaybackId, vo.playback_id);
             }
         } else {
-            log.warn("[{}]: currentPlaybackId is null BUT notifyFSPlaybackStarted with: {}", _sessionId, playbackId);
+            log.warn("[{}]: currentPlaybackId is null BUT notifyFSPlaybackStarted with: {}", _sessionId, vo.playback_id);
         }
     }
 
-    public void notifyPlaybackResumed(final WSCommandVO cmd) {
-        final String playbackId = cmd.getPayload().get("playback_id");
+    public void notifyPlaybackResumed(final VOFSPlaybackResumed vo) {
         final String currentPlaybackId = _currentPlaybackId.get();
         if (currentPlaybackId != null) {
-            if (currentPlaybackId.equals(playbackId)) {
-                final String str_playback_duration  = cmd.getPayload().get("playback_duration");
+            if (currentPlaybackId.equals(vo.playback_id)) {
+                final String str_playback_duration  = vo.playback_duration;
                 final long playbackDurationInMs = str_playback_duration != null ? Long.parseLong(str_playback_duration) : 0;
                 final long playbackResumedInMs = System.currentTimeMillis();
                 _currentPlaybackDuration.set(()->playbackDurationInMs + (System.currentTimeMillis() - playbackResumedInMs));
                 log.info("[{}]: notifyPlaybackResumed => current playbackid: {} Matched / playback_duration: {} ms",
-                        _sessionId, playbackId, playbackDurationInMs);
+                        _sessionId, vo.playback_id, playbackDurationInMs);
             } else {
                 log.info("[{}]: notifyPlaybackResumed => current playbackid: {} mismatch resumed playbackid: {}, ignore",
-                        _sessionId, currentPlaybackId, playbackId);
+                        _sessionId, currentPlaybackId, vo.playback_id);
             }
         } else {
-            log.warn("[{}]: currentPlaybackId is null BUT notifyPlaybackResumed with: {}", _sessionId, playbackId);
+            log.warn("[{}]: currentPlaybackId is null BUT notifyPlaybackResumed with: {}", _sessionId, vo.playback_id);
         }
     }
 
-    public void notifyPlaybackPaused(final WSCommandVO cmd) {
-        final String playbackId = cmd.getPayload().get("playback_id");
+    public void notifyPlaybackPaused(final VOFSPlaybackPaused vo) {
         final String currentPlaybackId = _currentPlaybackId.get();
         if (currentPlaybackId != null) {
-            if (currentPlaybackId.equals(playbackId)) {
-                final String str_playback_duration  = cmd.getPayload().get("playback_duration");
+            if (currentPlaybackId.equals(vo.playback_id)) {
+                final String str_playback_duration  = vo.playback_duration;
                 final long playbackDurationInMs = str_playback_duration != null ? Long.parseLong(str_playback_duration) : 0;
                 _currentPlaybackDuration.set(()->playbackDurationInMs);
                 log.info("[{}]: notifyPlaybackPaused => current playbackid: {} Matched / playback_duration: {} ms",
-                        _sessionId, playbackId, playbackDurationInMs);
+                        _sessionId, vo.playback_id, playbackDurationInMs);
             } else {
                 log.info("[{}]: notifyPlaybackPaused => current playbackid: {} mismatch paused playbackid: {}, ignore",
-                        _sessionId, currentPlaybackId, playbackId);
+                        _sessionId, currentPlaybackId, vo.playback_id);
             }
         } else {
-            log.warn("[{}]: currentPlaybackId is null BUT notifyPlaybackPaused with: {}", _sessionId, playbackId);
+            log.warn("[{}]: currentPlaybackId is null BUT notifyPlaybackPaused with: {}", _sessionId, vo.playback_id);
         }
     }
 
-    public void notifyFSPlaybackStopped(final WSCommandVO cmd) {
-        final String playbackId = cmd.getPayload().get("playback_id");
+    public void notifyFSPlaybackStopped(final VOFSPlaybackStopped vo) {
         if (_currentPlaybackId.get() != null
-            && playbackId != null
-            && playbackId.equals(_currentPlaybackId.get()) ) {
+            && vo.playback_id != null
+            && vo.playback_id.equals(_currentPlaybackId.get()) ) {
             _currentPlaybackId.set(null);
             _currentPlaybackDuration.set(()->0L);
             _idleStartInMs.set(System.currentTimeMillis());
-            log.info("[{}]: notifyFSPlaybackStopped: current playback_id matched:{}, clear current PlaybackId", _sessionId, playbackId);
-            if (memoFor(playbackId).isHangup()) {
+            log.info("[{}]: notifyFSPlaybackStopped: current playback_id matched:{}, clear current PlaybackId", _sessionId, vo.playback_id);
+            if (memoFor(vo.playback_id).isHangup()) {
                 // hangup call
                 _sendEvent.accept("FSHangup", new PayloadFSHangup(_uuid, _sessionId));
             }
         } else {
-            log.info("!NOT! current playback_id:{}, ignored", playbackId);
+            log.info("!NOT! current playback_id:{}, ignored", vo.playback_id);
         }
     }
 
@@ -485,10 +482,9 @@ public abstract class FsActor extends ASRActor implements WsHandler {
         return isAiSpeaking() ?  _currentPlaybackDuration.get().get().intValue() : 0;
     }
 
-    public void notifyFSRecordStarted(final WSCommandVO cmd) {
-        final String recordStartTimestamp = cmd.getPayload().get("record_start_timestamp");
-        if (recordStartTimestamp != null && !recordStartTimestamp.isEmpty()) {
-            final long rst = Long.parseLong(recordStartTimestamp);
+    public void notifyFSRecordStarted(final VOFSRecordStarted vo) {
+        if (vo.record_start_timestamp != null && !vo.record_start_timestamp.isEmpty()) {
+            final long rst = Long.parseLong(vo.record_start_timestamp);
             if (rst > 0) {
                 // Microseconds -> Milliseconds
                 _recordStartInMs.set(rst / 1000L);

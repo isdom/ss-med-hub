@@ -1,9 +1,10 @@
 package com.yulore.medhub.service;
 
 import com.yulore.medhub.vo.WSCommandVO;
+import com.yulore.medhub.vo.cmd.VOStartTranscription;
 import org.java_websocket.WebSocket;
 
 public interface ASRService {
-    void startTranscription(final WSCommandVO cmd, final WebSocket webSocket);
-    void stopTranscription(final WSCommandVO cmd, final WebSocket webSocket);
+    void startTranscription(final VOStartTranscription vo, final WebSocket webSocket);
+    void stopTranscription(final WebSocket webSocket);
 }

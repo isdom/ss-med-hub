@@ -12,6 +12,7 @@ import com.yulore.medhub.service.CommandExecutor;
 import com.yulore.medhub.task.PlayStreamPCMTask2;
 import com.yulore.medhub.task.SampleInfo;
 import com.yulore.medhub.vo.*;
+import com.yulore.medhub.vo.cmd.*;
 import com.yulore.medhub.ws.WsHandler;
 import com.yulore.medhub.ws.WsHandlerBuilder;
 import com.yulore.medhub.ws.actor.PoActor;
@@ -98,7 +99,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
                 public void onMessage(final WebSocket webSocket, final String message) {
                     cmdExecutorProvider.getObject().submit(()-> {
                         try {
-                            handleCommand(new ObjectMapper().readValue(message, WSCommandVO.class), webSocket, this);
+                            handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, webSocket, this);
                         } catch (JsonProcessingException ex) {
                             log.error("handleCommand {}: {}, an error occurred when parseAsJson: {}",
                                     webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
@@ -127,7 +128,6 @@ public class PoActorBuilder implements WsHandlerBuilder {
         } else {
             final String sessionId = varsBegin > 0 ? VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "sessionId", '&') : null;
             // init PlaybackSession attach with webSocket
-            // final PlaybackActor playbackSession = new PlaybackActor(sessionId);
             log.info("ws path match: {}, role: {}, using ws as PoActor's playback ws: [{}]", prefix, role, sessionId);
             final PoActor actor = PoActor.findBy(sessionId);
             if (actor == null) {
@@ -151,68 +151,35 @@ public class PoActorBuilder implements WsHandlerBuilder {
         }
     }
 
-    private void handleCommand(final WSCommandVO cmd, final WebSocket webSocket, final PoActor actor) {
+    private void handleCommand(final WSCommandVO<Void> cmd, final String message, final WebSocket webSocket, final PoActor actor) throws JsonProcessingException {
         if ("StartTranscription".equals(cmd.getHeader().get("name"))) {
-            asrService.startTranscription(cmd, webSocket);
+            asrService.startTranscription(VOStartTranscription.of(message), webSocket);
         } else if ("StopTranscription".equals(cmd.getHeader().get("name"))) {
-            asrService.stopTranscription(cmd, webSocket);
+            asrService.stopTranscription(webSocket);
         }else if ("PCMPlaybackStopped".equals(cmd.getHeader().get("name"))) {
-            handlePCMPlaybackStoppedCommand(cmd, webSocket, actor);
+            final var vo = VOPCMPlaybackStopped.of(message);
+            log.info("[{}]: handlePCMPlaybackStoppedCommand: playbackId: {}", actor.sessionId(), vo.playback_id);
+            actor.notifyPlaybackStop(vo.playback_id, vo.content_id, vo.playback_begin_timestamp, vo.playback_end_timestamp, vo.playback_duration);
         } else if ("PCMPlaybackPaused".equals(cmd.getHeader().get("name"))) {
-            handlePCMPlaybackPausedCommand(cmd, webSocket, actor);
+            // eg: {"header": {"name": "PCMPlaybackPaused"},"payload": {"playback_id": "ebfafab3-eb5e-454a-9427-187ceff9ff23", "content_id": "2213745", "playback_duration": "4.410666666666666"}}
+            final var vo = VOPCMPlaybackPaused.of(message);
+            log.info("[{}]: handlePCMPlaybackPausedCommand: playbackId: {}", actor.sessionId(), vo.playback_id);
+            actor.notifyPlaybackPaused(vo.playback_id, vo.content_id, vo.playback_duration);
         } else if ("PCMPlaybackResumed".equals(cmd.getHeader().get("name"))) {
-            handlePCMPlaybackResumedCommand(cmd, webSocket, actor);
+            // eg: {"header": {"name": "PCMPlaybackResumed"},"payload": {"playback_id": "ebfafab3-eb5e-454a-9427-187ceff9ff23", "content_id": "2213745", "playback_duration": "4.410666666666666"}}
+            final var vo = VOPCMPlaybackResumed.of(message);
+            log.info("[{}]: handlePCMPlaybackResumedCommand: playbackId: {}", actor.sessionId(), vo.playback_id);
+            actor.notifyPlaybackResumed(vo.playback_id, vo.content_id, vo.playback_duration);
         } else if ("PCMPlaybackStarted".equals(cmd.getHeader().get("name"))) {
-            handlePCMPlaybackStartedCommand(cmd, webSocket, actor);
+            // eg: {"header": {"name": "PCMPlaybackStarted"},"payload": {"playback_id": "ebfafab3-eb5e-454a-9427-187ceff9ff23", "content_id": "2213745"}}
+            final var vo = VOPCMPlaybackStarted.of(message);
+            log.info("[{}]: handlePCMPlaybackStartedCommand: playbackId: {}", actor.sessionId(), vo.playback_id);
+            actor.notifyPlaybackStarted(vo.playback_id, vo.content_id);
         } else if ("UserAnswer".equals(cmd.getHeader().get("name"))) {
-            handleUserAnswerCommand(cmd, webSocket, actor);
+            actor.notifyUserAnswer(VOUserAnswer.of(message));
         } else {
             log.warn("handleCommand: Unknown Command: {}", cmd);
         }
-    }
-
-    private void handleUserAnswerCommand(final WSCommandVO cmd, final WebSocket webSocket, final PoActor actor) {
-        actor.notifyUserAnswer(cmd);
-    }
-
-    private void handlePCMPlaybackStartedCommand(final WSCommandVO cmd, final WebSocket webSocket, final PoActor actor) {
-        // eg: {"header": {"name": "PCMPlaybackStarted"},"payload": {"playback_id": "ebfafab3-eb5e-454a-9427-187ceff9ff23", "content_id": "2213745"}}
-        final String playbackId = cmd.getPayload() != null ? cmd.getPayload().get("playback_id") : null;
-        final String contentId = cmd.getPayload() != null ? cmd.getPayload().get("content_id") : null;
-
-        log.info("[{}]: handlePCMPlaybackStartedCommand: playbackId: {}", actor.sessionId(), playbackId);
-        actor.notifyPlaybackStarted(playbackId, contentId);
-    }
-
-    private void handlePCMPlaybackResumedCommand(final WSCommandVO cmd, final WebSocket webSocket, final PoActor actor) {
-        // eg: {"header": {"name": "PCMPlaybackResumed"},"payload": {"playback_id": "ebfafab3-eb5e-454a-9427-187ceff9ff23", "content_id": "2213745", "playback_duration": "4.410666666666666"}}
-        final String playbackId = cmd.getPayload() != null ? cmd.getPayload().get("playback_id") : null;
-        final String contentId = cmd.getPayload() != null ? cmd.getPayload().get("content_id") : null;
-        final String playback_duration  = cmd.getPayload() != null ? cmd.getPayload().get("playback_duration") : null; //"4.410666666666666"
-
-        log.info("[{}]: handlePCMPlaybackResumedCommand: playbackId: {}", actor.sessionId(), playbackId);
-        actor.notifyPlaybackResumed(playbackId, contentId, playback_duration);
-    }
-
-    private void handlePCMPlaybackPausedCommand(final WSCommandVO cmd, final WebSocket webSocket, final PoActor actor) {
-        // eg: {"header": {"name": "PCMPlaybackPaused"},"payload": {"playback_id": "ebfafab3-eb5e-454a-9427-187ceff9ff23", "content_id": "2213745", "playback_duration": "4.410666666666666"}}
-        final String playbackId = cmd.getPayload() != null ? cmd.getPayload().get("playback_id") : null;
-        final String contentId = cmd.getPayload() != null ? cmd.getPayload().get("content_id") : null;
-        final String playback_duration  = cmd.getPayload() != null ? cmd.getPayload().get("playback_duration") : null; //"4.410666666666666"
-
-        log.info("[{}]: handlePCMPlaybackPausedCommand: playbackId: {}", actor.sessionId(), playbackId);
-        actor.notifyPlaybackPaused(playbackId, contentId, playback_duration);
-    }
-
-    private void handlePCMPlaybackStoppedCommand(final WSCommandVO cmd, final WebSocket webSocket, final PoActor actor) {
-        final String playbackId = cmd.getPayload() != null ? cmd.getPayload().get("playback_id") : null;
-        final String contentId = cmd.getPayload() != null ? cmd.getPayload().get("content_id") : null;
-        final String playback_begin_timestamp = cmd.getPayload() != null ? cmd.getPayload().get("playback_begin_timestamp") : null;
-        final String playback_end_timestamp  = cmd.getPayload() != null ? cmd.getPayload().get("playback_end_timestamp") : null;//": "1736389958856"
-        final String playback_duration  = cmd.getPayload() != null ? cmd.getPayload().get("playback_duration") : null; //": "3.4506666666666668"}
-
-        log.info("[{}]: handlePCMPlaybackStoppedCommand: playbackId: {}", actor.sessionId(), playbackId);
-        actor.notifyPlaybackStop(playbackId, contentId, playback_begin_timestamp, playback_end_timestamp, playback_duration);
     }
 
     private Runnable playbackOn2(final PoActor.PlaybackContext playbackContext, final PoActor poActor, final WebSocket webSocket) {
