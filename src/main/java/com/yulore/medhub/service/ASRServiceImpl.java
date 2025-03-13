@@ -121,13 +121,13 @@ class ASRServiceImpl implements ASRService {
                 } else {
                     agent.client = client;
                     agent.setSelectIdleTimer(
-                            metricsProvider.getObject(
+                            timerProvider.getObject(
                                     "nls.asr.idle.select.duration",
                                     "单个 ASRAgent checkAndSelectIfHasIdleAsync 执行时长",
                                     new String[]{"account", entry.getKey()})
                             );
                     agent.setSelectAgentTimer(
-                            metricsProvider.getObject(
+                            timerProvider.getObject(
                                     "nls.asr.agent.select.duration",
                                     "从所有 ASRAgent 中 selectASRAgent 执行时长",
                                     new String[]{"account", entry.getKey()})
@@ -154,13 +154,13 @@ class ASRServiceImpl implements ASRService {
                 } else {
                     agent.client = _txClient;
                     agent.setSelectIdleTimer(
-                            metricsProvider.getObject(
+                            timerProvider.getObject(
                                     "nls.txasr.idle.select.duration",
                                     "单个 TxASRAgent checkAndSelectIfHasIdleAsync 执行时长",
                                     new String[]{"account", entry.getKey()})
                     );
                     agent.setSelectAgentTimer(
-                            metricsProvider.getObject(
+                            timerProvider.getObject(
                                     "nls.txasr.agent.select.duration",
                                     "从所有 TxASRAgent 中 selectTxASRAgent 执行时长",
                                     new String[]{"account", entry.getKey()})
@@ -630,7 +630,7 @@ class ASRServiceImpl implements ASRService {
     private ObjectProvider<Executor> executorProvider;
 
     @Autowired
-    private ObjectProvider<Timer> metricsProvider;
+    private ObjectProvider<Timer> timerProvider;
 
     private NlsClient _nlsClient;
 

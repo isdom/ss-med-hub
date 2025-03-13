@@ -14,6 +14,7 @@ import com.yulore.medhub.ws.WsHandlerBuilder;
 import com.yulore.medhub.ws.actor.StreamActor;
 import com.yulore.util.ExceptionUtil;
 import com.yulore.util.VarsUtil;
+import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
@@ -23,6 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+import javax.annotation.PostConstruct;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.ScheduledExecutorService;
@@ -36,14 +38,30 @@ import java.util.function.Consumer;
 public class ReadStreamBuilder implements WsHandlerBuilder {
     public static final byte[] EMPTY_BYTES = new byte[0];
 
+    private Timer open_timer;
+    private Timer getlen_timer;
+    private Timer seek_timer;
+    private Timer read_timer;
+    private Timer tell_timer;
+
+    @PostConstruct
+    private void init() {
+        open_timer = timerProvider.getObject("rms.ro.duration", "read rms op", new String[]{"op", "open"});
+        getlen_timer = timerProvider.getObject("rms.ro.duration", "read rms op", new String[]{"op", "getlen"});
+        seek_timer = timerProvider.getObject("rms.ro.duration", "read rms op", new String[]{"op", "seek"});
+        read_timer = timerProvider.getObject("rms.ro.duration", "read rms op", new String[]{"op", "read"});
+        tell_timer = timerProvider.getObject("rms.ro.duration", "read rms op", new String[]{"op", "tell"});
+    }
+
     @Override
     public WsHandler build(final String prefix, final WebSocket webSocket, final ClientHandshake handshake) {
         final StreamActor actor = new StreamActor() {
             @Override
             public void onMessage(final WebSocket webSocket, final String message) {
+                final Timer.Sample sample = Timer.start();
                 cmdExecutorProvider.getObject().submit(()-> {
                     try {
-                        handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, webSocket, this);
+                        handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, webSocket, this, sample);
                     } catch (JsonProcessingException ex) {
                         log.error("handleCommand {}: {}, an error occurred when parseAsJson: {}",
                                 webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
@@ -53,24 +71,28 @@ public class ReadStreamBuilder implements WsHandlerBuilder {
 
             @Override
             public void onMessage(final WebSocket webSocket, final ByteBuffer bytes) {
-                log.error("[{}]: Unsupported command for readStream: fileWriteCommand", _ss.sessionId());
+                log.error("[{}]: Unsupported write command for readonly stream", _ss.sessionId());
             }
         };
         webSocket.setAttachment(actor);
         return actor;
     }
 
-    private void handleCommand(final WSCommandVO<Void> cmd, final String message, final WebSocket webSocket, final StreamActor actor) throws JsonProcessingException {
+    private void handleCommand(final WSCommandVO<Void> cmd,
+                               final String message,
+                               final WebSocket webSocket,
+                               final StreamActor actor,
+                               final Timer.Sample sample) throws JsonProcessingException {
         if ("OpenStream".equals(cmd.getHeader().get("name"))) {
-            handleOpenStreamCommand(VOSOpenStream.of(message), webSocket, actor);
+            handleOpenStreamCommand(VOSOpenStream.of(message), webSocket, actor, sample);
         } else if ("GetFileLen".equals(cmd.getHeader().get("name"))) {
-            handleGetFileLenCommand(webSocket, actor);
+            handleGetFileLenCommand(webSocket, actor, sample);
         } else if ("FileSeek".equals(cmd.getHeader().get("name"))) {
-            handleFileSeekCommand(VOSFileSeek.of(message), webSocket, actor);
+            handleFileSeekCommand(VOSFileSeek.of(message), webSocket, actor, sample);
         } else if ("FileRead".equals(cmd.getHeader().get("name"))) {
-            handleFileReadCommand(VOSFileRead.of(message), webSocket, actor);
+            handleFileReadCommand(VOSFileRead.of(message), webSocket, actor, sample);
         } else if ("FileTell".equals(cmd.getHeader().get("name"))) {
-            handleFileTellCommand(webSocket, actor);
+            handleFileTellCommand(webSocket, actor, sample);
         } else {
             log.warn("handleCommand: Unknown Command: {}", cmd);
         }
@@ -99,7 +121,7 @@ public class ReadStreamBuilder implements WsHandlerBuilder {
         };
     }
 
-    private void handleOpenStreamCommand(final VOSOpenStream vo, final WebSocket webSocket, final StreamActor actor) {
+    private void handleOpenStreamCommand(final VOSOpenStream vo, final WebSocket webSocket, final StreamActor actor, final Timer.Sample sample) {
         final long startInMs = System.currentTimeMillis();
 
         log.info("[{}]: open read stream => path: {}/is_write: {}/contentId: {}/playIdx: {}",
@@ -133,13 +155,14 @@ public class ReadStreamBuilder implements WsHandlerBuilder {
 
         _ss.onDataChange((ss) -> {
             ss.sendEvent(startInMs, "StreamOpened", null);
+            sample.stop(open_timer);
             return true;
         });
         bst.buildStream(_ss::appendData, (isOK) -> _ss.appendCompleted());
     }
 
 
-    private void handleGetFileLenCommand(final WebSocket webSocket, final StreamActor actor) {
+    private void handleGetFileLenCommand(final WebSocket webSocket, final StreamActor actor, final Timer.Sample sample) {
         final long startInMs = System.currentTimeMillis();
         log.info("get file len:");
         final StreamSession ss = actor._ss;
@@ -149,9 +172,10 @@ public class ReadStreamBuilder implements WsHandlerBuilder {
             return;
         }
         ss.sendEvent(startInMs, "GetFileLenResult", new PayloadGetFileLenResult(ss.length()));
+        sample.stop(getlen_timer);
     }
 
-    private void handleFileSeekCommand(final VOSFileSeek vo, final WebSocket webSocket, final StreamActor actor) {
+    private void handleFileSeekCommand(final VOSFileSeek vo, final WebSocket webSocket, final StreamActor actor, final Timer.Sample sample) {
         final long startInMs = System.currentTimeMillis();
         log.info("file seek => offset: {}, whence: {}", vo.offset, vo.whence);
         final StreamSession ss = actor._ss;
@@ -179,9 +203,10 @@ public class ReadStreamBuilder implements WsHandlerBuilder {
             pos = ss.seekFromStart(seek_from_start);
         }
         ss.sendEvent(startInMs,"FileSeekResult", new PayloadFileSeekResult(pos));
+        sample.stop(seek_timer);
     }
 
-    private void handleFileReadCommand(final VOSFileRead vo, final WebSocket webSocket, final StreamActor actor) {
+    private void handleFileReadCommand(final VOSFileRead vo, final WebSocket webSocket, final StreamActor actor, final Timer.Sample sample) {
         final long startInMs = System.currentTimeMillis();
         //final int count = Integer.parseInt(cmd.getPayload().get("count"));
         final StreamSession ss = actor._ss;
@@ -217,18 +242,19 @@ public class ReadStreamBuilder implements WsHandlerBuilder {
         if (ss.streaming() && vo.count <= 12 && ss.tell() >= 1024 ) {
             // streaming, and sndfile lib try to jump to eof
             ss.sendData(startInMs, ByteBuffer.wrap(EMPTY_BYTES));
+            sample.stop(read_timer);
             log.info("try to read: {} bytes from: {} pos when length: {}, send 0 bytes to rms client", vo.count, ss.tell(), ss.length());
             return;
         }
 
-        readLaterOrNow(startInMs, ss, vo.count);
+        readLaterOrNow(startInMs, ss, vo.count, sample);
     }
 
-    private static boolean readLaterOrNow(final long startInMs, final StreamSession ss, final int count4read) {
+    private boolean readLaterOrNow(final long startInMs, final StreamSession ss, final int count4read, final Timer.Sample sample) {
         try {
             ss.lock();
             if (ss.needMoreData(count4read)) {
-                ss.onDataChange((ignore) -> readLaterOrNow(startInMs, ss, count4read));
+                ss.onDataChange((ignore) -> readLaterOrNow(startInMs, ss, count4read, sample));
                 log.info("need more data for read: {} bytes, read on append data.", count4read);
                 return false;
             }
@@ -243,6 +269,7 @@ public class ReadStreamBuilder implements WsHandlerBuilder {
             if (readed <= 0) {
                 log.info("file read => request read count: {}, no_more_data read", count4read);
                 ss.sendData(startInMs, ByteBuffer.wrap(EMPTY_BYTES));
+                sample.stop(read_timer);
                 return true;
             }
             // readed > 0
@@ -252,6 +279,7 @@ public class ReadStreamBuilder implements WsHandlerBuilder {
             } else {
                 ss.sendData(startInMs, ByteBuffer.wrap(bytes4read, 0, readed));
             }
+            sample.stop(read_timer);
             log.info("file read => request read count: {}, actual read bytes: {}", count4read, readed);
         } catch (IOException ex) {
             log.warn("file read => request read count: {}/length:{}/pos before read:{}, failed: {}",
@@ -262,7 +290,7 @@ public class ReadStreamBuilder implements WsHandlerBuilder {
         return true;
     }
 
-    private void handleFileTellCommand(final WebSocket webSocket, final StreamActor actor) {
+    private void handleFileTellCommand(final WebSocket webSocket, final StreamActor actor, final Timer.Sample sample) {
         final long startInMs = System.currentTimeMillis();
         final StreamSession ss = actor._ss;
         if (ss == null) {
@@ -272,6 +300,7 @@ public class ReadStreamBuilder implements WsHandlerBuilder {
         }
         log.info("file tell: current pos: {}", ss.tell());
         ss.sendEvent(startInMs, "FileTellResult", new PayloadFileSeekResult(ss.tell()));
+        sample.stop(tell_timer);
     }
 
     @Autowired
@@ -279,4 +308,5 @@ public class ReadStreamBuilder implements WsHandlerBuilder {
 
     private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
     private final ObjectProvider<CommandExecutor> cmdExecutorProvider;
+    private final ObjectProvider<Timer> timerProvider;
 }
