@@ -1,4 +1,4 @@
-package com.yulore.medhub.metric;
+package com.yulore.metric;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;

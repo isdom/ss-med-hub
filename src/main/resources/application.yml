@@ -15,4 +15,5 @@ spring:
   config:
     import:
       - "nacos:${NACOS_DATAID}?group=DEFAULT_GROUP"  # 动态 DATAID
+      - "nacos:${METER_DATAID:prometheus}?group=DEFAULT_GROUP"  # 动态 DATAID
       # - "optional:file:/etc/config/custom.yaml"  # 可选的外部文件

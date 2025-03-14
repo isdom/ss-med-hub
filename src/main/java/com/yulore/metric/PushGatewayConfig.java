@@ -1,4 +1,4 @@
-package com.yulore.medhub.metric;
+package com.yulore.metric;
 
 import io.prometheus.client.exporter.PushGateway;
 import org.springframework.beans.factory.annotation.Value;

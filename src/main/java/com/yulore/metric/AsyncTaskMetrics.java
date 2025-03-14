@@ -1,4 +1,4 @@
-package com.yulore.medhub.metric;
+package com.yulore.metric;
 
 import com.yulore.util.NetworkUtil;
 import io.micrometer.core.instrument.MeterRegistry;
