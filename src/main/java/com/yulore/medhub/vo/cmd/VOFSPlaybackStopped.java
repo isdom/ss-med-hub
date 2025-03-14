@@ -11,7 +11,7 @@ import lombok.ToString;
 @ToString
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class VOFSPlaybackStopped {
-    private static final TypeReference<WSCommandVO<VOFSPlaybackStopped>> TYPE = new TypeReference<>() {};
+    public static final TypeReference<WSCommandVO<VOFSPlaybackStopped>> TYPE = new TypeReference<>() {};
     public static VOFSPlaybackStopped of(final String message) throws JsonProcessingException {
         return WSCommandVO.parse(message, TYPE).payload;
     }

@@ -7,6 +7,7 @@ import com.yulore.medhub.service.CommandExecutor;
 import com.yulore.medhub.vo.WSCommandVO;
 import com.yulore.medhub.vo.cmd.*;
 import com.yulore.medhub.ws.HandlerUrlBuilder;
+import com.yulore.medhub.ws.WSCommandRegistry;
 import com.yulore.medhub.ws.actor.FsActor;
 import com.yulore.medhub.vo.WSEventVO;
 import com.yulore.medhub.ws.WsHandler;
@@ -41,6 +42,29 @@ public class FsActorBuilder implements WsHandlerBuilder {
             final String welcome = handshake.getFieldValue("x-welcome");
             final String recordStartTimestamp = handshake.getFieldValue("x-rst");
 
+            final WSCommandRegistry<FsActor> cmds = new WSCommandRegistry<>();
+            cmds.register(VOStartTranscription.TYPE,
+                    "StartTranscription",
+                    ctx-> asrService.startTranscription(ctx.payload(), ctx.ws()))
+                    .register(WSCommandVO.WSCMD_VOID,
+                            "StopTranscription",
+                            ctx-> asrService.stopTranscription(ctx.ws()))
+                    .register(VOFSPlaybackStarted.TYPE,
+                            "FSPlaybackStarted",
+                            ctx->ctx.actor().notifyFSPlaybackStarted(ctx.payload()))
+                    .register(VOFSPlaybackStopped.TYPE,
+                            "FSPlaybackStopped",
+                            ctx->ctx.actor().notifyFSPlaybackStopped(ctx.payload()))
+                    .register(VOFSPlaybackPaused.TYPE,
+                            "FSPlaybackPaused",
+                            ctx->ctx.actor().notifyPlaybackPaused(ctx.payload()))
+                    .register(VOFSPlaybackResumed.TYPE,
+                            "FSPlaybackResumed",
+                            ctx->ctx.actor().notifyPlaybackResumed(ctx.payload()))
+                    .register(VOFSRecordStarted.TYPE,
+                            "FSRecordStarted",
+                            ctx->ctx.actor().notifyFSRecordStarted(ctx.payload()))
+                    ;
             final FsActor actor = new FsActor(
                     uuid,
                     sessionId,
@@ -60,7 +84,8 @@ public class FsActorBuilder implements WsHandlerBuilder {
                 public void onMessage(final WebSocket webSocket, final String message) {
                     cmdExecutorProvider.getObject().submit(()->{
                         try {
-                            handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket);
+                            cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket);
+                            // handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket);
                         } catch (JsonProcessingException ex) {
                             log.error("handleCommand {}: {}, an error occurred when parseAsJson: {}",
                                     webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
