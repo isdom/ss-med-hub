@@ -138,7 +138,7 @@ public class WriteStreamBuilder implements WsHandlerBuilder {
     private void handleOpenStreamCommand(final VOSOpenStream vo, final WebSocket webSocket, final StreamActor actor, final Timer.Sample sample) {
         final long startInMs = System.currentTimeMillis();
 
-        log.info("[{}]: open read stream => path: {}/is_write: {}/contentId: {}/playIdx: {}",
+        log.info("[{}]: open write stream => path: {}/is_write: {}/contentId: {}/playIdx: {}",
                 vo.session_id, vo.path, vo.is_write, vo.content_id, vo.playback_idx);
         if (!vo.is_write) {
             log.warn("[{}]: open write stream with readonly, open stream failed!", vo.session_id);
@@ -156,9 +156,13 @@ public class WriteStreamBuilder implements WsHandlerBuilder {
                 (ctx) -> {
                     final long startUploadInMs = System.currentTimeMillis();
                     _ossAccessExecutor.submit(()->{
-                        _ossProvider.getObject().putObject(ctx.bucketName, ctx.objectName, ctx.content);
-                        log.info("[{}]: upload content to oss => bucket:{}/object:{}, cost {} ms",
-                                vo.session_id, ctx.bucketName, ctx.objectName, System.currentTimeMillis() - startUploadInMs);
+                        try {
+                            _ossProvider.getObject().putObject(ctx.bucketName, ctx.objectName, ctx.content);
+                            log.info("[{}]: upload content to oss => bucket:{}/object:{}, cost {} ms",
+                                    vo.session_id, ctx.bucketName, ctx.objectName, System.currentTimeMillis() - startUploadInMs);
+                        } catch (Exception ex) {
+                            log.warn("[{}]: upload content to oss => bucket:{}/object:{} failed", vo.session_id, ctx.bucketName, ctx.objectName, ex);
+                        }
                     });
                 },
                 vo.path, vo.session_id, vo.content_id, vo.playback_idx);

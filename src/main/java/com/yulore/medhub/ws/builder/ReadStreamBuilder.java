@@ -124,7 +124,7 @@ public class ReadStreamBuilder implements WsHandlerBuilder {
     private void handleOpenStreamCommand(final VOSOpenStream vo, final WebSocket webSocket, final StreamActor actor, final Timer.Sample sample) {
         final long startInMs = System.currentTimeMillis();
 
-        log.info("[{}]: open read stream => path: {}/is_write: {}/contentId: {}/playIdx: {}",
+        log.info("[{}]: open readonly stream => path: {}/is_write: {}/contentId: {}/playIdx: {}",
                 vo.session_id, vo.path, vo.is_write, vo.content_id, vo.playback_idx);
         if (vo.is_write) {
             log.warn("[{}]: open read stream with writable, open stream failed!", vo.session_id);
