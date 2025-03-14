@@ -18,11 +18,12 @@ import java.util.Map;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class WSCommandVO<PAYLOAD> {
     public static final TypeReference<WSCommandVO<Void>> WSCMD_VOID = new TypeReference<>() {};
-    public static <PAYLOAD> WSCommandVO<PAYLOAD> parse(final String message, final TypeReference<WSCommandVO<PAYLOAD>> type) throws JsonProcessingException {
+    public static <PAYLOAD> WSCommandVO<PAYLOAD> parse(final String message,
+                                                       final TypeReference<WSCommandVO<PAYLOAD>> type)
+            throws JsonProcessingException {
         return new ObjectMapper().readValue(message, type);
     }
 
     public Map<String, String> header;
-    // Map<String, String> payload;
     public PAYLOAD payload;
 }

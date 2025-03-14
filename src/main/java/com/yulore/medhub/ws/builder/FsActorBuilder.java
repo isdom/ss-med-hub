@@ -43,28 +43,21 @@ public class FsActorBuilder implements WsHandlerBuilder {
             final String recordStartTimestamp = handshake.getFieldValue("x-rst");
 
             final WSCommandRegistry<FsActor> cmds = new WSCommandRegistry<>();
-            cmds.register(VOStartTranscription.TYPE,
-                    "StartTranscription",
+            cmds.register(VOStartTranscription.TYPE,"StartTranscription",
                     ctx-> asrService.startTranscription(ctx.payload(), ctx.ws()))
-                    .register(WSCommandVO.WSCMD_VOID,
-                            "StopTranscription",
-                            ctx-> asrService.stopTranscription(ctx.ws()))
-                    .register(VOFSPlaybackStarted.TYPE,
-                            "FSPlaybackStarted",
-                            ctx->ctx.actor().notifyFSPlaybackStarted(ctx.payload()))
-                    .register(VOFSPlaybackStopped.TYPE,
-                            "FSPlaybackStopped",
-                            ctx->ctx.actor().notifyFSPlaybackStopped(ctx.payload()))
-                    .register(VOFSPlaybackPaused.TYPE,
-                            "FSPlaybackPaused",
-                            ctx->ctx.actor().notifyPlaybackPaused(ctx.payload()))
-                    .register(VOFSPlaybackResumed.TYPE,
-                            "FSPlaybackResumed",
-                            ctx->ctx.actor().notifyPlaybackResumed(ctx.payload()))
-                    .register(VOFSRecordStarted.TYPE,
-                            "FSRecordStarted",
-                            ctx->ctx.actor().notifyFSRecordStarted(ctx.payload()))
-                    ;
+                .register(WSCommandVO.WSCMD_VOID,"StopTranscription",
+                        ctx-> asrService.stopTranscription(ctx.ws()))
+                .register(VOFSPlaybackStarted.TYPE,"FSPlaybackStarted",
+                        ctx->ctx.actor().notifyFSPlaybackStarted(ctx.payload()))
+                .register(VOFSPlaybackStopped.TYPE,"FSPlaybackStopped",
+                        ctx->ctx.actor().notifyFSPlaybackStopped(ctx.payload()))
+                .register(VOFSPlaybackPaused.TYPE,"FSPlaybackPaused",
+                        ctx->ctx.actor().notifyPlaybackPaused(ctx.payload()))
+                .register(VOFSPlaybackResumed.TYPE,"FSPlaybackResumed",
+                        ctx->ctx.actor().notifyPlaybackResumed(ctx.payload()))
+                .register(VOFSRecordStarted.TYPE,"FSRecordStarted",
+                        ctx->ctx.actor().notifyFSRecordStarted(ctx.payload()))
+                ;
             final FsActor actor = new FsActor(
                     uuid,
                     sessionId,

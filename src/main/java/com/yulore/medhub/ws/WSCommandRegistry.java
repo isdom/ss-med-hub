@@ -17,13 +17,15 @@ public class WSCommandRegistry<ACTOR> {
     public record CommandContext<ACTOR, PAYLOAD>(ACTOR actor, PAYLOAD payload, WebSocket ws) {
     }
 
-    public <PAYLOAD> WSCommandRegistry<ACTOR> register(final TypeReference<WSCommandVO<PAYLOAD>> type, final String name, final Consumer<CommandContext<ACTOR, PAYLOAD>> handler) {
+    public <PAYLOAD> WSCommandRegistry<ACTOR> register(final TypeReference<WSCommandVO<PAYLOAD>> type,
+                                                       final String name,
+                                                       final Consumer<CommandContext<ACTOR, PAYLOAD>> handler) {
         _command2handler.put(name, (Pair)Pair.of(type, handler));
         return this;
     }
 
     public void handleCommand(final WSCommandVO<Void> cmd, final String message, final ACTOR actor, final WebSocket ws) throws JsonProcessingException {
-        final Pair pair = _command2handler.get(cmd.getHeader().get("name"));
+        final Pair<?,?> pair = _command2handler.get(cmd.getHeader().get("name"));
         if (pair != null) {
             final Consumer<CommandContext<?,?>> consumer = (Consumer<CommandContext<?,?>>)pair.getSecond();
             final TypeReference<WSCommandVO<Object>> type = (TypeReference<WSCommandVO<Object>>)pair.getFirst();
