@@ -57,7 +57,6 @@ public class PoActorBuilder implements WsHandlerBuilder {
 
     // wss://domain/path?uuid=XX&tid=XXX&role=call
     // wss://domain/path?sessionId=xxx&role=playback
-
     @Override
     public WsHandler build(final String prefix, final WebSocket webSocket, final ClientHandshake handshake) {
         final String path = handshake.getResourceDescriptor();
