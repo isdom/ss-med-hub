@@ -34,8 +34,6 @@ import java.util.function.Consumer;
 @Component("write_rms")
 @ConditionalOnProperty(prefix = "feature", name = "write_rms", havingValue = "enabled")
 public class WriteStreamBuilder extends BaseStreamBuilder implements WsHandlerBuilder {
-    public static final byte[] EMPTY_BYTES = new byte[0];
-
     private Timer write_timer;
 
     @PostConstruct

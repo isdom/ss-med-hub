@@ -2,6 +2,7 @@ package com.yulore.medhub.ws;
 
 import com.yulore.util.ExceptionUtil;
 import com.yulore.util.NetworkUtil;
+import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
@@ -124,20 +125,28 @@ public class WsServerBuilder {
                         .expectResultWithin(3, TimeUnit.SECONDS));
 
         final String ipAndPort = ipv4Provider.getObject().getHostAddress() + ":" + configProps.port;
+        final Timer timer1 = timerProvider.getObject("redisson.rs.duration", "", new String[]{"method", "updateHubStatus"});
+        final Timer timer2 = timerProvider.getObject("redisson.rs.duration", "", new String[]{"method", "getUrlsOf"});
 
-        checkAndScheduleNext(startedTimestamp ->
-            masterService.updateHubStatus(ipAndPort, configProps.pathMappings, System.currentTimeMillis())
-                .thenCompose(v-> masterService.getUrlsOf(READ_RMS))
-                .handle((urls, ex) -> {
-                    if (ex != null) {
-                        log.warn("interact with masterService failed: {}", ex.toString());
-                    } else {
-                        rrmsUrls.set(urls);
-                        log.info("{}'s urls: {}", READ_RMS, rrmsUrls.get());
-                    }
-                    return true;
-                })
-        , System.currentTimeMillis());
+        checkAndScheduleNext(startedTimestamp -> {
+            final AtomicReference<Timer.Sample> sampleRef = new AtomicReference<>(Timer.start());
+            return masterService.updateHubStatus(ipAndPort, configProps.pathMappings, System.currentTimeMillis())
+                    .thenCompose(v -> {
+                        sampleRef.get().stop(timer1);
+                        sampleRef.set(Timer.start());
+                        return masterService.getUrlsOf(READ_RMS);
+                    })
+                    .handle((urls, ex) -> {
+                        if (ex != null) {
+                            log.warn("interact with masterService failed: {}", ex.toString());
+                        } else {
+                            sampleRef.get().stop(timer2);
+                            rrmsUrls.set(urls);
+                            log.info("{}'s urls: {}", READ_RMS, rrmsUrls.get());
+                        }
+                        return true;
+                    });
+        }, System.currentTimeMillis());
     }
 
     private void checkAndScheduleNext(final Function<Long, CompletionStage<Boolean>> doCheck, final long timestamp) {
@@ -185,6 +194,7 @@ public class WsServerBuilder {
     private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
     private final ObjectProvider<Inet4Address> ipv4Provider;
     private final RedissonClient redisson;
+    private final ObjectProvider<Timer> timerProvider;
 
     private final AtomicReference<List<String>> rrmsUrls = new AtomicReference<>(List.of());
     private final AtomicInteger _currentWSConnection = new AtomicInteger(0);
