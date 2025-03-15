@@ -37,6 +37,8 @@ public class WsServerBuilder {
     @Bean(destroyMethod = "stop")
     public WebSocketServer webSocketServer() {
         log.info("webSocketServer: {}", configProps);
+        final Timer timer = timerProvider.getObject("mh.connected.delay", "", new String[0]);
+
         final WebSocketServer server = new WebSocketServer(new InetSocketAddress(configProps.host, configProps.port)) {
             @Override
             public void onOpen(final WebSocket webSocket, final ClientHandshake handshake) {
@@ -46,6 +48,13 @@ public class WsServerBuilder {
                         webSocket.getLocalSocketAddress(),
                         handshake.getResourceDescriptor());
 
+                final String str = handshake.getFieldValue("x-timestamp");
+                if (str != null) {
+                    final long startConnectInMs = Long.parseLong(str) / 1000; // nanosecond to millisecond
+                    final long delay = System.currentTimeMillis() - startConnectInMs;
+                    log.info("ws: {} connected delay: {} ms", handshake.getResourceDescriptor(), delay);
+                    timer.record(delay, TimeUnit.MILLISECONDS);
+                }
                 handlerRegistry.createHandler(webSocket, handshake).ifPresentOrElse(handler -> {
                     // webSocket.setAttachment(handler);
                     // handler.onAttached(webSocket);
