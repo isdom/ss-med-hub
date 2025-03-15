@@ -50,6 +50,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
         _ossAccessExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
                 new DefaultThreadFactory("ossAccessExecutor"));
         playback_timer = timerProvider.getObject("mh.playback.delay", "", new String[]{"actor", "poio"});
+        oss_timer = timerProvider.getObject("oss.upload.duration", "", new String[]{"actor", "poio"});
     }
 
     @PreDestroy
@@ -89,8 +90,10 @@ public class PoActorBuilder implements WsHandlerBuilder {
                     _oss_path,
                     (ctx) -> {
                         final long startUploadInMs = System.currentTimeMillis();
+                        final Timer.Sample oss_sample = Timer.start();
                         _ossAccessExecutor.submit(() -> {
                             _ossProvider.getObject().putObject(ctx.bucketName(), ctx.objectName(), ctx.content());
+                            oss_sample.stop(oss_timer);
                             log.info("[{}]: upload record to oss => bucket:{}/object:{}, cost {} ms",
                                     ctx.sessionId(), ctx.bucketName(), ctx.objectName(), System.currentTimeMillis() - startUploadInMs);
                         });
@@ -225,6 +228,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
     private final ObjectProvider<Timer> timerProvider;
 
     private Timer playback_timer;
+    private Timer oss_timer;
 
     final WSCommandRegistry<PoActor> cmds = new WSCommandRegistry<PoActor>()
             .register(VOStartTranscription.TYPE,"StartTranscription",

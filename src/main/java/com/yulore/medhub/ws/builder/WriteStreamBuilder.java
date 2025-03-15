@@ -45,7 +45,7 @@ public class WriteStreamBuilder extends BaseStreamBuilder implements WsHandlerBu
         read_timer = timerProvider.getObject("rms.wr.duration", "write rms op", new String[]{"op", "read"});
         write_timer = timerProvider.getObject("rms.wr.duration", "write rms op", new String[]{"op", "write"});
         tell_timer = timerProvider.getObject("rms.wr.duration", "write rms op", new String[]{"op", "tell"});
-        oss_timer = timerProvider.getObject("oss.upload.duration", "", new String[]{"source", "wrms"});
+        oss_timer = timerProvider.getObject("oss.upload.duration", "", new String[]{"actor", "wrms"});
 
         _ossAccessExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
                 new DefaultThreadFactory("ossAccessExecutor"));
