@@ -236,22 +236,11 @@ public class PoActorBuilder implements WsHandlerBuilder {
             .register(VOPCMPlaybackStarted.TYPE,"PCMPlaybackStarted",
                     ctx->ctx.actor().notifyPlaybackStarted(ctx.payload(), playback_timer))
             .register(VOPCMPlaybackStopped.TYPE,"PCMPlaybackStopped",
-                      ctx->ctx.actor().notifyPlaybackStop(
-                        ctx.payload().playback_id,
-                        ctx.payload().content_id,
-                        ctx.payload().playback_begin_timestamp,
-                        ctx.payload().playback_end_timestamp,
-                        ctx.payload().playback_duration))
+                      ctx->ctx.actor().notifyPlaybackStop(ctx.payload()))
             .register(VOPCMPlaybackPaused.TYPE,"PCMPlaybackPaused",
-                      ctx->ctx.actor().notifyPlaybackPaused(
-                        ctx.payload().playback_id,
-                        ctx.payload().content_id,
-                        ctx.payload().playback_duration))
+                      ctx->ctx.actor().notifyPlaybackPaused(ctx.payload()))
             .register(VOPCMPlaybackResumed.TYPE,"PCMPlaybackResumed",
-                      ctx->ctx.actor().notifyPlaybackResumed(
-                        ctx.payload().playback_id,
-                        ctx.payload().content_id,
-                        ctx.payload().playback_duration))
+                      ctx->ctx.actor().notifyPlaybackResumed(ctx.payload()))
             .register(VOUserAnswer.TYPE,"UserAnswer",
                       ctx->ctx.actor().notifyUserAnswer(ctx.payload()))
             ;

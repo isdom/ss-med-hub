@@ -7,8 +7,7 @@ import com.google.common.base.Strings;
 import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.medhub.api.*;
 import com.yulore.medhub.vo.*;
-import com.yulore.medhub.vo.cmd.VOPCMPlaybackStarted;
-import com.yulore.medhub.vo.cmd.VOUserAnswer;
+import com.yulore.medhub.vo.cmd.*;
 import com.yulore.medhub.ws.WsHandler;
 import com.yulore.util.ByteArrayListInputStream;
 import com.yulore.util.ExceptionUtil;
@@ -434,14 +433,10 @@ public abstract class PoActor extends ASRActor implements WsHandler {
         }
     }
 
-    public void notifyPlaybackStop(final String playbackId,
-                                   final String contentId,
-                                   final String playback_begin_timestamp,
-                                   final String playback_end_timestamp,
-                                   final String playback_duration) {
+    public void notifyPlaybackStop(final VOPCMPlaybackStopped vo) {
         final String currentPlaybackId = _currentPlaybackId.get();
         if (currentPlaybackId != null) {
-            if (currentPlaybackId.equals(playbackId)) {
+            if (currentPlaybackId.equals(vo.playback_id)) {
                 // reset playback status
                 _currentPlaybackId.set(null);
                 _currentStopPlayback.set(null);
@@ -449,19 +444,19 @@ public abstract class PoActor extends ASRActor implements WsHandler {
                 _currentPlaybackDuration.set(()->0L);
                 _idleStartInMs.set(System.currentTimeMillis());
                 log.info("[{}]: [{}]-[{}]: notifyPlaybackStop => current playbackid: {} Matched / memo: {}",
-                        _clientIp, _sessionId, _uuid, playbackId, memoFor(playbackId));
-                if (memoFor(playbackId).isHangup()) {
+                        _clientIp, _sessionId, _uuid, vo.playback_id, memoFor(vo.playback_id));
+                if (memoFor(vo.playback_id).isHangup()) {
                     // hangup call
                     _doHangup.accept(this);
                 }
             } else {
                 log.info("[{}]: [{}]-[{}]: notifyPlaybackStop => current playbackid: {} mismatch stopped playbackid: {}, ignore",
-                        _clientIp, _sessionId, _uuid, currentPlaybackId, playbackId);
+                        _clientIp, _sessionId, _uuid, currentPlaybackId, vo.playback_id);
             }
         } else {
-            log.warn("[{}]: [{}]-[{}]: currentPlaybackId is null BUT notifyPlaybackStop with: {}", _clientIp, _sessionId, _uuid, playbackId);
+            log.warn("[{}]: [{}]-[{}]: currentPlaybackId is null BUT notifyPlaybackStop with: {}", _clientIp, _sessionId, _uuid, vo.playback_id);
         }
-        reportAIContent(playbackId, contentId, playback_begin_timestamp, playback_end_timestamp, playback_duration);
+        reportAIContent(vo.playback_id, vo.content_id, vo.playback_begin_timestamp, vo.playback_end_timestamp, vo.playback_duration);
     }
 
     private void reportUserContent(final PayloadSentenceEnd payload, final String userContentId) {
@@ -550,48 +545,44 @@ public abstract class PoActor extends ASRActor implements WsHandler {
                 resp);
     }
 
-    public void notifyPlaybackPaused(final String playbackId,
-                                     final String contentId,
-                                     final String playback_duration) {
+    public void notifyPlaybackPaused(final VOPCMPlaybackPaused vo) {
         final String currentPlaybackId = _currentPlaybackId.get();
         if (currentPlaybackId != null) {
-            if (currentPlaybackId.equals(playbackId)) {
-                final long ai_speak_duration = playback_duration != null
-                        ? (long)(Float.parseFloat(playback_duration) * 1000L)
+            if (currentPlaybackId.equals(vo.playback_id)) {
+                final long ai_speak_duration = vo.playback_duration != null
+                        ? (long)(Float.parseFloat(vo.playback_duration) * 1000L)
                         : 0;
                 _currentPlaybackDuration.set(()->ai_speak_duration);
                 log.info("[{}]: [{}]-[{}]: notifyPlaybackPaused => current playbackid: {} Matched / playback_duration: {} ms",
-                        _clientIp, _sessionId, _uuid, playbackId, ai_speak_duration);
+                        _clientIp, _sessionId, _uuid, vo.playback_id, ai_speak_duration);
             } else {
                 log.info("[{}]: [{}]-[{}]: notifyPlaybackPaused => current playbackid: {} mismatch paused playbackid: {}, ignore",
-                        _clientIp, _sessionId, _uuid, currentPlaybackId, playbackId);
+                        _clientIp, _sessionId, _uuid, currentPlaybackId, vo.playback_id);
             }
         } else {
             log.warn("[{}]: [{}]-[{}]: currentPlaybackId is null BUT notifyPlaybackPaused with: {}",
-                    _clientIp, _sessionId, _uuid, playbackId);
+                    _clientIp, _sessionId, _uuid, vo.playback_id);
         }
     }
 
-    public void notifyPlaybackResumed(final String playbackId,
-                                      final String contentId,
-                                      final String playback_duration) {
+    public void notifyPlaybackResumed(final VOPCMPlaybackResumed vo) {
         final String currentPlaybackId = _currentPlaybackId.get();
         if (currentPlaybackId != null) {
-            if (currentPlaybackId.equals(playbackId)) {
-                final long ai_speak_duration = playback_duration != null
-                        ? (long)(Float.parseFloat(playback_duration) * 1000L)
+            if (currentPlaybackId.equals(vo.playback_id)) {
+                final long ai_speak_duration = vo.playback_duration != null
+                        ? (long)(Float.parseFloat(vo.playback_duration) * 1000L)
                         : 0;
                 final long playbackResumedInMs = System.currentTimeMillis();
                 _currentPlaybackDuration.set(()->ai_speak_duration + (System.currentTimeMillis() - playbackResumedInMs));
                 log.info("[{}]: [{}]-[{}]: notifyPlaybackResumed => current playbackid: {} Matched / playback_duration: {} ms",
-                        _clientIp, _sessionId, _uuid, playbackId, ai_speak_duration);
+                        _clientIp, _sessionId, _uuid, vo.playback_id, ai_speak_duration);
             } else {
                 log.info("[{}]: [{}]-[{}]: notifyPlaybackResumed => current playbackid: {} mismatch resumed playbackid: {}, ignore",
-                        _clientIp, _sessionId, _uuid, currentPlaybackId, playbackId);
+                        _clientIp, _sessionId, _uuid, currentPlaybackId, vo.playback_id);
             }
         } else {
             log.warn("[{}]: [{}]-[{}]: currentPlaybackId is null BUT notifyPlaybackResumed with: {}",
-                    _clientIp, _sessionId, _uuid, playbackId);
+                    _clientIp, _sessionId, _uuid, vo.playback_id);
         }
     }
 
