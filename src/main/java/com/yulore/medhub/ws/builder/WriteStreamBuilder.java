@@ -47,6 +47,9 @@ public class WriteStreamBuilder extends BaseStreamBuilder implements WsHandlerBu
 
         _ossAccessExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
                 new DefaultThreadFactory("ossAccessExecutor"));
+
+        cmds.register(VOSOpenStream.TYPE, "OpenStream",
+                ctx->handleOpenStreamCommand(ctx.payload(), ctx.ws(), ctx.actor(), ctx.sample()));
     }
 
     @PreDestroy
@@ -62,7 +65,7 @@ public class WriteStreamBuilder extends BaseStreamBuilder implements WsHandlerBu
                 final Timer.Sample sample = Timer.start();
                 cmdExecutorProvider.getObject().submit(()-> {
                     try {
-                        handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, webSocket, this, sample);
+                        cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket, sample);
                     } catch (JsonProcessingException ex) {
                         log.error("handleCommand {}: {}, an error occurred when parseAsJson: {}",
                                 webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));

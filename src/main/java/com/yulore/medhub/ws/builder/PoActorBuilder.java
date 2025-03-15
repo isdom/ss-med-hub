@@ -69,38 +69,6 @@ public class PoActorBuilder implements WsHandlerBuilder {
             final String uuid = VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "uuid", '&');
             final String tid = VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "tid", '&');
             final String clientIp = handshake.getFieldValue("X-Forwarded-For");
-
-            final WSCommandRegistry<PoActor> cmds = new WSCommandRegistry<>();
-
-            cmds.register(VOStartTranscription.TYPE,"StartTranscription",
-                            ctx-> asrService.startTranscription(ctx.payload(), ctx.ws()))
-                    .register(WSCommandVO.WSCMD_VOID,"StopTranscription",
-                            ctx-> asrService.stopTranscription(ctx.ws()))
-                    .register(VOPCMPlaybackStopped.TYPE,"PCMPlaybackStopped",
-                            ctx->ctx.actor().notifyPlaybackStop(
-                                    ctx.payload().playback_id,
-                                    ctx.payload().content_id,
-                                    ctx.payload().playback_begin_timestamp,
-                                    ctx.payload().playback_end_timestamp,
-                                    ctx.payload().playback_duration))
-                    .register(VOPCMPlaybackPaused.TYPE,"PCMPlaybackPaused",
-                            ctx->ctx.actor().notifyPlaybackPaused(
-                                    ctx.payload().playback_id,
-                                    ctx.payload().content_id,
-                                    ctx.payload().playback_duration))
-                    .register(VOPCMPlaybackResumed.TYPE,"PCMPlaybackResumed",
-                            ctx->ctx.actor().notifyPlaybackResumed(
-                                    ctx.payload().playback_id,
-                                    ctx.payload().content_id,
-                                    ctx.payload().playback_duration))
-                    .register(VOPCMPlaybackStarted.TYPE,"PCMPlaybackStarted",
-                            ctx->ctx.actor().notifyPlaybackStarted(
-                                    ctx.payload().playback_id,
-                                    ctx.payload().content_id))
-                    .register(VOUserAnswer.TYPE,"UserAnswer",
-                            ctx->ctx.actor().notifyUserAnswer(ctx.payload()))
-                    ;
-
             final PoActor actor = new PoActor(
                     clientIp,
                     uuid,
@@ -130,7 +98,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
                 public void onMessage(final WebSocket webSocket, final String message) {
                     cmdExecutorProvider.getObject().submit(()-> {
                         try {
-                            cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket);
+                            cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket, null);
                         } catch (JsonProcessingException ex) {
                             log.error("handleCommand {}: {}, an error occurred when parseAsJson: {}",
                                     webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
@@ -250,4 +218,34 @@ public class PoActorBuilder implements WsHandlerBuilder {
 
     @Autowired
     private ASRService asrService;
+
+    final WSCommandRegistry<PoActor> cmds = new WSCommandRegistry<PoActor>()
+            .register(VOStartTranscription.TYPE,"StartTranscription",
+    ctx-> asrService.startTranscription(ctx.payload(), ctx.ws()))
+            .register(WSCommandVO.WSCMD_VOID,"StopTranscription",
+                      ctx-> asrService.stopTranscription(ctx.ws()))
+            .register(VOPCMPlaybackStopped.TYPE,"PCMPlaybackStopped",
+                      ctx->ctx.actor().notifyPlaybackStop(
+                        ctx.payload().playback_id,
+                        ctx.payload().content_id,
+                        ctx.payload().playback_begin_timestamp,
+                        ctx.payload().playback_end_timestamp,
+                        ctx.payload().playback_duration))
+            .register(VOPCMPlaybackPaused.TYPE,"PCMPlaybackPaused",
+                      ctx->ctx.actor().notifyPlaybackPaused(
+                        ctx.payload().playback_id,
+                        ctx.payload().content_id,
+                        ctx.payload().playback_duration))
+            .register(VOPCMPlaybackResumed.TYPE,"PCMPlaybackResumed",
+                      ctx->ctx.actor().notifyPlaybackResumed(
+                        ctx.payload().playback_id,
+                        ctx.payload().content_id,
+                        ctx.payload().playback_duration))
+            .register(VOPCMPlaybackStarted.TYPE,"PCMPlaybackStarted",
+                      ctx->ctx.actor().notifyPlaybackStarted(
+                        ctx.payload().playback_id,
+                        ctx.payload().content_id))
+            .register(VOUserAnswer.TYPE,"UserAnswer",
+                      ctx->ctx.actor().notifyUserAnswer(ctx.payload()))
+            ;
 }

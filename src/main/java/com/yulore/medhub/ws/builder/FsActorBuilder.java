@@ -41,23 +41,6 @@ public class FsActorBuilder implements WsHandlerBuilder {
             final String sessionId = handshake.getFieldValue("x-sessionid");
             final String welcome = handshake.getFieldValue("x-welcome");
             final String recordStartTimestamp = handshake.getFieldValue("x-rst");
-
-            final WSCommandRegistry<FsActor> cmds = new WSCommandRegistry<>();
-            cmds.register(VOStartTranscription.TYPE,"StartTranscription",
-                    ctx-> asrService.startTranscription(ctx.payload(), ctx.ws()))
-                .register(WSCommandVO.WSCMD_VOID,"StopTranscription",
-                        ctx-> asrService.stopTranscription(ctx.ws()))
-                .register(VOFSPlaybackStarted.TYPE,"FSPlaybackStarted",
-                        ctx->ctx.actor().notifyFSPlaybackStarted(ctx.payload()))
-                .register(VOFSPlaybackStopped.TYPE,"FSPlaybackStopped",
-                        ctx->ctx.actor().notifyFSPlaybackStopped(ctx.payload()))
-                .register(VOFSPlaybackPaused.TYPE,"FSPlaybackPaused",
-                        ctx->ctx.actor().notifyPlaybackPaused(ctx.payload()))
-                .register(VOFSPlaybackResumed.TYPE,"FSPlaybackResumed",
-                        ctx->ctx.actor().notifyPlaybackResumed(ctx.payload()))
-                .register(VOFSRecordStarted.TYPE,"FSRecordStarted",
-                        ctx->ctx.actor().notifyFSRecordStarted(ctx.payload()))
-                ;
             final FsActor actor = new FsActor(
                     uuid,
                     sessionId,
@@ -77,7 +60,7 @@ public class FsActorBuilder implements WsHandlerBuilder {
                 public void onMessage(final WebSocket webSocket, final String message) {
                     cmdExecutorProvider.getObject().submit(()->{
                         try {
-                            cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket);
+                            cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket, null);
                         } catch (JsonProcessingException ex) {
                             log.error("handleCommand {}: {}, an error occurred when parseAsJson: {}",
                                     webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
@@ -156,4 +139,21 @@ public class FsActorBuilder implements WsHandlerBuilder {
 
     @Autowired
     private ASRService asrService;
+
+    final WSCommandRegistry<FsActor> cmds = new WSCommandRegistry<FsActor>()
+            .register(VOStartTranscription.TYPE,"StartTranscription",
+    ctx-> asrService.startTranscription(ctx.payload(), ctx.ws()))
+            .register(WSCommandVO.WSCMD_VOID,"StopTranscription",
+                      ctx-> asrService.stopTranscription(ctx.ws()))
+            .register(VOFSPlaybackStarted.TYPE,"FSPlaybackStarted",
+                      ctx->ctx.actor().notifyFSPlaybackStarted(ctx.payload()))
+            .register(VOFSPlaybackStopped.TYPE,"FSPlaybackStopped",
+                      ctx->ctx.actor().notifyFSPlaybackStopped(ctx.payload()))
+            .register(VOFSPlaybackPaused.TYPE,"FSPlaybackPaused",
+                      ctx->ctx.actor().notifyPlaybackPaused(ctx.payload()))
+            .register(VOFSPlaybackResumed.TYPE,"FSPlaybackResumed",
+                      ctx->ctx.actor().notifyPlaybackResumed(ctx.payload()))
+            .register(VOFSRecordStarted.TYPE,"FSRecordStarted",
+                      ctx->ctx.actor().notifyFSRecordStarted(ctx.payload()))
+            ;
 }

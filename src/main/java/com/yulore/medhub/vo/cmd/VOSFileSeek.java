@@ -11,7 +11,7 @@ import lombok.ToString;
 @ToString
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class VOSFileSeek {
-    private static final TypeReference<WSCommandVO<VOSFileSeek>> TYPE = new TypeReference<>() {};
+    public static final TypeReference<WSCommandVO<VOSFileSeek>> TYPE = new TypeReference<>() {};
     public static VOSFileSeek of(final String message) throws JsonProcessingException {
         return WSCommandVO.parse(message, TYPE).payload;
     }

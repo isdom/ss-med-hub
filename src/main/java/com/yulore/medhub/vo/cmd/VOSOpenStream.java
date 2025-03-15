@@ -11,7 +11,7 @@ import lombok.ToString;
 @ToString
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class VOSOpenStream {
-    private static final TypeReference<WSCommandVO<VOSOpenStream>> TYPE = new TypeReference<>() {};
+    public static final TypeReference<WSCommandVO<VOSOpenStream>> TYPE = new TypeReference<>() {};
     public static VOSOpenStream of(final String message) throws JsonProcessingException {
         return WSCommandVO.parse(message, TYPE).payload;
     }

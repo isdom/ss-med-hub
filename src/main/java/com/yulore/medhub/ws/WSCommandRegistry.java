@@ -3,6 +3,7 @@ package com.yulore.medhub.ws;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.yulore.medhub.vo.WSCommandVO;
+import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.util.Pair;
 import org.java_websocket.WebSocket;
@@ -14,7 +15,7 @@ import java.util.function.Consumer;
 @Slf4j
 public class WSCommandRegistry<ACTOR> {
 
-    public record CommandContext<ACTOR, PAYLOAD>(ACTOR actor, PAYLOAD payload, WebSocket ws) {
+    public record CommandContext<ACTOR, PAYLOAD>(ACTOR actor, PAYLOAD payload, WebSocket ws, Timer.Sample sample) {
     }
 
     public <PAYLOAD> WSCommandRegistry<ACTOR> register(final TypeReference<WSCommandVO<PAYLOAD>> type,
@@ -24,12 +25,12 @@ public class WSCommandRegistry<ACTOR> {
         return this;
     }
 
-    public void handleCommand(final WSCommandVO<Void> cmd, final String message, final ACTOR actor, final WebSocket ws) throws JsonProcessingException {
+    public void handleCommand(final WSCommandVO<Void> cmd, final String message, final ACTOR actor, final WebSocket ws, final Timer.Sample sample) throws JsonProcessingException {
         final Pair<?,?> pair = _command2handler.get(cmd.getHeader().get("name"));
         if (pair != null) {
             final Consumer<CommandContext<?,?>> consumer = (Consumer<CommandContext<?,?>>)pair.getSecond();
             final TypeReference<WSCommandVO<Object>> type = (TypeReference<WSCommandVO<Object>>)pair.getFirst();
-            consumer.accept(new CommandContext<>(actor, WSCommandVO.parse(message, type).payload, ws));
+            consumer.accept(new CommandContext<>(actor, WSCommandVO.parse(message, type).payload, ws, sample));
         } else {
             log.warn("handleCommand: Unknown Command: {}", cmd);
         }

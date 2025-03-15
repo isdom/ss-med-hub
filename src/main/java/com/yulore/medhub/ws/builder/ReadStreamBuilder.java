@@ -38,6 +38,9 @@ public class ReadStreamBuilder extends BaseStreamBuilder implements WsHandlerBui
         seek_timer = timerProvider.getObject("rms.ro.duration", "read rms op", new String[]{"op", "seek"});
         read_timer = timerProvider.getObject("rms.ro.duration", "read rms op", new String[]{"op", "read"});
         tell_timer = timerProvider.getObject("rms.ro.duration", "read rms op", new String[]{"op", "tell"});
+
+        cmds.register(VOSOpenStream.TYPE, "OpenStream",
+                ctx->handleOpenStreamCommand(ctx.payload(), ctx.ws(), ctx.actor(), ctx.sample()));
     }
 
     @Override
@@ -48,7 +51,7 @@ public class ReadStreamBuilder extends BaseStreamBuilder implements WsHandlerBui
                 final Timer.Sample sample = Timer.start();
                 cmdExecutorProvider.getObject().submit(()-> {
                     try {
-                        handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, webSocket, this, sample);
+                        cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket, sample);
                     } catch (JsonProcessingException ex) {
                         log.error("handleCommand {}: {}, an error occurred when parseAsJson: {}",
                                 webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));

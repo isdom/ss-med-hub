@@ -1,14 +1,12 @@
 package com.yulore.medhub.ws.builder;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.yulore.medhub.session.StreamSession;
 import com.yulore.medhub.vo.PayloadFileSeekResult;
 import com.yulore.medhub.vo.PayloadGetFileLenResult;
 import com.yulore.medhub.vo.WSCommandVO;
 import com.yulore.medhub.vo.WSEventVO;
-import com.yulore.medhub.vo.cmd.VOSFileRead;
-import com.yulore.medhub.vo.cmd.VOSFileSeek;
-import com.yulore.medhub.vo.cmd.VOSOpenStream;
+import com.yulore.medhub.vo.cmd.*;
+import com.yulore.medhub.ws.WSCommandRegistry;
 import com.yulore.medhub.ws.actor.StreamActor;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
@@ -23,7 +21,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 @Slf4j
-public abstract class BaseStreamBuilder {
+public class BaseStreamBuilder {
     public static final byte[] EMPTY_BYTES = new byte[0];
 
     Timer open_timer;
@@ -31,26 +29,6 @@ public abstract class BaseStreamBuilder {
     Timer seek_timer;
     Timer read_timer;
     Timer tell_timer;
-
-    void handleCommand(final WSCommandVO<Void> cmd,
-                               final String message,
-                               final WebSocket webSocket,
-                               final StreamActor actor,
-                               final Timer.Sample sample) throws JsonProcessingException {
-        if ("OpenStream".equals(cmd.getHeader().get("name"))) {
-            handleOpenStreamCommand(VOSOpenStream.of(message), webSocket, actor, sample);
-        } else if ("GetFileLen".equals(cmd.getHeader().get("name"))) {
-            handleGetFileLenCommand(webSocket, actor, sample);
-        } else if ("FileSeek".equals(cmd.getHeader().get("name"))) {
-            handleFileSeekCommand(VOSFileSeek.of(message), webSocket, actor, sample);
-        } else if ("FileRead".equals(cmd.getHeader().get("name"))) {
-            handleFileReadCommand(VOSFileRead.of(message), webSocket, actor, sample);
-        } else if ("FileTell".equals(cmd.getHeader().get("name"))) {
-            handleFileTellCommand(webSocket, actor, sample);
-        } else {
-            log.warn("handleCommand: Unknown Command: {}", cmd);
-        }
-    }
 
     Consumer<StreamSession.EventContext> buildSendEvent(final WebSocket webSocket, final int delayInMs) {
         final Consumer<StreamSession.EventContext> performSendEvent = (ctx) -> {
@@ -74,8 +52,6 @@ public abstract class BaseStreamBuilder {
             schedulerProvider.getObject().schedule(() -> performSendData.accept(ctx), delayInMs, TimeUnit.MILLISECONDS);
         };
     }
-
-    abstract void handleOpenStreamCommand(final VOSOpenStream vo, final WebSocket webSocket, final StreamActor actor, final Timer.Sample sample);
 
     private void handleGetFileLenCommand(final WebSocket webSocket, final StreamActor actor, final Timer.Sample sample) {
         final long startInMs = System.currentTimeMillis();
@@ -216,4 +192,15 @@ public abstract class BaseStreamBuilder {
 
     @Autowired
     private ObjectProvider<ScheduledExecutorService> schedulerProvider;
+
+    final WSCommandRegistry<StreamActor> cmds = new WSCommandRegistry<StreamActor>()
+            .register(WSCommandVO.WSCMD_VOID,"GetFileLen",
+                    ctx-> handleGetFileLenCommand(ctx.ws(), ctx.actor(), ctx.sample()))
+            .register(VOSFileSeek.TYPE,"FileSeek",
+                    ctx-> handleFileSeekCommand(ctx.payload(), ctx.ws(), ctx.actor(), ctx.sample()))
+            .register(VOSFileRead.TYPE,"FileRead",
+                    ctx-> handleFileReadCommand(ctx.payload(), ctx.ws(), ctx.actor(), ctx.sample()))
+            .register(WSCommandVO.WSCMD_VOID,"FileTell",
+                    ctx-> handleFileTellCommand(ctx.ws(), ctx.actor(), ctx.sample()))
+            ;
 }
