@@ -6,12 +6,12 @@ import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.medhub.api.AIReplyVO;
 import com.yulore.medhub.api.ApiResponse;
 import com.yulore.medhub.api.ScriptApi;
-import com.yulore.medhub.session.ASRActor;
 import com.yulore.medhub.vo.*;
 import com.yulore.medhub.vo.cmd.*;
 import com.yulore.medhub.ws.HandlerUrlBuilder;
 import com.yulore.medhub.ws.WsHandler;
 import com.yulore.util.ExceptionUtil;
+import io.micrometer.core.instrument.Timer;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
@@ -206,9 +206,12 @@ public abstract class FsActor extends ASRActor implements WsHandler {
         }
     }
 
-    public void notifyFSPlaybackStarted(final VOFSPlaybackStarted vo) {
+    public void notifyFSPlaybackStarted(final VOFSPlaybackStarted vo, final Timer playback_timer) {
+        final PlaybackMemo playbackMemo = memoFor(vo.playback_id);
+        playbackMemo.sampleWhenCreate.stop(playback_timer);
+
         final long playbackStartedInMs = System.currentTimeMillis();
-        memoFor(vo.playback_id).setBeginInMs(playbackStartedInMs);
+        playbackMemo.setBeginInMs(playbackStartedInMs);
 
         final String currentPlaybackId = _currentPlaybackId.get();
         if (currentPlaybackId != null) {

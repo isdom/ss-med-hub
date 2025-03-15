@@ -24,6 +24,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
 import java.nio.ByteBuffer;
 import java.util.concurrent.ScheduledExecutorService;
@@ -108,6 +109,11 @@ public class FsActorBuilder implements WsHandlerBuilder {
         }
     }
 
+    @PostConstruct
+    private void init() {
+        playback_timer = timerProvider.getObject("mh.playback.delay", "", new String[]{"actor", "fsio"});
+    }
+
     @Resource
     private ScriptApi _scriptApi;
 
@@ -142,13 +148,19 @@ public class FsActorBuilder implements WsHandlerBuilder {
     @Autowired
     private ASRService asrService;
 
+    private final ObjectProvider<Timer> timerProvider;
+
+    private Timer playback_timer;
+
     final WSCommandRegistry<FsActor> cmds = new WSCommandRegistry<FsActor>()
             .register(VOStartTranscription.TYPE,"StartTranscription",
-    ctx-> asrService.startTranscription(ctx.payload(), ctx.ws()))
+    ctx-> asrService.startTranscription(ctx.actor(), ctx.payload(), ctx.ws())
+                .handle((timer, ex)->ctx.sample().stop(timer))
+            )
             .register(WSCommandVO.WSCMD_VOID,"StopTranscription",
                       ctx-> asrService.stopTranscription(ctx.ws()))
             .register(VOFSPlaybackStarted.TYPE,"FSPlaybackStarted",
-                      ctx->ctx.actor().notifyFSPlaybackStarted(ctx.payload()))
+                      ctx->ctx.actor().notifyFSPlaybackStarted(ctx.payload(), playback_timer))
             .register(VOFSPlaybackStopped.TYPE,"FSPlaybackStopped",
                       ctx->ctx.actor().notifyFSPlaybackStopped(ctx.payload()))
             .register(VOFSPlaybackPaused.TYPE,"FSPlaybackPaused",

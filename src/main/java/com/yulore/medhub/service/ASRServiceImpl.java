@@ -12,13 +12,12 @@ import com.tencent.core.ws.SpeechClient;
 import com.yulore.medhub.nls.ASRAgent;
 import com.yulore.medhub.nls.LimitAgent;
 import com.yulore.medhub.nls.TxASRAgent;
-import com.yulore.medhub.session.*;
 import com.yulore.medhub.vo.*;
 import com.yulore.medhub.vo.cmd.VOStartTranscription;
+import com.yulore.medhub.ws.actor.ASRActor;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
-import org.java_websocket.exceptions.WebsocketNotConnectedException;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,39 +35,31 @@ import java.util.concurrent.*;
 @Service
 @ConditionalOnProperty(prefix = "nls", name = "asr-enabled", havingValue = "true")
 class ASRServiceImpl implements ASRService {
-    @Override
-    public void startTranscription(final VOStartTranscription vo, final WebSocket webSocket) {
-        final ASRActor actor = webSocket.getAttachment();
-        if (actor == null) {
-            log.error("StartTranscription: {} without ASRSession, abort", webSocket.getRemoteSocketAddress());
-            return;
-        }
+    private Timer asr_started_timer;
+    private Timer txasr_started_timer;
 
-//        {
+    @Override
+    public CompletionStage<Timer>  startTranscription(final ASRActor actor, final VOStartTranscription vo, final WebSocket webSocket) {
         if (!actor.startTranscription()) {
             log.warn("StartTranscription: {}'s Session startTranscription already, ignore", webSocket.getRemoteSocketAddress());
-            return;
+            return CompletableFuture.failedStage(new RuntimeException("startTranscription already"));
         }
 
         if ("tx".equals(vo.provider)) {
-            startWithTxasr(webSocket, actor, vo).whenComplete( (v,ex) -> {
+            return startWithTxasr(webSocket, actor, vo).whenComplete( (v,ex) -> {
                 if (ex != null) {
                     log.warn("StartTranscription with Tx: failed", ex);
                     // throw new RuntimeException(ex);
                 }
-            });
+            }).thenApply(ignored->txasr_started_timer);
         } else {
-            startWithAliasr(webSocket, actor, vo).whenComplete( (v,ex) -> {
+            return startWithAliasr(webSocket, actor, vo).whenComplete( (v,ex) -> {
                 if (ex != null) {
                     log.warn("StartTranscription with Ali: failed", ex);
                     // throw new RuntimeException(ex);
                 }
-            });
+            }).thenApply(ignored -> asr_started_timer);
         }
-//        } /*catch (Exception ex) {*/
-            // TODO: close websocket?
-//            log.error("StartTranscription: failed: {}", ex.toString());
-//            throw new RuntimeException(ex);
     }
 
     @Override
@@ -94,6 +85,8 @@ class ASRServiceImpl implements ASRService {
         _txClient = new SpeechClient(AsrConstant.DEFAULT_RT_REQ_URL);
 
         initASRAgents(_nlsClient);
+        asr_started_timer = timerProvider.getObject("nls.asr.started.duration", "", new String[0]);
+        txasr_started_timer = timerProvider.getObject("nls.txasr.started.duration", "", new String[0]);
     }
 
     @PreDestroy
@@ -225,7 +218,7 @@ class ASRServiceImpl implements ASRService {
                 }
 
                 final SpeechRecognizer speechRecognizer = agent.buildSpeechRecognizer(
-                        buildRecognizerListener(actor, webSocket, agent, actor.sessionId(), startConnectingInMs),
+                        buildRecognizerListener(actor, /*webSocket,*/ agent, actor.sessionId(), startConnectingInMs),
                         (request) -> {
                             // https://cloud.tencent.com/document/product/1093/48982
                             if (vo.noise_threshold != null) {
@@ -281,8 +274,8 @@ class ASRServiceImpl implements ASRService {
         }).thenAccept(agent->{});
     }
 
-    private SpeechRecognizerListener buildRecognizerListener(final ASRActor session,
-                                                             final WebSocket webSocket,
+    private SpeechRecognizerListener buildRecognizerListener(final ASRActor actor,
+                                                             // final WebSocket webSocket,
                                                              final TxASRAgent account,
                                                              final String sessionId,
                                                              final long startConnectingInMs) {
@@ -296,7 +289,8 @@ class ASRServiceImpl implements ASRService {
                         JSON.toJSONString(response),
                         System.currentTimeMillis() - startConnectingInMs);
                 account.incConnected();
-                notifyTranscriptionStarted(webSocket);
+                actor.transcriptionStarted();
+                // notifyTranscriptionStarted(webSocket);
             }
 
             @Override
@@ -305,8 +299,9 @@ class ASRServiceImpl implements ASRService {
                         sessionId,
                         response.getVoiceId(),
                         JSON.toJSONString(response));
-                notifySentenceBegin(webSocket,
-                        new PayloadSentenceBegin(response.getResult().getIndex(), response.getResult().getStartTime().intValue()));
+                actor.notifySentenceBegin(new PayloadSentenceBegin(
+                        response.getResult().getIndex(), response.getResult().getStartTime().intValue()));
+                // notifySentenceBegin(webSocket, );
             }
 
             @Override
@@ -315,12 +310,13 @@ class ASRServiceImpl implements ASRService {
                         sessionId,
                         response.getVoiceId(),
                         JSON.toJSONString(response));
-                notifySentenceEnd(webSocket,
+                actor.notifySentenceEnd(
                         new PayloadSentenceEnd(response.getResult().getIndex(),
-                                response.getResult().getEndTime().intValue(),
-                                response.getResult().getStartTime().intValue(),
-                                response.getResult().getVoiceTextStr(),
-                                0));
+                            response.getResult().getEndTime().intValue(),
+                            response.getResult().getStartTime().intValue(),
+                            response.getResult().getVoiceTextStr(),
+                            0));
+                // notifySentenceEnd(webSocket, );
             }
 
             @Override
@@ -329,10 +325,11 @@ class ASRServiceImpl implements ASRService {
                         sessionId,
                         response.getVoiceId(),
                         JSON.toJSONString(response));
-                notifyTranscriptionResultChanged(webSocket,
+                actor.notifyTranscriptionResultChanged(
                         new PayloadTranscriptionResultChanged(response.getResult().getIndex(),
-                                response.getResult().getEndTime().intValue(),
-                                response.getResult().getVoiceTextStr()));
+                            response.getResult().getEndTime().intValue(),
+                            response.getResult().getVoiceTextStr()));
+                // notifyTranscriptionResultChanged(webSocket, );
             }
 
             @Override
@@ -341,7 +338,7 @@ class ASRServiceImpl implements ASRService {
                         sessionId,
                         response.getVoiceId(),
                         JSON.toJSONString(response));
-                notifyTranscriptionCompleted(webSocket);
+                // notifyTranscriptionCompleted(webSocket);
             }
 
             @Override
@@ -350,7 +347,7 @@ class ASRServiceImpl implements ASRService {
                         sessionId,
                         response.getVoiceId(),
                         JSON.toJSONString(response));
-                session.notifySpeechTranscriberFail();
+                actor.notifySpeechTranscriberFail();
             }
 
             @Override
@@ -362,12 +359,15 @@ class ASRServiceImpl implements ASRService {
 
     private CompletionStage<Void> startWithAliasr(final WebSocket webSocket, final ASRActor actor, final VOStartTranscription vo) {
         final long startConnectingInMs = System.currentTimeMillis();
-        return selectASRAgentAsync().whenComplete((agent, ex) -> {
+        return selectASRAgentAsync().thenCompose( agent -> {
+                // .whenComplete((agent, ex) -> {
+            final CompletableFuture<Void> completableFuture = new CompletableFuture<>();
+            /*
             if (ex != null) {
                 log.error("Failed to select ASR agent", ex);
                 webSocket.close();
                 return;
-            }
+            }*/
 
             actor.lock();
 
@@ -377,11 +377,11 @@ class ASRServiceImpl implements ASRService {
                     agent.decConnectionAsync().whenComplete((current, ex2) -> {
                         log.warn("ws({}) detached, so release asr({}): {}/{}", webSocket.getRemoteSocketAddress(), agent.getName(), current, agent.getLimit());
                     });
-                    return;
+                    return completableFuture;
                 }
 
                 final SpeechTranscriber transcriber = actor.onSpeechTranscriberCreated(
-                        buildSpeechTranscriber(agent, buildTranscriberListener(actor, webSocket, agent, actor.sessionId(), startConnectingInMs)));
+                        buildSpeechTranscriber(agent, buildTranscriberListener(actor, completableFuture,/*webSocket,*/ agent, actor.sessionId(), startConnectingInMs)));
 
                 if (vo.speech_noise_threshold != null) {
                     // ref: https://help.aliyun.com/zh/isi/developer-reference/websocket#sectiondiv-rz2-i36-2gv
@@ -424,7 +424,8 @@ class ASRServiceImpl implements ASRService {
             } finally {
                 actor.unlock();
             }
-        }).thenAccept(agent->{});
+            return completableFuture;
+        });
     }
 
     private SpeechTranscriber buildSpeechTranscriber(final ASRAgent agent, final SpeechTranscriberListener listener) throws Exception {
@@ -463,14 +464,16 @@ class ASRServiceImpl implements ASRService {
         return transcriber;
     }
 
-    private SpeechTranscriberListener buildTranscriberListener(final ASRActor session,
-                                                               final WebSocket webSocket,
+    private SpeechTranscriberListener buildTranscriberListener(final ASRActor actor,
+                                                               // final WebSocket webSocket,
+                                                               final CompletableFuture<Void> completableFuture,
                                                                final ASRAgent account,
                                                                final String sessionId,
                                                                final long startConnectingInMs) {
         return new SpeechTranscriberListener() {
             @Override
             public void onTranscriberStart(final SpeechTranscriberResponse response) {
+                completableFuture.complete(null);
                 //task_id是调用方和服务端通信的唯一标识，遇到问题时，需要提供此task_id。
                 log.info("onTranscriberStart: sessionId={}, task_id={}, name={}, status={}, cost={} ms",
                         sessionId,
@@ -479,15 +482,16 @@ class ASRServiceImpl implements ASRService {
                         response.getStatus(),
                         System.currentTimeMillis() - startConnectingInMs);
                 account.incConnected();
-                notifyTranscriptionStarted(webSocket);
+                // notifyTranscriptionStarted(webSocket);
+                actor.transcriptionStarted();
             }
 
             @Override
             public void onSentenceBegin(final SpeechTranscriberResponse response) {
                 log.info("onSentenceBegin: sessionId={}, task_id={}, name={}, status={}",
                         sessionId, response.getTaskId(), response.getName(), response.getStatus());
-                notifySentenceBegin(webSocket,
-                        new PayloadSentenceBegin(response.getTransSentenceIndex(), response.getTransSentenceTime()));
+                actor.notifySentenceBegin(new PayloadSentenceBegin(response.getTransSentenceIndex(), response.getTransSentenceTime()));
+                // notifySentenceBegin(webSocket, new PayloadSentenceBegin(response.getTransSentenceIndex(), response.getTransSentenceTime()));
             }
 
             @Override
@@ -502,12 +506,13 @@ class ASRServiceImpl implements ASRService {
                         response.getConfidence(),
                         response.getSentenceBeginTime(),
                         response.getTransSentenceTime());
-                notifySentenceEnd(webSocket,
+                actor.notifySentenceEnd(
                         new PayloadSentenceEnd(response.getTransSentenceIndex(),
-                                response.getTransSentenceTime(),
-                                response.getSentenceBeginTime(),
-                                response.getTransSentenceText(),
-                                response.getConfidence()));
+                        response.getTransSentenceTime(),
+                        response.getSentenceBeginTime(),
+                        response.getTransSentenceText(),
+                        response.getConfidence()));
+                // notifySentenceEnd(webSocket, );
             }
 
             @Override
@@ -520,10 +525,11 @@ class ASRServiceImpl implements ASRService {
                         response.getTransSentenceIndex(),
                         response.getTransSentenceText(),
                         response.getTransSentenceTime());
-                notifyTranscriptionResultChanged(webSocket,
+                actor.notifyTranscriptionResultChanged(
                         new PayloadTranscriptionResultChanged(response.getTransSentenceIndex(),
-                                response.getTransSentenceTime(),
-                                response.getTransSentenceText()));
+                        response.getTransSentenceTime(),
+                        response.getTransSentenceText()));
+                // notifyTranscriptionResultChanged(webSocket, );
             }
 
             @Override
@@ -533,7 +539,7 @@ class ASRServiceImpl implements ASRService {
                         response.getTaskId(),
                         response.getName(),
                         response.getStatus());
-                notifyTranscriptionCompleted(webSocket);
+                // notifyTranscriptionCompleted(webSocket);
             }
 
             @Override
@@ -543,17 +549,18 @@ class ASRServiceImpl implements ASRService {
                         response.getTaskId(),
                         response.getStatus(),
                         response.getStatusText());
-                session.notifySpeechTranscriberFail();
+                actor.notifySpeechTranscriberFail();
             }
         };
     }
 
+    /*
     private void notifyTranscriptionStarted(final WebSocket webSocket) {
         try {
             if (webSocket.getAttachment() instanceof ASRActor session) {
                 session.transcriptionStarted();
             }
-            WSEventVO.sendEvent(webSocket, "TranscriptionStarted", (Void) null);
+            // WSEventVO.sendEvent(webSocket, "TranscriptionStarted", (Void) null);
         } catch (WebsocketNotConnectedException ex) {
             log.info("ws disconnected when sendEvent TranscriptionStarted: {}", ex.toString());
         }
@@ -564,7 +571,7 @@ class ASRServiceImpl implements ASRService {
             if (webSocket.getAttachment() instanceof ASRActor session) {
                 session.notifySentenceBegin(payload);
             }
-            WSEventVO.sendEvent(webSocket, "SentenceBegin", payload);
+            // WSEventVO.sendEvent(webSocket, "SentenceBegin", payload);
         } catch (WebsocketNotConnectedException ex) {
             log.info("ws disconnected when sendEvent SentenceBegin: {}", ex.toString());
         }
@@ -575,7 +582,7 @@ class ASRServiceImpl implements ASRService {
             if (webSocket.getAttachment() instanceof ASRActor session) {
                 session.notifySentenceEnd(payload);
             }
-            WSEventVO.sendEvent(webSocket, "SentenceEnd", payload);
+            // WSEventVO.sendEvent(webSocket, "SentenceEnd", payload);
         } catch (WebsocketNotConnectedException ex) {
             log.info("ws disconnected when sendEvent SentenceEnd: {}", ex.toString());
         }
@@ -586,7 +593,7 @@ class ASRServiceImpl implements ASRService {
             if (webSocket.getAttachment() instanceof ASRActor session) {
                 session.notifyTranscriptionResultChanged(payload);
             }
-            WSEventVO.sendEvent(webSocket, "TranscriptionResultChanged", payload);
+            // WSEventVO.sendEvent(webSocket, "TranscriptionResultChanged", payload);
         } catch (WebsocketNotConnectedException ex) {
             log.info("ws disconnected when sendEvent TranscriptionResultChanged: {}", ex.toString());
         }
@@ -595,11 +602,12 @@ class ASRServiceImpl implements ASRService {
     private void notifyTranscriptionCompleted(final WebSocket webSocket) {
         try {
             // TODO: account.dec??
-            WSEventVO.sendEvent(webSocket, "TranscriptionCompleted", (Void)null);
+            // WSEventVO.sendEvent(webSocket, "TranscriptionCompleted", (Void)null);
         } catch (WebsocketNotConnectedException ex) {
             log.info("ws disconnected when sendEvent TranscriptionCompleted: {}", ex.toString());
         }
     }
+    */
 
     @Value("${nls.url}")
     private String _nls_url;

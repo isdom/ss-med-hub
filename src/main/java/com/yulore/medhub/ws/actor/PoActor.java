@@ -6,14 +6,15 @@ import com.alibaba.nls.client.protocol.asr.SpeechTranscriber;
 import com.google.common.base.Strings;
 import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.medhub.api.*;
-import com.yulore.medhub.session.ASRActor;
 import com.yulore.medhub.vo.*;
+import com.yulore.medhub.vo.cmd.VOPCMPlaybackStarted;
 import com.yulore.medhub.vo.cmd.VOUserAnswer;
 import com.yulore.medhub.ws.WsHandler;
 import com.yulore.util.ByteArrayListInputStream;
 import com.yulore.util.ExceptionUtil;
 import com.yulore.util.VarsUtil;
 import com.yulore.util.WaveUtil;
+import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
@@ -409,22 +410,27 @@ public abstract class PoActor extends ASRActor implements WsHandler {
                 _clientIp, _sessionId, _uuid, playbackId, _currentPlaybackId.get());
     }
 
-    public void notifyPlaybackStarted(final String playbackId, final String contentId) {
+    public void notifyPlaybackStarted(final VOPCMPlaybackStarted vo, final Timer playback_timer) {
+        final PlaybackMemo playbackMemo = memoFor(vo.playback_id);
+        playbackMemo.sampleWhenCreate.stop(playback_timer);
+
+        final long playbackStartedInMs = System.currentTimeMillis();
+        playbackMemo.setBeginInMs(playbackStartedInMs);
+
         log.info("[{}]: [{}]-[{}]: notifyPlaybackStarted => playbackId: {} while currentPlaybackId: {}",
-                _clientIp, _sessionId, _uuid, playbackId, _currentPlaybackId.get());
+                _clientIp, _sessionId, _uuid, vo.playback_id, _currentPlaybackId.get());
         final String currentPlaybackId = _currentPlaybackId.get();
         if (currentPlaybackId != null) {
-            if (currentPlaybackId.equals(playbackId)) {
-                final long playbackStartedInMs = System.currentTimeMillis();
+            if (currentPlaybackId.equals(vo.playback_id)) {
                 _currentPlaybackDuration.set(()->System.currentTimeMillis() - playbackStartedInMs);
                 log.info("[{}]: [{}]-[{}]: notifyPlaybackStarted => current playbackid: {} Matched",
-                        _clientIp, _sessionId, _uuid, playbackId);
+                        _clientIp, _sessionId, _uuid, vo.playback_id);
             } else {
                 log.info("[{}]: [{}]-[{}]: notifyPlaybackStarted => current playbackid: {} mismatch started playbackid: {}, ignore",
-                        _clientIp, _sessionId, _uuid, currentPlaybackId, playbackId);
+                        _clientIp, _sessionId, _uuid, currentPlaybackId, vo.playback_id);
             }
         } else {
-            log.warn("[{}]-[{}]: currentPlaybackId is null BUT notifyPlaybackStarted with: {}", _sessionId, _uuid, playbackId);
+            log.warn("[{}]-[{}]: currentPlaybackId is null BUT notifyPlaybackStarted with: {}", _sessionId, _uuid, vo.playback_id);
         }
     }
 

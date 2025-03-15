@@ -1,9 +1,10 @@
-package com.yulore.medhub.session;
+package com.yulore.medhub.ws.actor;
 
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriber;
 import com.yulore.medhub.vo.PayloadSentenceBegin;
 import com.yulore.medhub.vo.PayloadSentenceEnd;
 import com.yulore.medhub.vo.PayloadTranscriptionResultChanged;
+import io.micrometer.core.instrument.Timer;
 import lombok.Builder;
 import lombok.Data;
 import lombok.ToString;
@@ -31,6 +32,7 @@ public class ASRActor {
         public final String contentId;
         public final boolean cancelOnSpeak;
         public final boolean hangup;
+        public final Timer.Sample sampleWhenCreate;
         public long beginInMs;
     }
 
@@ -171,6 +173,7 @@ public class ASRActor {
                         .beginInMs(System.currentTimeMillis())
                         .cancelOnSpeak(cancelOnSpeak)
                         .hangup(hangup)
+                        .sampleWhenCreate(Timer.start())
                         .build());
     }
 
@@ -189,8 +192,8 @@ public class ASRActor {
     public final AtomicBoolean _isTranscriptionFailed = new AtomicBoolean(false);
     public final AtomicInteger _transmitCount = new AtomicInteger(0);
 
-    final AtomicReference<ScheduledFuture<?>>   _checkIdleFuture = new AtomicReference<>(null);
-    final AtomicInteger _checkIdleCount = new AtomicInteger(0);
+    public final AtomicReference<ScheduledFuture<?>>   _checkIdleFuture = new AtomicReference<>(null);
+    public final AtomicInteger _checkIdleCount = new AtomicInteger(0);
     public final long _sessionBeginInMs;
 
     private final AtomicInteger _playbackIdx = new AtomicInteger(0);

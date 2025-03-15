@@ -49,6 +49,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
     public void start() {
         _ossAccessExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
                 new DefaultThreadFactory("ossAccessExecutor"));
+        playback_timer = timerProvider.getObject("mh.playback.delay", "", new String[]{"actor", "poio"});
     }
 
     @PreDestroy
@@ -221,11 +222,19 @@ public class PoActorBuilder implements WsHandlerBuilder {
     @Autowired
     private ASRService asrService;
 
+    private final ObjectProvider<Timer> timerProvider;
+
+    private Timer playback_timer;
+
     final WSCommandRegistry<PoActor> cmds = new WSCommandRegistry<PoActor>()
             .register(VOStartTranscription.TYPE,"StartTranscription",
-    ctx-> asrService.startTranscription(ctx.payload(), ctx.ws()))
+    ctx-> asrService.startTranscription(ctx.actor(), ctx.payload(), ctx.ws())
+                .handle((timer, ex)->ctx.sample().stop(timer))
+            )
             .register(WSCommandVO.WSCMD_VOID,"StopTranscription",
                       ctx-> asrService.stopTranscription(ctx.ws()))
+            .register(VOPCMPlaybackStarted.TYPE,"PCMPlaybackStarted",
+                    ctx->ctx.actor().notifyPlaybackStarted(ctx.payload(), playback_timer))
             .register(VOPCMPlaybackStopped.TYPE,"PCMPlaybackStopped",
                       ctx->ctx.actor().notifyPlaybackStop(
                         ctx.payload().playback_id,
@@ -243,10 +252,6 @@ public class PoActorBuilder implements WsHandlerBuilder {
                         ctx.payload().playback_id,
                         ctx.payload().content_id,
                         ctx.payload().playback_duration))
-            .register(VOPCMPlaybackStarted.TYPE,"PCMPlaybackStarted",
-                      ctx->ctx.actor().notifyPlaybackStarted(
-                        ctx.payload().playback_id,
-                        ctx.payload().content_id))
             .register(VOUserAnswer.TYPE,"UserAnswer",
                       ctx->ctx.actor().notifyUserAnswer(ctx.payload()))
             ;
