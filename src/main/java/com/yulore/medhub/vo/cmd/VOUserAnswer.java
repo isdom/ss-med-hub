@@ -11,7 +11,7 @@ import lombok.ToString;
 @ToString
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class VOUserAnswer {
-    private static final TypeReference<WSCommandVO<VOUserAnswer>> TYPE = new TypeReference<>() {};
+    public static final TypeReference<WSCommandVO<VOUserAnswer>> TYPE = new TypeReference<>() {};
     public static VOUserAnswer of(final String message) throws JsonProcessingException {
         return WSCommandVO.parse(message, TYPE).payload;
     }

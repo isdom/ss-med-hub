@@ -78,7 +78,6 @@ public class FsActorBuilder implements WsHandlerBuilder {
                     cmdExecutorProvider.getObject().submit(()->{
                         try {
                             cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket);
-                            // handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket);
                         } catch (JsonProcessingException ex) {
                             log.error("handleCommand {}: {}, an error occurred when parseAsJson: {}",
                                     webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
@@ -121,26 +120,6 @@ public class FsActorBuilder implements WsHandlerBuilder {
                 log.warn("ws path match: {}, role: {}, !NOT! find FsActor with {}", prefix, role, sessionId);
             }
             return actor;
-        }
-    }
-
-    private void handleCommand(final WSCommandVO<Void> cmd, final String message, final FsActor actor, final WebSocket webSocket) throws JsonProcessingException {
-        if ("StartTranscription".equals(cmd.getHeader().get("name"))) {
-            asrService.startTranscription(VOStartTranscription.of(message), webSocket);
-        } else if ("StopTranscription".equals(cmd.getHeader().get("name"))) {
-            asrService.stopTranscription(webSocket);
-        } else if ("FSPlaybackStarted".equals(cmd.getHeader().get("name"))) {
-            actor.notifyFSPlaybackStarted(VOFSPlaybackStarted.of(message));
-        } else if ("FSPlaybackStopped".equals(cmd.getHeader().get("name"))) {
-            actor.notifyFSPlaybackStopped(VOFSPlaybackStopped.of(message));
-        } else if ("FSPlaybackPaused".equals(cmd.getHeader().get("name"))) {
-            actor.notifyPlaybackPaused(VOFSPlaybackPaused.of(message));
-        } else if ("FSPlaybackResumed".equals(cmd.getHeader().get("name"))) {
-            actor.notifyPlaybackResumed(VOFSPlaybackResumed.of(message));
-        } else if ("FSRecordStarted".equals(cmd.getHeader().get("name"))) {
-            actor.notifyFSRecordStarted(VOFSRecordStarted.of(message));
-        } else {
-            log.warn("handleCommand: Unknown Command: {}", cmd);
         }
     }
 

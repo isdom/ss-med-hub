@@ -2,7 +2,6 @@ package com.yulore.medhub.ws.builder;
 
 import com.aliyun.oss.OSS;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yulore.bst.*;
 import com.yulore.medhub.api.CallApi;
 import com.yulore.medhub.api.ScriptApi;
@@ -13,6 +12,7 @@ import com.yulore.medhub.task.PlayStreamPCMTask2;
 import com.yulore.medhub.task.SampleInfo;
 import com.yulore.medhub.vo.*;
 import com.yulore.medhub.vo.cmd.*;
+import com.yulore.medhub.ws.WSCommandRegistry;
 import com.yulore.medhub.ws.WsHandler;
 import com.yulore.medhub.ws.WsHandlerBuilder;
 import com.yulore.medhub.ws.actor.PoActor;
@@ -69,6 +69,38 @@ public class PoActorBuilder implements WsHandlerBuilder {
             final String uuid = VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "uuid", '&');
             final String tid = VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "tid", '&');
             final String clientIp = handshake.getFieldValue("X-Forwarded-For");
+
+            final WSCommandRegistry<PoActor> cmds = new WSCommandRegistry<>();
+
+            cmds.register(VOStartTranscription.TYPE,"StartTranscription",
+                            ctx-> asrService.startTranscription(ctx.payload(), ctx.ws()))
+                    .register(WSCommandVO.WSCMD_VOID,"StopTranscription",
+                            ctx-> asrService.stopTranscription(ctx.ws()))
+                    .register(VOPCMPlaybackStopped.TYPE,"PCMPlaybackStopped",
+                            ctx->ctx.actor().notifyPlaybackStop(
+                                    ctx.payload().playback_id,
+                                    ctx.payload().content_id,
+                                    ctx.payload().playback_begin_timestamp,
+                                    ctx.payload().playback_end_timestamp,
+                                    ctx.payload().playback_duration))
+                    .register(VOPCMPlaybackPaused.TYPE,"PCMPlaybackPaused",
+                            ctx->ctx.actor().notifyPlaybackPaused(
+                                    ctx.payload().playback_id,
+                                    ctx.payload().content_id,
+                                    ctx.payload().playback_duration))
+                    .register(VOPCMPlaybackResumed.TYPE,"PCMPlaybackResumed",
+                            ctx->ctx.actor().notifyPlaybackResumed(
+                                    ctx.payload().playback_id,
+                                    ctx.payload().content_id,
+                                    ctx.payload().playback_duration))
+                    .register(VOPCMPlaybackStarted.TYPE,"PCMPlaybackStarted",
+                            ctx->ctx.actor().notifyPlaybackStarted(
+                                    ctx.payload().playback_id,
+                                    ctx.payload().content_id))
+                    .register(VOUserAnswer.TYPE,"UserAnswer",
+                            ctx->ctx.actor().notifyUserAnswer(ctx.payload()))
+                    ;
+
             final PoActor actor = new PoActor(
                     clientIp,
                     uuid,
@@ -98,7 +130,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
                 public void onMessage(final WebSocket webSocket, final String message) {
                     cmdExecutorProvider.getObject().submit(()-> {
                         try {
-                            handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, webSocket, this);
+                            cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket);
                         } catch (JsonProcessingException ex) {
                             log.error("handleCommand {}: {}, an error occurred when parseAsJson: {}",
                                     webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
@@ -136,7 +168,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
             webSocket.setAttachment(actor);
             actor.attachPlaybackWs(
                     (playbackContext) ->
-                            playbackOn2(playbackContext,
+                            playbackOn(playbackContext,
                                     actor,
                                     webSocket),
                     (event, payload) -> {
@@ -150,41 +182,10 @@ public class PoActorBuilder implements WsHandlerBuilder {
         }
     }
 
-    private void handleCommand(final WSCommandVO<Void> cmd, final String message, final WebSocket webSocket, final PoActor actor) throws JsonProcessingException {
-        if ("StartTranscription".equals(cmd.getHeader().get("name"))) {
-            asrService.startTranscription(VOStartTranscription.of(message), webSocket);
-        } else if ("StopTranscription".equals(cmd.getHeader().get("name"))) {
-            asrService.stopTranscription(webSocket);
-        }else if ("PCMPlaybackStopped".equals(cmd.getHeader().get("name"))) {
-            final var vo = VOPCMPlaybackStopped.of(message);
-            log.info("[{}]: handlePCMPlaybackStoppedCommand: playbackId: {}", actor.sessionId(), vo.playback_id);
-            actor.notifyPlaybackStop(vo.playback_id, vo.content_id, vo.playback_begin_timestamp, vo.playback_end_timestamp, vo.playback_duration);
-        } else if ("PCMPlaybackPaused".equals(cmd.getHeader().get("name"))) {
-            // eg: {"header": {"name": "PCMPlaybackPaused"},"payload": {"playback_id": "ebfafab3-eb5e-454a-9427-187ceff9ff23", "content_id": "2213745", "playback_duration": "4.410666666666666"}}
-            final var vo = VOPCMPlaybackPaused.of(message);
-            log.info("[{}]: handlePCMPlaybackPausedCommand: playbackId: {}", actor.sessionId(), vo.playback_id);
-            actor.notifyPlaybackPaused(vo.playback_id, vo.content_id, vo.playback_duration);
-        } else if ("PCMPlaybackResumed".equals(cmd.getHeader().get("name"))) {
-            // eg: {"header": {"name": "PCMPlaybackResumed"},"payload": {"playback_id": "ebfafab3-eb5e-454a-9427-187ceff9ff23", "content_id": "2213745", "playback_duration": "4.410666666666666"}}
-            final var vo = VOPCMPlaybackResumed.of(message);
-            log.info("[{}]: handlePCMPlaybackResumedCommand: playbackId: {}", actor.sessionId(), vo.playback_id);
-            actor.notifyPlaybackResumed(vo.playback_id, vo.content_id, vo.playback_duration);
-        } else if ("PCMPlaybackStarted".equals(cmd.getHeader().get("name"))) {
-            // eg: {"header": {"name": "PCMPlaybackStarted"},"payload": {"playback_id": "ebfafab3-eb5e-454a-9427-187ceff9ff23", "content_id": "2213745"}}
-            final var vo = VOPCMPlaybackStarted.of(message);
-            log.info("[{}]: handlePCMPlaybackStartedCommand: playbackId: {}", actor.sessionId(), vo.playback_id);
-            actor.notifyPlaybackStarted(vo.playback_id, vo.content_id);
-        } else if ("UserAnswer".equals(cmd.getHeader().get("name"))) {
-            actor.notifyUserAnswer(VOUserAnswer.of(message));
-        } else {
-            log.warn("handleCommand: Unknown Command: {}", cmd);
-        }
-    }
-
-    private Runnable playbackOn2(final PoActor.PlaybackContext playbackContext, final PoActor poActor, final WebSocket webSocket) {
+    private Runnable playbackOn(final PoActor.PlaybackContext playbackContext, final PoActor poActor, final WebSocket webSocket) {
         // interval = 20 ms
         int interval = 20;
-        log.info("[{}]: playbackOn2: {} => sample rate: {}/interval: {}/channels: {} as {}",
+        log.info("[{}]: playbackOn: {} => sample rate: {}/interval: {}/channels: {} as {}",
                 poActor.sessionId(), playbackContext.path(), 16000, interval, 1, playbackContext.playbackId());
         final PlayStreamPCMTask2 task = new PlayStreamPCMTask2(
                 playbackContext.playbackId(),
