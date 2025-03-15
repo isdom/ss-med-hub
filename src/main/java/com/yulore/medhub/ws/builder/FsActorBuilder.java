@@ -13,6 +13,7 @@ import com.yulore.medhub.vo.WSEventVO;
 import com.yulore.medhub.ws.WsHandler;
 import com.yulore.medhub.ws.WsHandlerBuilder;
 import com.yulore.util.ExceptionUtil;
+import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
@@ -58,9 +59,10 @@ public class FsActorBuilder implements WsHandlerBuilder {
                     ()->webSocket.close(1006, "test_disconnect")) {
                 @Override
                 public void onMessage(final WebSocket webSocket, final String message) {
+                    final Timer.Sample sample = Timer.start();
                     cmdExecutorProvider.getObject().submit(()->{
                         try {
-                            cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket, null);
+                            cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket, sample);
                         } catch (JsonProcessingException ex) {
                             log.error("handleCommand {}: {}, an error occurred when parseAsJson: {}",
                                     webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));

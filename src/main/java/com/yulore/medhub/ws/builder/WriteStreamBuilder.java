@@ -35,6 +35,7 @@ import java.util.function.Consumer;
 @ConditionalOnProperty(prefix = "feature", name = "write_rms", havingValue = "enabled")
 public class WriteStreamBuilder extends BaseStreamBuilder implements WsHandlerBuilder {
     private Timer write_timer;
+    private Timer oss_timer;
 
     @PostConstruct
     public void start() {
@@ -44,6 +45,7 @@ public class WriteStreamBuilder extends BaseStreamBuilder implements WsHandlerBu
         read_timer = timerProvider.getObject("rms.wr.duration", "write rms op", new String[]{"op", "read"});
         write_timer = timerProvider.getObject("rms.wr.duration", "write rms op", new String[]{"op", "write"});
         tell_timer = timerProvider.getObject("rms.wr.duration", "write rms op", new String[]{"op", "tell"});
+        oss_timer = timerProvider.getObject("oss.upload.duration", "", new String[]{"source", "wrms"});
 
         _ossAccessExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
                 new DefaultThreadFactory("ossAccessExecutor"));
@@ -103,9 +105,11 @@ public class WriteStreamBuilder extends BaseStreamBuilder implements WsHandlerBu
         final StreamSession _ss = new StreamSession(true, sendEvent, sendData,
                 (ctx) -> {
                     final long startUploadInMs = System.currentTimeMillis();
+                    final Timer.Sample oss_sample = Timer.start();
                     _ossAccessExecutor.submit(()->{
                         try {
                             _ossProvider.getObject().putObject(ctx.bucketName, ctx.objectName, ctx.content);
+                            oss_sample.stop(oss_timer);
                             log.info("[{}]: upload content to oss => bucket:{}/object:{}, cost {} ms",
                                     vo.session_id, ctx.bucketName, ctx.objectName, System.currentTimeMillis() - startUploadInMs);
                         } catch (Exception ex) {

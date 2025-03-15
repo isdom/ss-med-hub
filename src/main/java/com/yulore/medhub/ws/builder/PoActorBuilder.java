@@ -18,6 +18,7 @@ import com.yulore.medhub.ws.WsHandlerBuilder;
 import com.yulore.medhub.ws.actor.PoActor;
 import com.yulore.util.ExceptionUtil;
 import com.yulore.util.VarsUtil;
+import io.micrometer.core.instrument.Timer;
 import io.netty.util.NettyRuntime;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.RequiredArgsConstructor;
@@ -96,9 +97,10 @@ public class PoActorBuilder implements WsHandlerBuilder {
                     (_sessionId) -> WSEventVO.sendEvent(webSocket, "CallStarted", new PayloadCallStarted(_sessionId))) {
                 @Override
                 public void onMessage(final WebSocket webSocket, final String message) {
+                    final Timer.Sample sample = Timer.start();
                     cmdExecutorProvider.getObject().submit(()-> {
                         try {
-                            cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket, null);
+                            cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket, sample);
                         } catch (JsonProcessingException ex) {
                             log.error("handleCommand {}: {}, an error occurred when parseAsJson: {}",
                                     webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
