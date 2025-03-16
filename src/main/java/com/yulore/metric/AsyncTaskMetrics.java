@@ -34,6 +34,8 @@ public class AsyncTaskMetrics {
                 .description(desc)
                 .tags("hostname", HOSTNAME)
                 .tags("ip", LOCAL_IP)
+                .tags("ns", System.getenv("NACOS_NAMESPACE"))
+                .tags("srv", System.getenv("NACOS_DATAID"))
                 .tags(Tags.of(tags))
                 .publishPercentileHistogram()
                 .minimumExpectedValue(Duration.ofMillis(1))
