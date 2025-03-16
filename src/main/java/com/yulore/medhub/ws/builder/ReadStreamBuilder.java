@@ -12,6 +12,7 @@ import com.yulore.medhub.ws.WsHandlerBuilder;
 import com.yulore.medhub.ws.actor.StreamActor;
 import com.yulore.util.ExceptionUtil;
 import com.yulore.util.VarsUtil;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,7 +25,9 @@ import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
 import java.nio.ByteBuffer;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -41,6 +44,7 @@ public class ReadStreamBuilder extends BaseStreamBuilder implements WsHandlerBui
 
         cmds.register(VOSOpenStream.TYPE, "OpenStream",
                 ctx->handleOpenStreamCommand(ctx.payload(), ctx.ws(), ctx.actor(), ctx.sample()));
+        gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", "", new String[]{"actor", "rrms"});
     }
 
     @Override
@@ -63,7 +67,14 @@ public class ReadStreamBuilder extends BaseStreamBuilder implements WsHandlerBui
             public void onMessage(final WebSocket webSocket, final ByteBuffer bytes) {
                 log.error("[{}]: Unsupported write command for readonly stream", _ss.sessionId());
             }
+
+            @Override
+            public void onClose(final WebSocket webSocket) {
+                _wscount.decrementAndGet();
+                super.onClose(webSocket);
+            }
         };
+        _wscount.incrementAndGet();
         webSocket.setAttachment(actor);
         return actor;
     }
@@ -113,4 +124,7 @@ public class ReadStreamBuilder extends BaseStreamBuilder implements WsHandlerBui
 
     private final ObjectProvider<CommandExecutor> cmdExecutorProvider;
     private final ObjectProvider<Timer> timerProvider;
+    private final ObjectProvider<Gauge> gaugeProvider;
+
+    private final AtomicInteger _wscount = new AtomicInteger(0);
 }

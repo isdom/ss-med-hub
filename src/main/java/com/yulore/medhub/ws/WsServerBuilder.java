@@ -2,6 +2,7 @@ package com.yulore.medhub.ws;
 
 import com.yulore.util.ExceptionUtil;
 import com.yulore.util.NetworkUtil;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +26,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 @Configuration
 @EnableConfigurationProperties(WsConfigProperties.class)
@@ -38,6 +40,8 @@ public class WsServerBuilder {
     public WebSocketServer webSocketServer() {
         log.info("webSocketServer: {}", configProps);
         final Timer timer = timerProvider.getObject("mh.connected.delay", "", new String[0]);
+        gaugeProvider.getObject((Supplier<Number>)_currentWSConnection::get, "mh.ws.count", "",
+                new String[]{"actor", "all"});
 
         final WebSocketServer server = new WebSocketServer(new InetSocketAddress(configProps.host, configProps.port)) {
             @Override
@@ -204,6 +208,7 @@ public class WsServerBuilder {
     private final ObjectProvider<Inet4Address> ipv4Provider;
     private final RedissonClient redisson;
     private final ObjectProvider<Timer> timerProvider;
+    private final ObjectProvider<Gauge> gaugeProvider;
 
     private final AtomicReference<List<String>> rrmsUrls = new AtomicReference<>(List.of());
     private final AtomicInteger _currentWSConnection = new AtomicInteger(0);

@@ -11,6 +11,7 @@ import com.yulore.medhub.ws.WsHandlerBuilder;
 import com.yulore.medhub.ws.actor.StreamActor;
 import com.yulore.util.ExceptionUtil;
 import com.yulore.util.VarsUtil;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Timer;
 import io.netty.util.NettyRuntime;
 import io.netty.util.concurrent.DefaultThreadFactory;
@@ -27,7 +28,9 @@ import javax.annotation.PreDestroy;
 import java.nio.ByteBuffer;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -52,6 +55,7 @@ public class WriteStreamBuilder extends BaseStreamBuilder implements WsHandlerBu
 
         cmds.register(VOSOpenStream.TYPE, "OpenStream",
                 ctx->handleOpenStreamCommand(ctx.payload(), ctx.ws(), ctx.actor(), ctx.sample()));
+        gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", "", new String[]{"actor", "wrms"});
     }
 
     @PreDestroy
@@ -80,7 +84,14 @@ public class WriteStreamBuilder extends BaseStreamBuilder implements WsHandlerBu
                 final Timer.Sample sample = Timer.start();
                 cmdExecutorProvider.getObject().submit(()-> handleFileWriteCommand(bytes, _ss, webSocket, sample));
             }
+
+            @Override
+            public void onClose(final WebSocket webSocket) {
+                _wscount.decrementAndGet();
+                super.onClose(webSocket);
+            }
         };
+        _wscount.incrementAndGet();
         webSocket.setAttachment(actor);
         return actor;
     }
@@ -135,6 +146,8 @@ public class WriteStreamBuilder extends BaseStreamBuilder implements WsHandlerBu
     private final ObjectProvider<CommandExecutor> cmdExecutorProvider;
     private final ObjectProvider<OSS> _ossProvider;
     private final ObjectProvider<Timer> timerProvider;
+    private final ObjectProvider<Gauge> gaugeProvider;
 
     private ExecutorService _ossAccessExecutor;
+    private final AtomicInteger _wscount = new AtomicInteger(0);
 }

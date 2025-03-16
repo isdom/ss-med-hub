@@ -18,6 +18,7 @@ import com.yulore.medhub.ws.WsHandlerBuilder;
 import com.yulore.medhub.ws.actor.PoActor;
 import com.yulore.util.ExceptionUtil;
 import com.yulore.util.VarsUtil;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Timer;
 import io.netty.util.NettyRuntime;
 import io.netty.util.concurrent.DefaultThreadFactory;
@@ -39,6 +40,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -51,6 +54,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
                 new DefaultThreadFactory("ossAccessExecutor"));
         playback_timer = timerProvider.getObject("mh.playback.delay", "", new String[]{"actor", "poio"});
         oss_timer = timerProvider.getObject("oss.upload.duration", "", new String[]{"actor", "poio"});
+        gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", "", new String[]{"actor", "poio"});
     }
 
     @PreDestroy
@@ -67,6 +71,8 @@ public class PoActorBuilder implements WsHandlerBuilder {
         final String role = varsBegin > 0 ? VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "role", '&') : null;
 
         if ("call".equals(role)) {
+            _wscount.incrementAndGet();
+
             // means ws with role: call
             // init PoActor attach with webSocket
             final String uuid = VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "uuid", '&');
@@ -121,6 +127,12 @@ public class PoActorBuilder implements WsHandlerBuilder {
                         }
                     }
                 }
+
+                @Override
+                public void onClose(final WebSocket webSocket) {
+                    _wscount.decrementAndGet();
+                    super.onClose(webSocket);
+                }
             };
             webSocket.setAttachment(actor);
             actor.onAttached(webSocket);
@@ -139,6 +151,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
                 log.info("can't find callSession by sessionId: {}, ignore", sessionId);
                 return null;
             }
+            _wscount.incrementAndGet();
             webSocket.setAttachment(actor);
             actor.attachPlaybackWs(
                     (playbackContext) ->
@@ -226,6 +239,9 @@ public class PoActorBuilder implements WsHandlerBuilder {
     private ASRService asrService;
 
     private final ObjectProvider<Timer> timerProvider;
+    private final ObjectProvider<Gauge> gaugeProvider;
+
+    private final AtomicInteger _wscount = new AtomicInteger(0);
 
     private Timer playback_timer;
     private Timer oss_timer;

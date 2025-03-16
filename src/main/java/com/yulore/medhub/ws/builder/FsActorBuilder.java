@@ -13,6 +13,7 @@ import com.yulore.medhub.vo.WSEventVO;
 import com.yulore.medhub.ws.WsHandler;
 import com.yulore.medhub.ws.WsHandlerBuilder;
 import com.yulore.util.ExceptionUtil;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +29,8 @@ import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
 import java.nio.ByteBuffer;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -39,6 +42,7 @@ public class FsActorBuilder implements WsHandlerBuilder {
         // init FsActor attach with webSocket
         final String role = handshake.getFieldValue("x-role");
         if ("asr".equals(role)) {
+            _wscount.incrementAndGet();
             final String uuid = handshake.getFieldValue("x-uuid");
             final String sessionId = handshake.getFieldValue("x-sessionid");
             final String welcome = handshake.getFieldValue("x-welcome");
@@ -80,6 +84,12 @@ public class FsActorBuilder implements WsHandlerBuilder {
                         }
                     }
                 }
+
+                @Override
+                public void onClose(final WebSocket webSocket) {
+                    _wscount.decrementAndGet();
+                    super.onClose(webSocket);
+                }
             };
 
             webSocket.setAttachment(actor);
@@ -92,6 +102,7 @@ public class FsActorBuilder implements WsHandlerBuilder {
             log.info("onOpen: sessionid: {} for ws: {}", sessionId, webSocket.getRemoteSocketAddress());
             final FsActor actor = FsActor.findBy(sessionId);
             if (actor != null) {
+                _wscount.incrementAndGet();
                 webSocket.setAttachment(actor);
                 actor.attachPlaybackWs((event, payload) -> {
                     try {
@@ -112,6 +123,7 @@ public class FsActorBuilder implements WsHandlerBuilder {
     @PostConstruct
     private void init() {
         playback_timer = timerProvider.getObject("mh.playback.delay", "", new String[]{"actor", "fsio"});
+        gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", "", new String[]{"actor", "fsio"});
     }
 
     @Resource
@@ -149,6 +161,9 @@ public class FsActorBuilder implements WsHandlerBuilder {
     private ASRService asrService;
 
     private final ObjectProvider<Timer> timerProvider;
+    private final ObjectProvider<Gauge> gaugeProvider;
+
+    private final AtomicInteger _wscount = new AtomicInteger(0);
 
     private Timer playback_timer;
 
