@@ -34,6 +34,11 @@ public class NetworkUtil {
         return null;
     }
 
+    public static String getLocalIpv4AsString() {
+        final Inet4Address localAddress = getLocalIpv4();
+        return localAddress != null ? localAddress.getHostAddress() : "(null)";
+    }
+
     // 安全获取主机名，避免重复调用
     public static String getHostname() {
         try {

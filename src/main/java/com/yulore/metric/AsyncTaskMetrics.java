@@ -12,6 +12,7 @@ import java.util.Arrays;
 @Slf4j
 public class AsyncTaskMetrics {
     private static final String HOSTNAME = NetworkUtil.getHostname();
+    private static final String LOCAL_IP = NetworkUtil.getLocalIpv4AsString();
 
     private final Timer asyncTaskTimer;
 
@@ -32,6 +33,7 @@ public class AsyncTaskMetrics {
         asyncTaskTimer = Timer.builder(name)
                 .description(desc)
                 .tags("hostname", HOSTNAME)
+                .tags("ip", LOCAL_IP)
                 .tags(Tags.of(tags))
                 .publishPercentileHistogram()
                 .minimumExpectedValue(Duration.ofMillis(1))

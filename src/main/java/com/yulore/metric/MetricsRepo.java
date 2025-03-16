@@ -12,6 +12,7 @@ import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
+import java.util.Objects;
 import java.util.function.Supplier;
 
 import static org.springframework.beans.factory.config.ConfigurableBeanFactory.SCOPE_PROTOTYPE;
@@ -21,6 +22,7 @@ import static org.springframework.beans.factory.config.ConfigurableBeanFactory.S
 @Component
 public class MetricsRepo {
     private static final String HOSTNAME = NetworkUtil.getHostname();
+    private static final String LOCAL_IP = NetworkUtil.getLocalIpv4AsString();
 
     @Bean
     @Scope(SCOPE_PROTOTYPE)
@@ -35,6 +37,7 @@ public class MetricsRepo {
         return Gauge.builder(name, f)
                 .description(desc)
                 .tags("hostname", HOSTNAME)
+                .tags("ip", LOCAL_IP)
                 .tags(Tags.of(tags))
                 .register(meterRegistry);
     }
