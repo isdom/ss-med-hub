@@ -37,66 +37,24 @@ import java.util.function.Supplier;
 @Component("fs_io")
 @ConditionalOnProperty(prefix = "feature", name = "fs_io", havingValue = "enabled")
 public class FsActorBuilder implements WsHandlerBuilder {
+
+    @PostConstruct
+    private void init() {
+        playback_timer = timerProvider.getObject("mh.playback.delay", "", new String[]{"actor", "fsio"});
+        gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", "", new String[]{"actor", "fsio"});
+        cmdExecutor = cmdExecutorProvider.getObject();
+    }
+
     @Override
     public WsHandler build(final String prefix, final WebSocket webSocket, final ClientHandshake handshake) {
-        // init FsActor attach with webSocket
         final String role = handshake.getFieldValue("x-role");
         if ("asr".equals(role)) {
-            _wscount.incrementAndGet();
-            final String uuid = handshake.getFieldValue("x-uuid");
-            final String sessionId = handshake.getFieldValue("x-sessionid");
-            final String welcome = handshake.getFieldValue("x-welcome");
-            final String recordStartTimestamp = handshake.getFieldValue("x-rst");
-            final FsActor actor = new FsActor(
-                    uuid,
-                    sessionId,
-                    _scriptApi,
-                    welcome,
-                    recordStartTimestamp,
-                    _rms_cp_prefix,
-                    _rms_tts_prefix,
-                    _rms_wav_prefix,
-                    urlProvider.getObject(),
-                    _test_enable_delay,
-                    _test_delay_ms,
-                    _test_enable_disconnect,
-                    _test_disconnect_probability,
-                    ()->webSocket.close(1006, "test_disconnect")) {
-                @Override
-                public void onMessage(final WebSocket webSocket, final String message) {
-                    final Timer.Sample sample = Timer.start();
-                    cmdExecutorProvider.getObject().submit(()->{
-                        try {
-                            cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket, sample);
-                        } catch (JsonProcessingException ex) {
-                            log.error("handleCommand {}: {}, an error occurred when parseAsJson: {}",
-                                    webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
-                        }
-                    });
-                }
-
-                @Override
-                public void onMessage(final WebSocket webSocket, final ByteBuffer bytes) {
-                    if (transmit(bytes)) {
-                        // transmit success
-                        if ((transmitCount() % 50) == 0) {
-                            log.debug("{}: transmit 50 times.", sessionId());
-                        }
-                    }
-                }
-
-                @Override
-                public void onClose(final WebSocket webSocket) {
-                    _wscount.decrementAndGet();
-                    super.onClose(webSocket);
-                }
-            };
-
-            webSocket.setAttachment(actor);
-            actor.scheduleCheckIdle(schedulerProvider.getObject(), _check_idle_interval_ms, actor::checkIdle);
-            WSEventVO.<Void>sendEvent(webSocket, "FSConnected", null);
-            log.info("ws path match {}, role: {}. using ws as FsActor {}", prefix, role, sessionId);
-            return actor;
+            // init FsActor attach with webSocket
+            cmdExecutor.submit(()-> buildFsActor(prefix, webSocket, handshake, role));
+            // FsActor build async , so return dummy handler for NOT close ws connection
+            // StartTranscription will wait for playback connected
+            // and playback connection will wait for receive 'FSConnected' event
+            return WsHandler.DUMMP_HANDLER;
         } else {
             final String sessionId = handshake.getFieldValue("x-sessionid");
             log.info("onOpen: sessionid: {} for ws: {}", sessionId, webSocket.getRemoteSocketAddress());
@@ -120,10 +78,61 @@ public class FsActorBuilder implements WsHandlerBuilder {
         }
     }
 
-    @PostConstruct
-    private void init() {
-        playback_timer = timerProvider.getObject("mh.playback.delay", "", new String[]{"actor", "fsio"});
-        gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", "", new String[]{"actor", "fsio"});
+    private void buildFsActor(final String prefix, final WebSocket webSocket, final ClientHandshake handshake, final String role) {
+        _wscount.incrementAndGet();
+        final String uuid = handshake.getFieldValue("x-uuid");
+        final String sessionId = handshake.getFieldValue("x-sessionid");
+        final String welcome = handshake.getFieldValue("x-welcome");
+        final String recordStartTimestamp = handshake.getFieldValue("x-rst");
+        final FsActor actor = new FsActor(
+                uuid,
+                sessionId,
+                _scriptApi,
+                welcome,
+                recordStartTimestamp,
+                _rms_cp_prefix,
+                _rms_tts_prefix,
+                _rms_wav_prefix,
+                urlProvider.getObject(),
+                _test_enable_delay,
+                _test_delay_ms,
+                _test_enable_disconnect,
+                _test_disconnect_probability,
+                () -> webSocket.close(1006, "test_disconnect")) {
+            @Override
+            public void onMessage(final WebSocket webSocket, final String message) {
+                final Timer.Sample sample = Timer.start();
+                cmdExecutorProvider.getObject().submit(() -> {
+                    try {
+                        cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket, sample);
+                    } catch (JsonProcessingException ex) {
+                        log.error("handleCommand {}: {}, an error occurred when parseAsJson: {}",
+                                webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
+                    }
+                });
+            }
+
+            @Override
+            public void onMessage(final WebSocket webSocket, final ByteBuffer bytes) {
+                if (transmit(bytes)) {
+                    // transmit success
+                    if ((transmitCount() % 50) == 0) {
+                        log.debug("{}: transmit 50 times.", sessionId());
+                    }
+                }
+            }
+
+            @Override
+            public void onClose(final WebSocket webSocket) {
+                _wscount.decrementAndGet();
+                super.onClose(webSocket);
+            }
+        };
+
+        webSocket.setAttachment(actor);
+        actor.scheduleCheckIdle(schedulerProvider.getObject(), _check_idle_interval_ms, actor::checkIdle);
+        WSEventVO.<Void>sendEvent(webSocket, "FSConnected", null);
+        log.info("ws path match {}, role: {}. using ws as FsActor {}", prefix, role, sessionId);
     }
 
     @Resource
@@ -156,6 +165,7 @@ public class FsActorBuilder implements WsHandlerBuilder {
     private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
     private final ObjectProvider<HandlerUrlBuilder> urlProvider;
     private final ObjectProvider<CommandExecutor> cmdExecutorProvider;
+    private CommandExecutor cmdExecutor;
 
     @Autowired
     private ASRService asrService;
