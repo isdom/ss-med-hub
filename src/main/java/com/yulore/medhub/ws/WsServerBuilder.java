@@ -19,6 +19,7 @@ import org.springframework.context.annotation.Configuration;
 
 import java.net.*;
 import java.nio.ByteBuffer;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ScheduledExecutorService;
@@ -56,7 +57,13 @@ public class WsServerBuilder {
                 if (str != null) {
                     final long startConnectInMs = Long.parseLong(str) / 1000; // nanosecond to millisecond
                     final long delay = System.currentTimeMillis() - startConnectInMs;
-                    log.info("ws: {} connected delay: {} ms", handshake.getResourceDescriptor(), delay);
+                    final StringBuilder sb = new StringBuilder();
+                    handshake.iterateHttpFields().forEachRemaining(s -> {
+                        if (s.startsWith("x-")) {
+                            sb.append(handshake.getFieldValue(s)).append(":");
+                        }
+                    });
+                    log.info("ws: {}/{} connected delay: {} ms", handshake.getResourceDescriptor(), sb, delay);
                     timer.record(delay, TimeUnit.MILLISECONDS);
                 }
                 handlerRegistry.createHandler(webSocket, handshake).ifPresentOrElse(handler -> {
