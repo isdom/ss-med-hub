@@ -1,5 +1,6 @@
 package com.yulore.medhub.ws;
 
+import com.yulore.medhub.service.CommandExecutor;
 import com.yulore.util.ExceptionUtil;
 import com.yulore.util.NetworkUtil;
 import io.micrometer.core.instrument.Gauge;
@@ -42,6 +43,7 @@ public class WsServerBuilder {
         final Timer timer = timerProvider.getObject("mh.connected.delay", "", new String[0]);
         gaugeProvider.getObject((Supplier<Number>)_currentWSConnection::get, "mh.ws.count", "",
                 new String[]{"actor", "all"});
+        final CommandExecutor cmdExecutor = cmdExecutorProvider.getObject();
 
         final WebSocketServer server = new WebSocketServer(new InetSocketAddress(configProps.host, configProps.port)) {
             @Override
@@ -59,10 +61,12 @@ public class WsServerBuilder {
                     log.info("ws: {} connected delay: {} ms", handshake.getResourceDescriptor(), delay);
                     timer.record(delay, TimeUnit.MILLISECONDS);
                 }
-                handlerRegistry.createHandler(webSocket, handshake).ifPresentOrElse(handler -> {
-                    // webSocket.setAttachment(handler);
-                    // handler.onAttached(webSocket);
-                }, () -> webSocket.close(1002, "Unsupported path"));
+                cmdExecutor.submit(()->
+                    handlerRegistry.createHandler(webSocket, handshake).ifPresentOrElse(handler -> {
+                        // webSocket.setAttachment(handler);
+                        // handler.onAttached(webSocket);
+                    }, () -> webSocket.close(1002, "Unsupported path"))
+                );
             }
 
             @Override
@@ -205,6 +209,8 @@ public class WsServerBuilder {
     private long _check_interval;
 
     private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
+    private final ObjectProvider<CommandExecutor> cmdExecutorProvider;
+
     private final ObjectProvider<Inet4Address> ipv4Provider;
     private final RedissonClient redisson;
     private final ObjectProvider<Timer> timerProvider;
