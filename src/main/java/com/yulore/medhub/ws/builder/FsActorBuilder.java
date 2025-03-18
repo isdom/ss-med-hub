@@ -50,35 +50,35 @@ public class FsActorBuilder implements WsHandlerBuilder {
         final String role = handshake.getFieldValue("x-role");
         if ("asr".equals(role)) {
             // init FsActor attach with webSocket
-            cmdExecutor.submit(()-> buildFsActor(prefix, webSocket, handshake, role));
-            // FsActor build async , so return dummy handler for NOT close ws connection
-            // StartTranscription will wait for playback connected
-            // and playback connection will wait for receive 'FSConnected' event
-            return WsHandler.DUMMP_HANDLER;
+            return buildFsActor(prefix, webSocket, handshake, role);
         } else {
-            final String sessionId = handshake.getFieldValue("x-sessionid");
-            log.info("onOpen: sessionid: {} for ws: {}", sessionId, webSocket.getRemoteSocketAddress());
-            final FsActor actor = FsActor.findBy(sessionId);
-            if (actor != null) {
-                _wscount.incrementAndGet();
-                webSocket.setAttachment(actor);
-                actor.attachPlaybackWs((event, payload) -> {
-                    try {
-                        WSEventVO.sendEvent(webSocket, event, payload);
-                    } catch (Exception ex) {
-                        log.warn("[{}]: FsActor sendback {}/{} failed, detail: {}", actor.sessionId(), event, payload,
-                                ExceptionUtil.exception2detail(ex));
-                    }
-                });
-                log.info("ws path match: {}, role: {}, attach exist FsActor {}", prefix, role, sessionId);
-            } else {
-                log.warn("ws path match: {}, role: {}, !NOT! find FsActor with {}", prefix, role, sessionId);
-            }
-            return actor;
+            return attachFsActor(prefix, webSocket, handshake, role);
         }
     }
 
-    private void buildFsActor(final String prefix, final WebSocket webSocket, final ClientHandshake handshake, final String role) {
+    private FsActor attachFsActor(final String prefix, final WebSocket webSocket, final ClientHandshake handshake, final String role) {
+        final String sessionId = handshake.getFieldValue("x-sessionid");
+        log.info("onOpen: sessionid: {} for ws: {}", sessionId, webSocket.getRemoteSocketAddress());
+        final FsActor actor = FsActor.findBy(sessionId);
+        if (actor != null) {
+            _wscount.incrementAndGet();
+            webSocket.setAttachment(actor);
+            actor.attachPlaybackWs((event, payload) -> {
+                try {
+                    WSEventVO.sendEvent(webSocket, event, payload);
+                } catch (Exception ex) {
+                    log.warn("[{}]: FsActor sendback {}/{} failed, detail: {}", actor.sessionId(), event, payload,
+                            ExceptionUtil.exception2detail(ex));
+                }
+            });
+            log.info("ws path match: {}, role: {}, attach exist FsActor {}", prefix, role, sessionId);
+        } else {
+            log.warn("ws path match: {}, role: {}, !NOT! find FsActor with {}", prefix, role, sessionId);
+        }
+        return actor;
+    }
+
+    private FsActor buildFsActor(final String prefix, final WebSocket webSocket, final ClientHandshake handshake, final String role) {
         _wscount.incrementAndGet();
         final String uuid = handshake.getFieldValue("x-uuid");
         final String sessionId = handshake.getFieldValue("x-sessionid");
@@ -102,7 +102,7 @@ public class FsActorBuilder implements WsHandlerBuilder {
             @Override
             public void onMessage(final WebSocket webSocket, final String message) {
                 final Timer.Sample sample = Timer.start();
-                cmdExecutorProvider.getObject().submit(() -> {
+                cmdExecutor.submit(() -> {
                     try {
                         cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket, sample);
                     } catch (JsonProcessingException ex) {
@@ -133,6 +133,7 @@ public class FsActorBuilder implements WsHandlerBuilder {
         actor.scheduleCheckIdle(schedulerProvider.getObject(), _check_idle_interval_ms, actor::checkIdle);
         WSEventVO.<Void>sendEvent(webSocket, "FSConnected", null);
         log.info("ws path match {}, role: {}. using ws as FsActor {}", prefix, role, sessionId);
+        return actor;
     }
 
     @Resource

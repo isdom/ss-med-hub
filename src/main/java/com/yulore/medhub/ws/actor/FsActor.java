@@ -301,8 +301,6 @@ public abstract class FsActor extends ASRActor implements WsHandler {
             if (prevPlaybackId != null) {
                 _sendEvent.accept("FSStopPlayback", new PayloadFSChangePlayback(_uuid, prevPlaybackId));
             }
-
-            //_currentAIContentId.set(ai_content_id);
             _currentPlaybackId.set(newPlaybackId);
             _currentPlaybackPaused.set(false);
             _currentPlaybackDuration.set(()->0L);
