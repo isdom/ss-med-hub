@@ -1,6 +1,5 @@
 package com.yulore.medhub.ws;
 
-import com.yulore.medhub.service.CommandExecutor;
 import com.yulore.util.ExceptionUtil;
 import com.yulore.util.NetworkUtil;
 import io.micrometer.core.instrument.Gauge;
