@@ -90,8 +90,8 @@ public class TTSAgent extends LimitAgent<TTSAgent> {
                     log.info("tts agent: {} update token: {}, expire time: {}",
                             getName(), _accessToken.getToken(),
                             new SimpleDateFormat().format(new Date(_accessToken.getExpireTime() * 1000)) );
-                } catch (IOException e) {
-                    log.warn("_accessToken.apply failed: {}", e.toString());
+                } catch (IOException ex) {
+                    log.warn("_accessToken.apply failed", ex);
                 }
             } else {
                 log.info("tts agent: {} no need update token, expire time: {} connecting:{}, connected: {}",
