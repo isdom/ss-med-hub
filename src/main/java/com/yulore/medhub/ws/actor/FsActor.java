@@ -134,10 +134,11 @@ public abstract class FsActor extends ASRActor implements WsHandler {
                     }, _testDelayMs, TimeUnit.MILLISECONDS);
                 }
                 _transmitCount.incrementAndGet();
+                return true;
             } catch (Exception ex) {
-                log.warn("[{}]: transmit error, detail: {}", _sessionId, ex.toString());
+                log.warn("[{}]: transmit error", _sessionId, ex);
+                return false;
             }
-            return true;
         } else {
             return false;
         }

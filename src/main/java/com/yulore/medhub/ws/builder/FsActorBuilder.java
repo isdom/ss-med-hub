@@ -30,7 +30,9 @@ import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
 import java.nio.ByteBuffer;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 
 @Slf4j
@@ -42,6 +44,7 @@ public class FsActorBuilder implements WsHandlerBuilder {
     @PostConstruct
     private void init() {
         playback_timer = timerProvider.getObject("mh.playback.delay", "", new String[]{"actor", "fsio"});
+        transmit_timer = timerProvider.getObject("mh.transmit.delay", "", new String[]{"actor", "fsio"});
         gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", "", new String[]{"actor", "fsio"});
         cmdExecutor = cmdExecutorProvider.getObject();
     }
@@ -113,12 +116,18 @@ public class FsActorBuilder implements WsHandlerBuilder {
                 });
             }
 
+            long totalDelayInMs = 0;
+
             @Override
             public void onMessage(final WebSocket webSocket, final ByteBuffer bytes) {
+                final long beginInMs = System.currentTimeMillis();
                 orderedTaskExecutor.submit(actorIdx(), ()-> {
                     if (transmit(bytes)) {
+                        totalDelayInMs += System.currentTimeMillis() - beginInMs;
                         // transmit success
                         if ((transmitCount() % 50) == 0) {
+                            transmit_timer.record(totalDelayInMs, TimeUnit.MILLISECONDS);
+                            totalDelayInMs = 0;
                             log.debug("{}: transmit 50 times.", sessionId());
                         }
                     }
@@ -185,6 +194,7 @@ public class FsActorBuilder implements WsHandlerBuilder {
     private final AtomicInteger _wscount = new AtomicInteger(0);
 
     private Timer playback_timer;
+    private Timer transmit_timer;
 
     final WSCommandRegistry<FsActor> cmds = new WSCommandRegistry<FsActor>()
             .register(VOStartTranscription.TYPE,"StartTranscription",
