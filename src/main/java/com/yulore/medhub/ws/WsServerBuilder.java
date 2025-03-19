@@ -54,7 +54,7 @@ public class WsServerBuilder {
                         handshake.getResourceDescriptor());
 
                 final String str = handshake.getFieldValue("x-timestamp");
-                if (str != null) {
+                if (str != null && !str.isEmpty()) {
                     final long startConnectInMs = Long.parseLong(str) / 1000; // nanosecond to millisecond
                     final long delay = System.currentTimeMillis() - startConnectInMs;
                     final StringBuilder sb = new StringBuilder();
@@ -79,8 +79,7 @@ public class WsServerBuilder {
                     try {
                         handler.onClose(webSocket);
                     } catch (Exception ex) {
-                        log.warn("handler.onClose: {} with exception {}",
-                                webSocket.getRemoteSocketAddress(), ExceptionUtil.exception2detail(ex));
+                        log.warn("handler.onClose: {} failed", webSocket.getRemoteSocketAddress(), ex);
                     }
                 }
                 log.info("wscount/{}: closed {} with exit code {} additional info: {}",

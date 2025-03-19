@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.yulore.medhub.api.ScriptApi;
 import com.yulore.medhub.service.ASRService;
 import com.yulore.medhub.service.CommandExecutor;
+import com.yulore.medhub.service.OrderedTaskExecutor;
 import com.yulore.medhub.vo.WSCommandVO;
 import com.yulore.medhub.vo.cmd.*;
 import com.yulore.medhub.ws.HandlerUrlBuilder;
@@ -114,18 +115,22 @@ public class FsActorBuilder implements WsHandlerBuilder {
 
             @Override
             public void onMessage(final WebSocket webSocket, final ByteBuffer bytes) {
-                if (transmit(bytes)) {
-                    // transmit success
-                    if ((transmitCount() % 50) == 0) {
-                        log.debug("{}: transmit 50 times.", sessionId());
+                orderedTaskExecutor.submit(actorIdx(), ()-> {
+                    if (transmit(bytes)) {
+                        // transmit success
+                        if ((transmitCount() % 50) == 0) {
+                            log.debug("{}: transmit 50 times.", sessionId());
+                        }
                     }
-                }
+                });
             }
 
             @Override
             public void onClose(final WebSocket webSocket) {
-                _wscount.decrementAndGet();
-                super.onClose(webSocket);
+                orderedTaskExecutor.submit(actorIdx(), ()-> {
+                    _wscount.decrementAndGet();
+                    super.onClose(webSocket);
+                });
             }
         };
 
@@ -170,6 +175,9 @@ public class FsActorBuilder implements WsHandlerBuilder {
 
     @Autowired
     private ASRService asrService;
+
+    @Autowired
+    OrderedTaskExecutor orderedTaskExecutor;
 
     private final ObjectProvider<Timer> timerProvider;
     private final ObjectProvider<Gauge> gaugeProvider;

@@ -24,6 +24,8 @@ import java.util.function.Consumer;
 @ToString
 @Slf4j
 public class ASRActor {
+    private static final AtomicInteger currentCounter = new AtomicInteger(0);
+
     @Builder
     @Data
     @ToString
@@ -57,7 +59,12 @@ public class ASRActor {
     }
 
     public ASRActor() {
+        _actorIdx = currentCounter.incrementAndGet();
         _sessionBeginInMs = System.currentTimeMillis();
+    }
+
+    public int actorIdx() {
+        return _actorIdx;
     }
 
     public String sessionId() {
@@ -149,7 +156,7 @@ public class ASRActor {
         if (future != null) {
             future.cancel(false);
         }
-        log.info("{} 's ASRSession close(), lasted: {} s, check idle {} times",
+        log.info("{} 's ASRActor close(), lasted: {} s, check idle {} times",
                 _sessionId, (System.currentTimeMillis() - _sessionBeginInMs) / 1000.0f, _checkIdleCount.get());
     }
 
@@ -181,6 +188,7 @@ public class ASRActor {
         return _id2memo.get(playbackId);
     }
 
+    private final int _actorIdx;
     public String _sessionId;
     public final Lock _lock = new ReentrantLock();
 
