@@ -149,7 +149,7 @@ public class WsServerBuilder {
 
         checkAndScheduleNext(startedTimestamp -> {
             final AtomicReference<Timer.Sample> sampleRef = new AtomicReference<>(Timer.start());
-            return masterService.updateHubStatus(ipAndPort, configProps.pathMappings, System.currentTimeMillis())
+            return masterService.updateHubStatus(System.currentTimeMillis(), ipAndPort, configProps.pathMappings, null)
                     .thenCompose(v -> {
                         sampleRef.get().stop(timer1);
                         sampleRef.set(Timer.start());
