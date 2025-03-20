@@ -1,5 +1,7 @@
 package com.yulore.medhub.ws;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yulore.util.ExceptionUtil;
 import com.yulore.util.NetworkUtil;
 import io.micrometer.core.instrument.Gauge;
@@ -148,7 +150,7 @@ public class WsServerBuilder {
 
         checkAndScheduleNext(startedTimestamp -> {
             final AtomicReference<Timer.Sample> sampleRef = new AtomicReference<>(Timer.start());
-            return masterService.updateHubStatus(System.currentTimeMillis(), ipAndPort, configProps.pathMappings, null)
+            return masterService.updateHubStatus(System.currentTimeMillis(), ipAndPort, configProps.pathMappings, buildInfo())
                     .thenCompose(v -> {
                         sampleRef.get().stop(timer1);
                         sampleRef.set(Timer.start());
@@ -165,6 +167,15 @@ public class WsServerBuilder {
                         return true;
                     });
         }, System.currentTimeMillis());
+    }
+
+    private String buildInfo() {
+        try {
+            return new ObjectMapper().writeValueAsString(HubInfo.builder().wscount(_currentWSConnection.get()).build());
+        } catch (JsonProcessingException ex) {
+            log.warn("buildInfo failed", ex);
+            return null;
+        }
     }
 
     private void checkAndScheduleNext(final Function<Long, CompletionStage<Boolean>> doCheck, final long timestamp) {
