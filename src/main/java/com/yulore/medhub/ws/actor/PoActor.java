@@ -268,7 +268,7 @@ public abstract class PoActor extends ASRActor implements WsHandler {
 
             return result;
         } catch (Exception ex) {
-            log.warn("[{}]: [{}]-[{}]: transmit_asr_failed, detail: {}", _clientIp, _sessionId, _uuid, ex.toString());
+            log.warn("[{}]: [{}]-[{}]: transmit_asr_failed", _clientIp, _sessionId, _uuid, ex);
             return false;
         }
     }

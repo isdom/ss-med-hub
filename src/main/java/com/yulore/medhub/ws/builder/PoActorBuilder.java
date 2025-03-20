@@ -8,6 +8,7 @@ import com.yulore.medhub.api.ScriptApi;
 import com.yulore.medhub.service.ASRService;
 import com.yulore.medhub.service.BSTService;
 import com.yulore.medhub.service.CommandExecutor;
+import com.yulore.medhub.service.OrderedTaskExecutor;
 import com.yulore.medhub.task.PlayStreamPCMTask2;
 import com.yulore.medhub.task.SampleInfo;
 import com.yulore.medhub.vo.*;
@@ -53,6 +54,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
         _ossAccessExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
                 new DefaultThreadFactory("ossAccessExecutor"));
         playback_timer = timerProvider.getObject("mh.playback.delay", "", new String[]{"actor", "poio"});
+        transmit_timer = timerProvider.getObject("mh.transmit.delay", "", new String[]{"actor", "poio"});
         oss_timer = timerProvider.getObject("oss.upload.duration", "", new String[]{"actor", "poio"});
         gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", "", new String[]{"actor", "poio"});
     }
@@ -71,102 +73,120 @@ public class PoActorBuilder implements WsHandlerBuilder {
         final String role = varsBegin > 0 ? VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "role", '&') : null;
 
         if ("call".equals(role)) {
-            _wscount.incrementAndGet();
+            return buildPoActor(prefix, webSocket, handshake, path, varsBegin, role);
+        } else {
+            return attachPoActor(prefix, webSocket, path, varsBegin, role);
+        }
+    }
 
-            // means ws with role: call
-            // init PoActor attach with webSocket
-            final String uuid = VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "uuid", '&');
-            final String tid = VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "tid", '&');
-            final String clientIp = handshake.getFieldValue("X-Forwarded-For");
-            final PoActor actor = new PoActor(
-                    clientIp,
-                    uuid,
-                    tid,
-                    _callApi,
-                    _scriptApi,
-                    (_session) -> {
-                        try {
-                            WSEventVO.sendEvent(webSocket, "CallEnded", new PayloadCallEnded(_session.sessionId()));
-                            log.info("[{}]: sendback CallEnded event", _session.sessionId());
-                        } catch (Exception ex) {
-                            log.warn("[{}]: sendback CallEnded event failed, detail: {}", _session.sessionId(), ex.toString());
-                        }
-                    },
-                    _oss_bucket,
-                    _oss_path,
-                    (ctx) -> {
-                        final long startUploadInMs = System.currentTimeMillis();
-                        final Timer.Sample oss_sample = Timer.start();
-                        _ossAccessExecutor.submit(() -> {
-                            _ossProvider.getObject().putObject(ctx.bucketName(), ctx.objectName(), ctx.content());
-                            oss_sample.stop(oss_timer);
-                            log.info("[{}]: upload record to oss => bucket:{}/object:{}, cost {} ms",
-                                    ctx.sessionId(), ctx.bucketName(), ctx.objectName(), System.currentTimeMillis() - startUploadInMs);
-                        });
-                    },
-                    (_sessionId) -> WSEventVO.sendEvent(webSocket, "CallStarted", new PayloadCallStarted(_sessionId))) {
-                @Override
-                public void onMessage(final WebSocket webSocket, final String message) {
-                    final Timer.Sample sample = Timer.start();
-                    cmdExecutorProvider.getObject().submit(()-> {
-                        try {
-                            cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket, sample);
-                        } catch (JsonProcessingException ex) {
-                            log.error("handleCommand {}: {}, an error occurred when parseAsJson: {}",
-                                    webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
-                        }
+    private PoActor attachPoActor(final String prefix, final WebSocket webSocket, final String path, final int varsBegin, final String role) {
+        final String sessionId = varsBegin > 0 ? VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "sessionId", '&') : null;
+        // init PlaybackSession attach with webSocket
+        log.info("ws path match: {}, role: {}, using ws as PoActor's playback ws: [{}]", prefix, role, sessionId);
+        final PoActor actor = PoActor.findBy(sessionId);
+        if (actor == null) {
+            log.info("can't find callSession by sessionId: {}, ignore", sessionId);
+            return null;
+        }
+        _wscount.incrementAndGet();
+        webSocket.setAttachment(actor);
+        actor.attachPlaybackWs(
+                (playbackContext) ->
+                        playbackOn(playbackContext,
+                                actor,
+                                webSocket),
+                (event, payload) -> {
+                    try {
+                        WSEventVO.sendEvent(webSocket, event, payload);
+                    } catch (Exception ex) {
+                        log.warn("[{}]: PoActor sendback {}/{} failed, detail: {}", actor.sessionId(), event, payload, ex.toString());
+                    }
+                });
+        return actor;
+    }
+
+    private PoActor buildPoActor(final String prefix, final WebSocket webSocket, final ClientHandshake handshake, final String path, final int varsBegin, final String role) {
+        _wscount.incrementAndGet();
+
+        // means ws with role: call
+        // init PoActor attach with webSocket
+        final String uuid = VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "uuid", '&');
+        final String tid = VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "tid", '&');
+        final String clientIp = handshake.getFieldValue("X-Forwarded-For");
+        final PoActor actor = new PoActor(
+                clientIp,
+                uuid,
+                tid,
+                _callApi,
+                _scriptApi,
+                (_session) -> {
+                    try {
+                        WSEventVO.sendEvent(webSocket, "CallEnded", new PayloadCallEnded(_session.sessionId()));
+                        log.info("[{}]: sendback CallEnded event", _session.sessionId());
+                    } catch (Exception ex) {
+                        log.warn("[{}]: sendback CallEnded event failed, detail: {}", _session.sessionId(), ex.toString());
+                    }
+                },
+                _oss_bucket,
+                _oss_path,
+                (ctx) -> {
+                    final long startUploadInMs = System.currentTimeMillis();
+                    final Timer.Sample oss_sample = Timer.start();
+                    _ossAccessExecutor.submit(() -> {
+                        _ossProvider.getObject().putObject(ctx.bucketName(), ctx.objectName(), ctx.content());
+                        oss_sample.stop(oss_timer);
+                        log.info("[{}]: upload record to oss => bucket:{}/object:{}, cost {} ms",
+                                ctx.sessionId(), ctx.bucketName(), ctx.objectName(), System.currentTimeMillis() - startUploadInMs);
                     });
-                }
+                },
+                (_sessionId) -> WSEventVO.sendEvent(webSocket, "CallStarted", new PayloadCallStarted(_sessionId))) {
+            @Override
+            public void onMessage(final WebSocket webSocket, final String message) {
+                final Timer.Sample sample = Timer.start();
+                cmdExecutorProvider.getObject().submit(()-> {
+                    try {
+                        cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket, sample);
+                    } catch (JsonProcessingException ex) {
+                        log.error("handleCommand {}: {}, an error occurred when parseAsJson: {}",
+                                webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
+                    }
+                });
+            }
 
-                @Override
-                public void onMessage(final WebSocket webSocket, final ByteBuffer bytes) {
+            long totalDelayInMs = 0;
+
+            @Override
+            public void onMessage(final WebSocket webSocket, final ByteBuffer bytes) {
+                final long beginInMs = System.currentTimeMillis();
+                orderedTaskExecutor.submit(actorIdx(), ()-> {
                     if (transmit(bytes)) {
+                        totalDelayInMs += System.currentTimeMillis() - beginInMs;
                         // transmit success
                         if ((transmitCount() % 50) == 0) {
-                            log.info("{}: transmit 50 times.", sessionId());
+                            transmit_timer.record(totalDelayInMs, TimeUnit.MILLISECONDS);
+                            totalDelayInMs = 0;
+                            log.info("[{}]: transmit 50 times.", sessionId());
                         }
                     }
-                }
+                });
+            }
 
-                @Override
-                public void onClose(final WebSocket webSocket) {
+            @Override
+            public void onClose(final WebSocket webSocket) {
+                orderedTaskExecutor.submit(actorIdx(), ()-> {
                     _wscount.decrementAndGet();
                     super.onClose(webSocket);
-                }
-            };
-            webSocket.setAttachment(actor);
-            actor.onAttached(webSocket);
-
-            actor.scheduleCheckIdle(schedulerProvider.getObject(), _check_idle_interval_ms, actor::checkIdle);
-            schedulerProvider.getObject().schedule(actor::notifyMockAnswer, _answer_timeout_ms, TimeUnit.MILLISECONDS);
-
-            log.info("ws path match: {}, using ws as PoActor with role: {}", prefix, role);
-            return actor;
-        } else {
-            final String sessionId = varsBegin > 0 ? VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "sessionId", '&') : null;
-            // init PlaybackSession attach with webSocket
-            log.info("ws path match: {}, role: {}, using ws as PoActor's playback ws: [{}]", prefix, role, sessionId);
-            final PoActor actor = PoActor.findBy(sessionId);
-            if (actor == null) {
-                log.info("can't find callSession by sessionId: {}, ignore", sessionId);
-                return null;
+                });
             }
-            _wscount.incrementAndGet();
-            webSocket.setAttachment(actor);
-            actor.attachPlaybackWs(
-                    (playbackContext) ->
-                            playbackOn(playbackContext,
-                                    actor,
-                                    webSocket),
-                    (event, payload) -> {
-                        try {
-                            WSEventVO.sendEvent(webSocket, event, payload);
-                        } catch (Exception ex) {
-                            log.warn("[{}]: PoActor sendback {}/{} failed, detail: {}", actor.sessionId(), event, payload, ex.toString());
-                        }
-                    });
-            return actor;
-        }
+        };
+        webSocket.setAttachment(actor);
+        actor.onAttached(webSocket);
+
+        actor.scheduleCheckIdle(schedulerProvider.getObject(), _check_idle_interval_ms, actor::checkIdle);
+        schedulerProvider.getObject().schedule(actor::notifyMockAnswer, _answer_timeout_ms, TimeUnit.MILLISECONDS);
+
+        log.info("ws path match: {}, using ws as PoActor with role: {}", prefix, role);
+        return actor;
     }
 
     private Runnable playbackOn(final PoActor.PlaybackContext playbackContext, final PoActor poActor, final WebSocket webSocket) {
@@ -238,6 +258,9 @@ public class PoActorBuilder implements WsHandlerBuilder {
     @Autowired
     private ASRService asrService;
 
+    @Autowired
+    OrderedTaskExecutor orderedTaskExecutor;
+
     private final ObjectProvider<Timer> timerProvider;
     private final ObjectProvider<Gauge> gaugeProvider;
 
@@ -245,6 +268,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
 
     private Timer playback_timer;
     private Timer oss_timer;
+    private Timer transmit_timer;
 
     final WSCommandRegistry<PoActor> cmds = new WSCommandRegistry<PoActor>()
             .register(VOStartTranscription.TYPE,"StartTranscription",
