@@ -152,8 +152,8 @@ public class PoActorBuilder implements WsHandlerBuilder {
                 cmdExecutorProvider.getObject().submit(()-> {
                     try {
                         cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket, sample);
-                    } catch (JsonProcessingException ex) {
-                        log.error("handleCommand {}: {}, an error occurred when parseAsJson: {}",
+                    } catch (Exception ex) {
+                        log.error("handleCommand {}: {}, an error occurred: {}",
                                 webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
                     }
                 });
