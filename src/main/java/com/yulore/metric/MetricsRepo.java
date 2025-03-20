@@ -1,10 +1,7 @@
 package com.yulore.metric;
 
 import com.yulore.util.NetworkUtil;
-import io.micrometer.core.instrument.Gauge;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Tags;
-import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
@@ -34,6 +31,20 @@ public class MetricsRepo {
     public Gauge buildGauge(final Supplier<Number> f, final String name, final String desc, final String[] tags) {
         log.info("Gauge: create {} with f:{}/tags:{}", name, f, Arrays.toString(tags));
         return Gauge.builder(name, f)
+                .description(desc)
+                .tags("hostname", HOSTNAME)
+                .tags("ip", LOCAL_IP)
+                .tags("ns", System.getenv("NACOS_NAMESPACE"))
+                .tags("srv", System.getenv("NACOS_DATAID"))
+                .tags(Tags.of(tags))
+                .register(meterRegistry);
+    }
+
+    @Bean
+    @Scope(SCOPE_PROTOTYPE)
+    public Counter buildCounter(final String name, final String desc, final String[] tags) {
+        log.info("Counter: create {} with tags:{}", name, Arrays.toString(tags));
+        return Counter.builder(name)
                 .description(desc)
                 .tags("hostname", HOSTNAME)
                 .tags("ip", LOCAL_IP)
