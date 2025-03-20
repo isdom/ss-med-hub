@@ -9,6 +9,7 @@ import com.yulore.medhub.vo.cmd.VOSOpenStream;
 import com.yulore.medhub.ws.WsHandler;
 import com.yulore.medhub.ws.WsHandlerBuilder;
 import com.yulore.medhub.ws.actor.StreamActor;
+import com.yulore.metric.MetricCustomized;
 import com.yulore.util.ExceptionUtil;
 import com.yulore.util.VarsUtil;
 import io.micrometer.core.instrument.Gauge;
@@ -26,6 +27,7 @@ import org.springframework.stereotype.Component;
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import java.nio.ByteBuffer;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -42,20 +44,20 @@ public class WriteStreamBuilder extends BaseStreamBuilder implements WsHandlerBu
 
     @PostConstruct
     public void start() {
-        open_timer = timerProvider.getObject("rms.wr.duration", "write rms op", new String[]{"op", "open"});
-        getlen_timer = timerProvider.getObject("rms.wr.duration", "write rms op", new String[]{"op", "getlen"});
-        seek_timer = timerProvider.getObject("rms.wr.duration", "write rms op", new String[]{"op", "seek"});
-        read_timer = timerProvider.getObject("rms.wr.duration", "write rms op", new String[]{"op", "read"});
-        write_timer = timerProvider.getObject("rms.wr.duration", "write rms op", new String[]{"op", "write"});
-        tell_timer = timerProvider.getObject("rms.wr.duration", "write rms op", new String[]{"op", "tell"});
-        oss_timer = timerProvider.getObject("oss.upload.duration", "", new String[]{"actor", "wrms"});
+        open_timer = timerProvider.getObject("rms.wr.duration", MetricCustomized.builder().tags(List.of("op", "open")).build());
+        getlen_timer = timerProvider.getObject("rms.wr.duration", MetricCustomized.builder().tags(List.of("op", "getlen")).build());
+        seek_timer = timerProvider.getObject("rms.wr.duration", MetricCustomized.builder().tags(List.of("op", "seek")).build());
+        read_timer = timerProvider.getObject("rms.wr.duration", MetricCustomized.builder().tags(List.of("op", "read")).build());
+        write_timer = timerProvider.getObject("rms.wr.duration", MetricCustomized.builder().tags(List.of("op", "write")).build());
+        tell_timer = timerProvider.getObject("rms.wr.duration", MetricCustomized.builder().tags(List.of("op", "tell")).build());
+        oss_timer = timerProvider.getObject("oss.upload.duration", MetricCustomized.builder().tags(List.of("actor", "wrms")).build());
 
         _ossAccessExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
                 new DefaultThreadFactory("ossAccessExecutor"));
 
         cmds.register(VOSOpenStream.TYPE, "OpenStream",
                 ctx->handleOpenStreamCommand(ctx.payload(), ctx.ws(), ctx.actor(), ctx.sample()));
-        gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", "", new String[]{"actor", "wrms"});
+        gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", MetricCustomized.builder().tags(List.of("actor", "wrms")).build());
     }
 
     @PreDestroy

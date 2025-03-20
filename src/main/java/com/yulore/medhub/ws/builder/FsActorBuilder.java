@@ -13,6 +13,7 @@ import com.yulore.medhub.ws.actor.FsActor;
 import com.yulore.medhub.vo.WSEventVO;
 import com.yulore.medhub.ws.WsHandler;
 import com.yulore.medhub.ws.WsHandlerBuilder;
+import com.yulore.metric.MetricCustomized;
 import com.yulore.util.ExceptionUtil;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Timer;
@@ -29,6 +30,8 @@ import org.springframework.stereotype.Component;
 import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
 import java.nio.ByteBuffer;
+import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -42,9 +45,12 @@ public class FsActorBuilder implements WsHandlerBuilder {
 
     @PostConstruct
     private void init() {
-        playback_timer = timerProvider.getObject("mh.playback.delay", "", new String[]{"actor", "fsio"});
-        transmit_timer = timerProvider.getObject("mh.transmit.delay", "", new String[]{"actor", "fsio"});
-        gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", "", new String[]{"actor", "fsio"});
+        playback_timer = timerProvider.getObject("mh.playback.delay", MetricCustomized.builder().tags(List.of("actor", "fsio")).build());
+        transmit_timer = timerProvider.getObject("mh.transmit.delay", MetricCustomized.builder()
+                .tags(List.of("actor", "fsio"))
+                .maximumExpected(Duration.ofMinutes(1))
+                .build());
+        gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", MetricCustomized.builder().tags(List.of("actor", "fsio")).build());
         cmdExecutor = cmdExecutorProvider.getObject();
     }
 

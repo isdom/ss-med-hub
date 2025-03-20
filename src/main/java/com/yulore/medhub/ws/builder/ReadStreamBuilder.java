@@ -10,6 +10,7 @@ import com.yulore.medhub.vo.cmd.VOSOpenStream;
 import com.yulore.medhub.ws.WsHandler;
 import com.yulore.medhub.ws.WsHandlerBuilder;
 import com.yulore.medhub.ws.actor.StreamActor;
+import com.yulore.metric.MetricCustomized;
 import com.yulore.util.ExceptionUtil;
 import com.yulore.util.VarsUtil;
 import io.micrometer.core.instrument.Gauge;
@@ -25,6 +26,7 @@ import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
 import java.nio.ByteBuffer;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -36,15 +38,15 @@ import java.util.function.Supplier;
 public class ReadStreamBuilder extends BaseStreamBuilder implements WsHandlerBuilder {
     @PostConstruct
     private void init() {
-        open_timer = timerProvider.getObject("rms.ro.duration", "read rms op", new String[]{"op", "open"});
-        getlen_timer = timerProvider.getObject("rms.ro.duration", "read rms op", new String[]{"op", "getlen"});
-        seek_timer = timerProvider.getObject("rms.ro.duration", "read rms op", new String[]{"op", "seek"});
-        read_timer = timerProvider.getObject("rms.ro.duration", "read rms op", new String[]{"op", "read"});
-        tell_timer = timerProvider.getObject("rms.ro.duration", "read rms op", new String[]{"op", "tell"});
+        open_timer = timerProvider.getObject("rms.ro.duration", MetricCustomized.builder().tags(List.of("op", "open")).build());
+        getlen_timer = timerProvider.getObject("rms.ro.duration", MetricCustomized.builder().tags(List.of("op", "getlen")).build());
+        seek_timer = timerProvider.getObject("rms.ro.duration", MetricCustomized.builder().tags(List.of("op", "seek")).build());
+        read_timer = timerProvider.getObject("rms.ro.duration", MetricCustomized.builder().tags(List.of("op", "read")).build());
+        tell_timer = timerProvider.getObject("rms.ro.duration", MetricCustomized.builder().tags(List.of("op", "tell")).build());
 
         cmds.register(VOSOpenStream.TYPE, "OpenStream",
                 ctx->handleOpenStreamCommand(ctx.payload(), ctx.ws(), ctx.actor(), ctx.sample()));
-        gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", "", new String[]{"actor", "rrms"});
+        gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", MetricCustomized.builder().tags(List.of("actor", "rrms")).build());
     }
 
     @Override

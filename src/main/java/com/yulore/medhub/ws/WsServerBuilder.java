@@ -2,6 +2,7 @@ package com.yulore.medhub.ws;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yulore.metric.MetricCustomized;
 import com.yulore.util.ExceptionUtil;
 import com.yulore.util.NetworkUtil;
 import io.micrometer.core.instrument.Gauge;
@@ -41,9 +42,9 @@ public class WsServerBuilder {
     @Bean(destroyMethod = "stop")
     public WebSocketServer webSocketServer() {
         log.info("webSocketServer: {}", configProps);
-        final Timer timer = timerProvider.getObject("mh.connected.delay", "", new String[0]);
-        gaugeProvider.getObject((Supplier<Number>)_currentWSConnection::get, "mh.ws.count", "",
-                new String[]{"actor", "all"});
+        final Timer timer = timerProvider.getObject("mh.connected.delay", null);
+        gaugeProvider.getObject((Supplier<Number>)_currentWSConnection::get, "mh.ws.count",
+                MetricCustomized.builder().tags(List.of("actor", "all")).build());
 
         final WebSocketServer server = new WebSocketServer(new InetSocketAddress(configProps.host, configProps.port)) {
             @Override
@@ -145,8 +146,10 @@ public class WsServerBuilder {
                         .expectResultWithin(3, TimeUnit.SECONDS));
 
         final String ipAndPort = ipv4Provider.getObject().getHostAddress() + ":" + configProps.port;
-        final Timer timer1 = timerProvider.getObject("redisson.rs.duration", "", new String[]{"method", "updateHubStatus"});
-        final Timer timer2 = timerProvider.getObject("redisson.rs.duration", "", new String[]{"method", "getUrlsOf"});
+        final Timer timer1 = timerProvider.getObject("redisson.rs.duration",
+                MetricCustomized.builder().tags(List.of("method", "updateHubStatus")).build());
+        final Timer timer2 = timerProvider.getObject("redisson.rs.duration",
+                MetricCustomized.builder().tags(List.of("method", "getUrlsOf")).build());
 
         checkAndScheduleNext(startedTimestamp -> {
             final AtomicReference<Timer.Sample> sampleRef = new AtomicReference<>(Timer.start());

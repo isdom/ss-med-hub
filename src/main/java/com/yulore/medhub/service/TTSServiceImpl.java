@@ -4,6 +4,7 @@ import com.alibaba.nls.client.protocol.NlsClient;
 import com.yulore.medhub.nls.CosyAgent;
 import com.yulore.medhub.nls.LimitAgent;
 import com.yulore.medhub.nls.TTSAgent;
+import com.yulore.metric.MetricCustomized;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RedissonClient;
@@ -56,18 +57,12 @@ class TTSServiceImpl implements TTSService {
                     log.warn("tts init failed by: {}/{}", entry.getKey(), entry.getValue());
                 } else {
                     agent.client = client;
-                    agent.setSelectIdleTimer(
-                            timerProvider.getObject(
-                                    "nls.tts.idle.select.duration",
-                                    "单个 TTSAgent checkAndSelectIfHasIdleAsync 执行时长",
-                                    new String[]{"account", entry.getKey()})
-                    );
-                    agent.setSelectAgentTimer(
-                            timerProvider.getObject(
-                                    "nls.tts.agent.select.duration",
-                                    "从所有 TTSAgent 中 selectTTSAgent 执行时长",
-                                    new String[]{"account", entry.getKey()})
-                    );
+                    agent.setSelectIdleTimer(timerProvider.getObject(
+                            "nls.tts.idle.select.duration",
+                            MetricCustomized.builder().tags(List.of("account", entry.getKey())).build()));
+                    agent.setSelectAgentTimer(timerProvider.getObject(
+                            "nls.tts.agent.select.duration",
+                            MetricCustomized.builder().tags(List.of("account", entry.getKey())).build()));
                     _ttsAgents.add(agent);
                 }
             }
@@ -88,18 +83,12 @@ class TTSServiceImpl implements TTSService {
                     log.warn("cosy init failed by: {}/{}", entry.getKey(), entry.getValue());
                 } else {
                     agent.client = client;
-                    agent.setSelectIdleTimer(
-                            timerProvider.getObject(
-                                    "nls.cosy.idle.select.duration",
-                                    "单个 CosyAgent checkAndSelectIfHasIdleAsync 执行时长",
-                                    new String[]{"account", entry.getKey()})
-                    );
-                    agent.setSelectAgentTimer(
-                            timerProvider.getObject(
-                                    "nls.cosy.agent.select.duration",
-                                    "从所有 CosyAgent 中 selectCosyAgent 执行时长",
-                                    new String[]{"account", entry.getKey()})
-                    );
+                    agent.setSelectIdleTimer(timerProvider.getObject(
+                            "nls.cosy.idle.select.duration",
+                            MetricCustomized.builder().tags(List.of("account", entry.getKey())).build()));
+                    agent.setSelectAgentTimer(timerProvider.getObject(
+                            "nls.cosy.agent.select.duration",
+                            MetricCustomized.builder().tags(List.of("account", entry.getKey())).build()));
                     _cosyAgents.add(agent);
                 }
             }

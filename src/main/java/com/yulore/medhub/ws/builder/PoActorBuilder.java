@@ -17,6 +17,7 @@ import com.yulore.medhub.ws.WSCommandRegistry;
 import com.yulore.medhub.ws.WsHandler;
 import com.yulore.medhub.ws.WsHandlerBuilder;
 import com.yulore.medhub.ws.actor.PoActor;
+import com.yulore.metric.MetricCustomized;
 import com.yulore.util.ExceptionUtil;
 import com.yulore.util.VarsUtil;
 import io.micrometer.core.instrument.Gauge;
@@ -37,6 +38,8 @@ import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import javax.annotation.Resource;
 import java.nio.ByteBuffer;
+import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -53,10 +56,13 @@ public class PoActorBuilder implements WsHandlerBuilder {
     public void start() {
         _ossAccessExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
                 new DefaultThreadFactory("ossAccessExecutor"));
-        playback_timer = timerProvider.getObject("mh.playback.delay", "", new String[]{"actor", "poio"});
-        transmit_timer = timerProvider.getObject("mh.transmit.delay", "", new String[]{"actor", "poio"});
-        oss_timer = timerProvider.getObject("oss.upload.duration", "", new String[]{"actor", "poio"});
-        gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", "", new String[]{"actor", "poio"});
+        playback_timer = timerProvider.getObject("mh.playback.delay", MetricCustomized.builder().tags(List.of("actor", "poio")).build());
+        transmit_timer = timerProvider.getObject("mh.transmit.delay", MetricCustomized.builder()
+                .tags(List.of("actor", "poio"))
+                .maximumExpected(Duration.ofMinutes(1))
+                .build());
+        oss_timer = timerProvider.getObject("oss.upload.duration", MetricCustomized.builder().tags(List.of("actor", "poio")).build());
+        gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", MetricCustomized.builder().tags(List.of("actor", "poio")).build());
     }
 
     @PreDestroy

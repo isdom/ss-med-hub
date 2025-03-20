@@ -15,6 +15,7 @@ import com.yulore.medhub.nls.TxASRAgent;
 import com.yulore.medhub.vo.*;
 import com.yulore.medhub.vo.cmd.VOStartTranscription;
 import com.yulore.medhub.ws.actor.ASRActor;
+import com.yulore.metric.MetricCustomized;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
@@ -85,8 +86,8 @@ class ASRServiceImpl implements ASRService {
         _txClient = new SpeechClient(AsrConstant.DEFAULT_RT_REQ_URL);
 
         initASRAgents(_nlsClient);
-        asr_started_timer = timerProvider.getObject("nls.asr.started.duration", "", new String[0]);
-        txasr_started_timer = timerProvider.getObject("nls.txasr.started.duration", "", new String[0]);
+        asr_started_timer = timerProvider.getObject("nls.asr.started.duration", null);
+        txasr_started_timer = timerProvider.getObject("nls.txasr.started.duration", null);
     }
 
     @PreDestroy
@@ -113,18 +114,12 @@ class ASRServiceImpl implements ASRService {
                     log.warn("asr init failed by: {}/{}", entry.getKey(), entry.getValue());
                 } else {
                     agent.client = client;
-                    agent.setSelectIdleTimer(
-                            timerProvider.getObject(
-                                    "nls.asr.idle.select.duration",
-                                    "单个 ASRAgent checkAndSelectIfHasIdleAsync 执行时长",
-                                    new String[]{"account", entry.getKey()})
-                            );
-                    agent.setSelectAgentTimer(
-                            timerProvider.getObject(
-                                    "nls.asr.agent.select.duration",
-                                    "从所有 ASRAgent 中 selectASRAgent 执行时长",
-                                    new String[]{"account", entry.getKey()})
-                    );
+                    agent.setSelectIdleTimer(timerProvider.getObject(
+                            "nls.asr.idle.select.duration",
+                            MetricCustomized.builder().tags(List.of("account", entry.getKey())).build()));
+                    agent.setSelectAgentTimer(timerProvider.getObject(
+                            "nls.asr.agent.select.duration",
+                            MetricCustomized.builder().tags(List.of("account", entry.getKey())).build()));
                     _asrAgents.add(agent);
                 }
             }
@@ -146,18 +141,12 @@ class ASRServiceImpl implements ASRService {
                     log.warn("txasr init failed by: {}/{}", entry.getKey(), entry.getValue());
                 } else {
                     agent.client = _txClient;
-                    agent.setSelectIdleTimer(
-                            timerProvider.getObject(
-                                    "nls.txasr.idle.select.duration",
-                                    "单个 TxASRAgent checkAndSelectIfHasIdleAsync 执行时长",
-                                    new String[]{"account", entry.getKey()})
-                    );
-                    agent.setSelectAgentTimer(
-                            timerProvider.getObject(
-                                    "nls.txasr.agent.select.duration",
-                                    "从所有 TxASRAgent 中 selectTxASRAgent 执行时长",
-                                    new String[]{"account", entry.getKey()})
-                    );
+                    agent.setSelectIdleTimer(timerProvider.getObject(
+                            "nls.txasr.idle.select.duration",
+                            MetricCustomized.builder().tags(List.of("account", entry.getKey())).build()));
+                    agent.setSelectAgentTimer(timerProvider.getObject(
+                            "nls.txasr.agent.select.duration",
+                            MetricCustomized.builder().tags(List.of("account", entry.getKey())).build()));
                     _txasrAgents.add(agent);
                 }
             }

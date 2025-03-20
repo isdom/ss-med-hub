@@ -1,5 +1,6 @@
 package com.yulore.medhub.service;
 
+import com.yulore.metric.MetricCustomized;
 import io.micrometer.core.instrument.Gauge;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.RequiredArgsConstructor;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
+import java.util.List;
 import java.util.concurrent.*;
 import java.util.function.Supplier;
 
@@ -31,8 +33,8 @@ public class OrderedTaskProcessor implements OrderedTaskExecutor {
                     new LinkedBlockingQueue<Runnable>(),
                     new DefaultThreadFactory("ASR-Transmit-" + i));
             final BlockingQueue<Runnable> queue = executor.getQueue();
-            gaugeProvider.getObject((Supplier<Number>)queue::size, "mh.transmit.qsize", "",
-                    new String[]{"idx", Integer.toString(i)});
+            gaugeProvider.getObject((Supplier<Number>)queue::size, "mh.transmit.qsize",
+                    MetricCustomized.builder().tags(List.of("idx", Integer.toString(i))).build());
             workers[i] = executor;
             log.info("create ASR-Transmit-{}", i);
         }
