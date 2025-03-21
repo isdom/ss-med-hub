@@ -31,6 +31,7 @@ import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.function.Function;
 
 @Slf4j
 @Service
@@ -88,6 +89,7 @@ class ASRServiceImpl implements ASRService {
         initASRAgents(_nlsClient);
         asr_started_timer = timerProvider.getObject("nls.asr.started.duration", null);
         txasr_started_timer = timerProvider.getObject("nls.txasr.started.duration", null);
+        executor = executorProvider.apply("nlsExecutor");
     }
 
     @PreDestroy
@@ -159,9 +161,10 @@ class ASRServiceImpl implements ASRService {
     public CompletionStage<ASRAgent> selectASRAgentAsync() {
         final io.micrometer.core.instrument.Timer.Sample sample =
                 io.micrometer.core.instrument.Timer.start();
-        return LimitAgent.attemptSelectAgentAsync(new ArrayList<>(_asrAgents).iterator(),
+        return LimitAgent.attemptSelectAgentAsync(
+                new ArrayList<>(_asrAgents).iterator(),
                 new CompletableFuture<>(),
-                executorProvider.getObject()).whenComplete((agent,ex) -> {
+                executor).whenComplete((agent,ex) -> {
                     if (agent != null) {
                         sample.stop(agent.getSelectAgentTimer());
                     }
@@ -171,9 +174,10 @@ class ASRServiceImpl implements ASRService {
     public CompletionStage<TxASRAgent> selectTxASRAgentAsync() {
         final io.micrometer.core.instrument.Timer.Sample sample =
                 io.micrometer.core.instrument.Timer.start();
-        return LimitAgent.attemptSelectAgentAsync(new ArrayList<>(_txasrAgents).iterator(),
+        return LimitAgent.attemptSelectAgentAsync(
+                new ArrayList<>(_txasrAgents).iterator(),
                 new CompletableFuture<>(),
-                executorProvider.getObject()).whenComplete((agent,ex) -> {
+                executor).whenComplete((agent,ex) -> {
                     if (agent != null) {
                         sample.stop(agent.getSelectAgentTimer());
                     }
@@ -561,8 +565,9 @@ class ASRServiceImpl implements ASRService {
     private RedissonClient redisson;
 
     @Autowired
-    @Qualifier("commonExecutor")
-    private ObjectProvider<Executor> executorProvider;
+    private Function<String, ExecutorService> executorProvider;
+
+    private Executor executor;
 
     @Autowired
     private ObjectProvider<Timer> timerProvider;

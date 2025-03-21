@@ -4,6 +4,7 @@ import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Scope;
 import org.springframework.context.event.ContextClosedEvent;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 
 import static org.springframework.beans.factory.config.ConfigurableBeanFactory.SCOPE_PROTOTYPE;
 
@@ -26,34 +28,34 @@ public class ExecutorRepo implements ApplicationListener<ContextClosedEvent> {
 
     @Bean
     @Scope(SCOPE_PROTOTYPE)
-    public CommandExecutor buildExecutor(final String name) {
-        // log.info("create Common Executor");
-        final AtomicReference<ExecutorService> created = new AtomicReference<>(null);
-        final ExecutorService current = executors.computeIfAbsent(name, k -> {
-            created.set(Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2,
-                new DefaultThreadFactory(name)));
-            return created.get();
-        });
-
-        if (created.get() != null) {
-            if (created.get() != current) {
-                // mappingFunction invoked & NOT associated with name
-                created.get().shutdownNow();
-            } else {
-                log.info("create ExecutorService({}) - {}", name, current);
-            }
-        } else {
-            log.info("using exist ExecutorService({}) - {}", name, current);
-        }
-
-        return current::submit;
+    public CommandExecutor buildCmdExecutor(final String name) {
+        final Executor executor = buildExecutorProvider().apply(name);
+        return executor::execute;
     }
 
-    @Bean(name = "commonExecutor", destroyMethod = "shutdown")
-    public Executor commonExecutor() {
-        log.info("create Common Executor");
-        return Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2,
-                new DefaultThreadFactory("commonExecutor"));
+    @Bean
+    public Function<String, ExecutorService> buildExecutorProvider() {
+        return name -> {
+            final AtomicReference<ExecutorService> created = new AtomicReference<>(null);
+            final ExecutorService current = executors.computeIfAbsent(name, k -> {
+                created.set(Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2,
+                        new DefaultThreadFactory(name)));
+                return created.get();
+            });
+
+            if (created.get() != null) {
+                if (created.get() != current) {
+                    // mappingFunction invoked & NOT associated with name
+                    created.get().shutdownNow();
+                } else {
+                    log.info("create ExecutorService({}) - {}", name, current);
+                }
+            } else {
+                log.info("using exist ExecutorService({}) - {}", name, current);
+            }
+
+            return current;
+        };
     }
 
     @Override

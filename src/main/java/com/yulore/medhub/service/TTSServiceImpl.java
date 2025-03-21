@@ -6,6 +6,7 @@ import com.yulore.medhub.nls.LimitAgent;
 import com.yulore.medhub.nls.TTSAgent;
 import com.yulore.metric.MetricCustomized;
 import io.micrometer.core.instrument.Timer;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.ObjectProvider;
@@ -22,21 +23,24 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
+import java.util.function.Function;
 
 @Slf4j
+@RequiredArgsConstructor
 @Service
 @ConditionalOnProperty(prefix = "nls", name = "tts-enabled", havingValue = "true")
 class TTSServiceImpl implements TTSService {
     @PostConstruct
-    public void start() {
+    public void init() {
         //创建NlsClient实例应用全局创建一个即可。生命周期可和整个应用保持一致，默认服务地址为阿里云线上服务地址。
         _nlsClient = new NlsClient(_nls_url, "invalid_token");
 
         initTTSAgents(_nlsClient);
+        executor = executorProvider.apply("nlsExecutor");
     }
 
     @PreDestroy
-    public void stop() throws InterruptedException {
+    public void release() throws InterruptedException {
         _nlsClient.shutdown();
 
         log.info("NlsServiceImpl: shutdown");
@@ -102,9 +106,10 @@ class TTSServiceImpl implements TTSService {
     public CompletionStage<TTSAgent> selectTTSAgentAsync() {
         final io.micrometer.core.instrument.Timer.Sample sample =
                 io.micrometer.core.instrument.Timer.start();
-        return LimitAgent.attemptSelectAgentAsync(new ArrayList<>(_ttsAgents).iterator(),
+        return LimitAgent.attemptSelectAgentAsync(
+                new ArrayList<>(_ttsAgents).iterator(),
                 new CompletableFuture<>(),
-                executorProvider.getObject()).whenComplete((agent,ex) -> {
+                executor).whenComplete((agent,ex) -> {
                     if (agent != null) {
                         sample.stop(agent.getSelectAgentTimer());
                     }
@@ -115,9 +120,10 @@ class TTSServiceImpl implements TTSService {
     public CompletionStage<CosyAgent> selectCosyAgentAsync() {
         final io.micrometer.core.instrument.Timer.Sample sample =
                 io.micrometer.core.instrument.Timer.start();
-        return LimitAgent.attemptSelectAgentAsync(new ArrayList<>(_cosyAgents).iterator(),
+        return LimitAgent.attemptSelectAgentAsync(
+                new ArrayList<>(_cosyAgents).iterator(),
                 new CompletableFuture<>(),
-                executorProvider.getObject()).whenComplete((agent,ex) -> {
+                executor).whenComplete((agent,ex) -> {
                     if (agent != null) {
                         sample.stop(agent.getSelectAgentTimer());
                     }
@@ -151,18 +157,12 @@ class TTSServiceImpl implements TTSService {
     final List<TTSAgent> _ttsAgents = new ArrayList<>();
     final List<CosyAgent> _cosyAgents = new ArrayList<>();
 
-    @Autowired
-    private ObjectProvider<ScheduledExecutorService> schedulerProvider;
+    private final RedissonClient redisson;
+    private final Function<String, ExecutorService> executorProvider;
+    private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
+    private final ObjectProvider<Timer> timerProvider;
 
-    @Autowired
-    private RedissonClient redisson;
-
-    @Autowired
-    @Qualifier("commonExecutor")
-    private ObjectProvider<Executor> executorProvider;
-
-    @Autowired
-    private ObjectProvider<Timer> timerProvider;
+    private Executor executor;
 
     private NlsClient _nlsClient;
 }
