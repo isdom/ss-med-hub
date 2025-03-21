@@ -37,22 +37,26 @@ public abstract class FsActor extends ASRActor implements WsHandler {
         return _fsSessions.get(sessionId);
     }
 
+    private WebSocket _ws;
+
     @Override
     public void onAttached(final WebSocket webSocket) {
-
+        _ws = webSocket;
     }
 
     @Override
     public void onClose(final WebSocket webSocket) {
-        lock();
-        try {
-            // detatch
-            webSocket.setAttachment(null);
+        if (_ws == webSocket) {
+            lock();
+            try {
+                // detatch
+                webSocket.setAttachment(null);
 
-            stopAndCloseTranscriber();
-            close();
-        } finally {
-            unlock();
+                stopAndCloseTranscriber();
+                close();
+            } finally {
+                unlock();
+            }
         }
     }
 

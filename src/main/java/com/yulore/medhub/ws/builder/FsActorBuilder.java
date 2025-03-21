@@ -141,7 +141,7 @@ public class FsActorBuilder implements WsHandlerBuilder {
 
             @Override
             public void onClose(final WebSocket webSocket) {
-                orderedTaskExecutor.submit(actorIdx(), ()-> {
+                cmdExecutor.submit(()-> {
                     _wscount.decrementAndGet();
                     super.onClose(webSocket);
                 });
@@ -149,6 +149,8 @@ public class FsActorBuilder implements WsHandlerBuilder {
         };
 
         webSocket.setAttachment(actor);
+        actor.onAttached(webSocket);
+
         actor.scheduleCheckIdle(schedulerProvider.getObject(), _check_idle_interval_ms, actor::checkIdle);
         WSEventVO.<Void>sendEvent(webSocket, "FSConnected", null);
         log.info("ws path match {}, role: {}. using ws as FsActor {}", prefix, role, sessionId);
