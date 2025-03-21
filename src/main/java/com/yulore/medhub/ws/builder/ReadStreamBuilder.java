@@ -47,15 +47,18 @@ public class ReadStreamBuilder extends BaseStreamBuilder implements WsHandlerBui
         cmds.register(VOSOpenStream.TYPE, "OpenStream",
                 ctx->handleOpenStreamCommand(ctx.payload(), ctx.ws(), ctx.actor(), ctx.sample()));
         gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", MetricCustomized.builder().tags(List.of("actor", "rrms")).build());
+
+        executor = cmdExecutorProvider.getObject("rrms");
     }
 
     @Override
     public WsHandler build(final String prefix, final WebSocket webSocket, final ClientHandshake handshake) {
+
         final StreamActor actor = new StreamActor() {
             @Override
             public void onMessage(final WebSocket webSocket, final String message) {
                 final Timer.Sample sample = Timer.start();
-                cmdExecutorProvider.getObject().submit(()-> {
+                executor.submit(()-> {
                     try {
                         cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket, sample);
                     } catch (JsonProcessingException ex) {
@@ -125,6 +128,7 @@ public class ReadStreamBuilder extends BaseStreamBuilder implements WsHandlerBui
     private BSTService bstService;
 
     private final ObjectProvider<CommandExecutor> cmdExecutorProvider;
+    private CommandExecutor executor;
     private final ObjectProvider<Timer> timerProvider;
     private final ObjectProvider<Gauge> gaugeProvider;
 

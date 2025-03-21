@@ -1,7 +1,6 @@
 package com.yulore.medhub.ws.builder;
 
 import com.aliyun.oss.OSS;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.yulore.bst.*;
 import com.yulore.medhub.api.CallApi;
 import com.yulore.medhub.api.ScriptApi;
@@ -22,8 +21,6 @@ import com.yulore.util.ExceptionUtil;
 import com.yulore.util.VarsUtil;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Timer;
-import io.netty.util.NettyRuntime;
-import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
@@ -35,13 +32,10 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
 import javax.annotation.Resource;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -54,9 +48,6 @@ import java.util.function.Supplier;
 public class PoActorBuilder implements WsHandlerBuilder {
     @PostConstruct
     public void init() {
-        _ossAccessExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
-                new DefaultThreadFactory("ossAccessExecutor"));
-        cmdExecutor = cmdExecutorProvider.getObject();
         playback_timer = timerProvider.getObject("mh.playback.delay", MetricCustomized.builder().tags(List.of("actor", "poio")).build());
         transmit_timer = timerProvider.getObject("mh.transmit.delay", MetricCustomized.builder()
                 .tags(List.of("actor", "poio"))
@@ -64,11 +55,9 @@ public class PoActorBuilder implements WsHandlerBuilder {
                 .build());
         oss_timer = timerProvider.getObject("oss.upload.duration", MetricCustomized.builder().tags(List.of("actor", "poio")).build());
         gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", MetricCustomized.builder().tags(List.of("actor", "poio")).build());
-    }
 
-    @PreDestroy
-    public void release() {
-        _ossAccessExecutor.shutdownNow();
+        cmdExecutor = cmdExecutorProvider.getObject("poio");
+        _ossExecutor = cmdExecutorProvider.getObject("longTimeExecutor");
     }
 
     // wss://domain/path?uuid=XX&tid=XXX&role=call
@@ -139,7 +128,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
                 (ctx) -> {
                     final long startUploadInMs = System.currentTimeMillis();
                     final Timer.Sample oss_sample = Timer.start();
-                    _ossAccessExecutor.submit(() -> {
+                    _ossExecutor.submit(() -> {
                         _ossProvider.getObject().putObject(ctx.bucketName(), ctx.objectName(), ctx.content());
                         oss_sample.stop(oss_timer);
                         log.info("[{}]: upload record to oss => bucket:{}/object:{}, cost {} ms",
@@ -261,7 +250,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
     private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
     private final ObjectProvider<CommandExecutor> cmdExecutorProvider;
     private CommandExecutor cmdExecutor;
-    private ExecutorService _ossAccessExecutor;
+    private CommandExecutor _ossExecutor;
 
     @Autowired
     private ASRService asrService;

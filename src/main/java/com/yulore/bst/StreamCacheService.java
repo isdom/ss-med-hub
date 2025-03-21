@@ -1,42 +1,36 @@
 package com.yulore.bst;
 
-import io.netty.util.NettyRuntime;
-import io.netty.util.concurrent.DefaultThreadFactory;
+import com.yulore.medhub.service.CommandExecutor;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.tuple.Pair;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 
 @Slf4j
+@RequiredArgsConstructor
 @Component
 public class StreamCacheService {
 
-    private ExecutorService _scsExecutor;
+    private final ObjectProvider<CommandExecutor> cmdExecutorProvider;
+    private CommandExecutor _longTimeExecutor;
+
 
     private final ConcurrentMap<String, LoadAndCahceTask> _key2task = new ConcurrentHashMap<>();
 
     @PostConstruct
-    public void start() {
-        _scsExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
-                new DefaultThreadFactory("scsExecutor"));
-    }
-
-    @PreDestroy
-    public void stop() {
-        // 关闭客户端 - 注：关闭后不支持再次 start, 一般伴随JVM关闭而关闭
-        _scsExecutor.shutdownNow();
+    public void init() {
+        _longTimeExecutor = cmdExecutorProvider.getObject("longTimeExecutor");
     }
 
     public BuildStreamTask asCache(final BuildStreamTask sourceTask) {
@@ -68,7 +62,7 @@ public class StreamCacheService {
                 log.info("asCache: {} its_my_task", key);
                 // it's me, first start task
                 myTask.onCached(onPart, onCompleted);
-                _scsExecutor.submit(myTask::start);
+                _longTimeExecutor.submit(myTask::start);
             }
         };
     }

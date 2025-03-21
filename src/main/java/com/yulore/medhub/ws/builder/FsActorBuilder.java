@@ -51,7 +51,7 @@ public class FsActorBuilder implements WsHandlerBuilder {
                 .maximumExpected(Duration.ofMinutes(1))
                 .build());
         gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", MetricCustomized.builder().tags(List.of("actor", "fsio")).build());
-        cmdExecutor = cmdExecutorProvider.getObject();
+        cmdExecutor = cmdExecutorProvider.getObject("fsio");
     }
 
     @Override

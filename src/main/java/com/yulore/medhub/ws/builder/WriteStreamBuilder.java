@@ -14,8 +14,6 @@ import com.yulore.util.ExceptionUtil;
 import com.yulore.util.VarsUtil;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Timer;
-import io.netty.util.NettyRuntime;
-import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
@@ -25,11 +23,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
 import java.nio.ByteBuffer;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -51,18 +46,13 @@ public class WriteStreamBuilder extends BaseStreamBuilder implements WsHandlerBu
         write_timer = timerProvider.getObject("rms.wr.duration", MetricCustomized.builder().tags(List.of("op", "write")).build());
         tell_timer = timerProvider.getObject("rms.wr.duration", MetricCustomized.builder().tags(List.of("op", "tell")).build());
         oss_timer = timerProvider.getObject("oss.upload.duration", MetricCustomized.builder().tags(List.of("actor", "wrms")).build());
+        gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", MetricCustomized.builder().tags(List.of("actor", "wrms")).build());
 
-        _ossAccessExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
-                new DefaultThreadFactory("ossAccessExecutor"));
+        _ossExecutor = cmdExecutorProvider.getObject("longTimeExecutor");
+        executor = cmdExecutorProvider.getObject("wrms");
 
         cmds.register(VOSOpenStream.TYPE, "OpenStream",
                 ctx->handleOpenStreamCommand(ctx.payload(), ctx.ws(), ctx.actor(), ctx.sample()));
-        gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", MetricCustomized.builder().tags(List.of("actor", "wrms")).build());
-    }
-
-    @PreDestroy
-    public void stop() throws InterruptedException {
-        _ossAccessExecutor.shutdownNow();
     }
 
     @Override
@@ -71,7 +61,7 @@ public class WriteStreamBuilder extends BaseStreamBuilder implements WsHandlerBu
             @Override
             public void onMessage(final WebSocket webSocket, final String message) {
                 final Timer.Sample sample = Timer.start();
-                cmdExecutorProvider.getObject().submit(()-> {
+                executor.submit(()-> {
                     try {
                         cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket, sample);
                     } catch (JsonProcessingException ex) {
@@ -84,7 +74,7 @@ public class WriteStreamBuilder extends BaseStreamBuilder implements WsHandlerBu
             @Override
             public void onMessage(final WebSocket webSocket, final ByteBuffer bytes) {
                 final Timer.Sample sample = Timer.start();
-                cmdExecutorProvider.getObject().submit(()-> handleFileWriteCommand(bytes, _ss, webSocket, sample));
+                executor.submit(()-> handleFileWriteCommand(bytes, _ss, webSocket, sample));
             }
 
             @Override
@@ -119,7 +109,7 @@ public class WriteStreamBuilder extends BaseStreamBuilder implements WsHandlerBu
                 (ctx) -> {
                     final long startUploadInMs = System.currentTimeMillis();
                     final Timer.Sample oss_sample = Timer.start();
-                    _ossAccessExecutor.submit(()->{
+                    _ossExecutor.submit(()->{
                         try {
                             _ossProvider.getObject().putObject(ctx.bucketName, ctx.objectName, ctx.content);
                             oss_sample.stop(oss_timer);
@@ -150,6 +140,8 @@ public class WriteStreamBuilder extends BaseStreamBuilder implements WsHandlerBu
     private final ObjectProvider<Timer> timerProvider;
     private final ObjectProvider<Gauge> gaugeProvider;
 
-    private ExecutorService _ossAccessExecutor;
+    private CommandExecutor _ossExecutor;
+    private CommandExecutor executor;
+
     private final AtomicInteger _wscount = new AtomicInteger(0);
 }
