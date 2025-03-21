@@ -1,6 +1,5 @@
 package com.yulore.medhub.service;
 
-import io.netty.util.NettyRuntime;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
@@ -21,7 +20,7 @@ public class ExecutorRepo {
     @Bean(destroyMethod = "shutdown")
     public CommandExecutor commandExecutor() {
         log.info("create CommandExecutor");
-        final ExecutorService executor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
+        final ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2,
                 new DefaultThreadFactory("sessionExecutor"));
         return new CommandExecutor() {
             @Override
@@ -39,7 +38,7 @@ public class ExecutorRepo {
     @Bean(name = "commonExecutor", destroyMethod = "shutdown")
     public Executor commonExecutor() {
         log.info("create Common Executor");
-        return Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
+        return Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2,
                 new DefaultThreadFactory("commonExecutor"));
     }
 }
