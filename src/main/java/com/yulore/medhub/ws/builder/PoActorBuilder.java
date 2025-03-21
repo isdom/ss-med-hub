@@ -53,9 +53,10 @@ import java.util.function.Supplier;
 @ConditionalOnProperty(prefix = "feature", name = "po_io", havingValue = "enabled")
 public class PoActorBuilder implements WsHandlerBuilder {
     @PostConstruct
-    public void start() {
+    public void init() {
         _ossAccessExecutor = Executors.newFixedThreadPool(NettyRuntime.availableProcessors() * 2,
                 new DefaultThreadFactory("ossAccessExecutor"));
+        cmdExecutor = cmdExecutorProvider.getObject();
         playback_timer = timerProvider.getObject("mh.playback.delay", MetricCustomized.builder().tags(List.of("actor", "poio")).build());
         transmit_timer = timerProvider.getObject("mh.transmit.delay", MetricCustomized.builder()
                 .tags(List.of("actor", "poio"))
@@ -66,7 +67,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
     }
 
     @PreDestroy
-    public void stop() throws InterruptedException {
+    public void release() {
         _ossAccessExecutor.shutdownNow();
     }
 
@@ -149,7 +150,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
             @Override
             public void onMessage(final WebSocket webSocket, final String message) {
                 final Timer.Sample sample = Timer.start();
-                cmdExecutorProvider.getObject().submit(()-> {
+                cmdExecutor.submit(()-> {
                     try {
                         cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket, sample);
                     } catch (Exception ex) {
@@ -179,7 +180,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
 
             @Override
             public void onClose(final WebSocket webSocket) {
-                orderedTaskExecutor.submit(actorIdx(), ()-> {
+                cmdExecutor.submit(()-> {
                     _wscount.decrementAndGet();
                     super.onClose(webSocket);
                 });
@@ -259,6 +260,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
 
     private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
     private final ObjectProvider<CommandExecutor> cmdExecutorProvider;
+    private CommandExecutor cmdExecutor;
     private ExecutorService _ossAccessExecutor;
 
     @Autowired
