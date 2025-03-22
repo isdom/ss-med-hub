@@ -1,18 +1,25 @@
 package com.yulore.util;
 
+import com.yulore.metric.MetricCustomized;
+import io.micrometer.core.instrument.Gauge;
 import io.netty.util.concurrent.DefaultThreadFactory;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
-@Component
 @Slf4j
+@RequiredArgsConstructor
+@Component
 public class ExecutorRepo implements ApplicationListener<ContextClosedEvent> {
     @Bean(destroyMethod = "shutdown")
     public ScheduledExecutorService scheduledExecutor() {
@@ -30,10 +37,13 @@ public class ExecutorRepo implements ApplicationListener<ContextClosedEvent> {
     @Bean
     public Function<String, ExecutorService> buildExecutorServiceProvider() {
         return name -> {
-            final AtomicReference<ExecutorService> created = new AtomicReference<>(null);
+            final AtomicReference<ThreadPoolExecutor> created = new AtomicReference<>(null);
             final ExecutorService current = executors.computeIfAbsent(name, k -> {
-                created.set(Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2,
-                        new DefaultThreadFactory(name)));
+                final int nThreads = Runtime.getRuntime().availableProcessors() * 2;
+                created.set(new ThreadPoolExecutor(nThreads, nThreads,
+                                0L, TimeUnit.MILLISECONDS,
+                                new LinkedBlockingQueue<>(),
+                                new DefaultThreadFactory(name)));
                 return created.get();
             });
 
@@ -42,6 +52,10 @@ public class ExecutorRepo implements ApplicationListener<ContextClosedEvent> {
                     // mappingFunction invoked & NOT associated with name
                     created.get().shutdownNow();
                 } else {
+                    final ThreadPoolExecutor tpe = created.get();
+                    final BlockingQueue<Runnable> queue = tpe.getQueue();
+                    gaugeProvider.getObject((Supplier<Number>)queue::size, "exc.queue.size",
+                            MetricCustomized.builder().tags(List.of("name", name)).build());
                     log.info("create ExecutorService({}) - {}", name, current);
                 }
             } else {
@@ -68,4 +82,5 @@ public class ExecutorRepo implements ApplicationListener<ContextClosedEvent> {
     }
 
     private final ConcurrentMap<String, ExecutorService> executors = new ConcurrentHashMap<>();
+    private final ObjectProvider<Gauge> gaugeProvider;
 }

@@ -62,7 +62,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
         oss_timer = timerProvider.getObject("oss.upload.duration", MetricCustomized.builder().tags(List.of("actor", "poio")).build());
         gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", MetricCustomized.builder().tags(List.of("actor", "poio")).build());
 
-        executor = executorProvider.apply("longTimeExecutor");
+        executor = executorProvider.apply("ltx");
     }
 
     // wss://domain/path?uuid=XX&tid=XXX&role=call

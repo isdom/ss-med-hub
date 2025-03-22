@@ -28,7 +28,7 @@ public class StreamCacheService {
 
     @PostConstruct
     public void init() {
-        executor = executorProvider.apply("longTimeExecutor");
+        executor = executorProvider.apply("ltx");
     }
 
     public BuildStreamTask asCache(final BuildStreamTask sourceTask) {

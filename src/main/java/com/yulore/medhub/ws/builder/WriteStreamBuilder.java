@@ -49,7 +49,7 @@ public class WriteStreamBuilder extends BaseStreamBuilder implements WsHandlerBu
         oss_timer = timerProvider.getObject("oss.upload.duration", MetricCustomized.builder().tags(List.of("actor", "wrms")).build());
         gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", MetricCustomized.builder().tags(List.of("actor", "wrms")).build());
 
-        ossExecutor = executorProvider.apply("longTimeExecutor");
+        ossExecutor = executorProvider.apply("ltx");
         executor = executorProvider.apply("wsmsg");
 
         cmds.register(VOSOpenStream.TYPE, "OpenStream",
