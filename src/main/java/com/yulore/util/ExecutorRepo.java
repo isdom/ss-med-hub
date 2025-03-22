@@ -1,4 +1,4 @@
-package com.yulore.medhub.service;
+package com.yulore.util;
 
 import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.extern.slf4j.Slf4j;

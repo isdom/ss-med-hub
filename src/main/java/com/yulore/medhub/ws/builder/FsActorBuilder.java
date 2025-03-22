@@ -2,7 +2,7 @@ package com.yulore.medhub.ws.builder;
 
 import com.yulore.medhub.api.ScriptApi;
 import com.yulore.medhub.service.ASRService;
-import com.yulore.medhub.service.OrderedTaskExecutor;
+import com.yulore.util.OrderedTaskExecutor;
 import com.yulore.medhub.vo.WSCommandVO;
 import com.yulore.medhub.vo.cmd.*;
 import com.yulore.medhub.ws.HandlerUrlBuilder;

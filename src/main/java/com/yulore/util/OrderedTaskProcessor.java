@@ -1,4 +1,4 @@
-package com.yulore.medhub.service;
+package com.yulore.util;
 
 import com.yulore.metric.MetricCustomized;
 import io.micrometer.core.instrument.Gauge;

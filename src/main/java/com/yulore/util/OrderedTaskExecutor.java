@@ -1,4 +1,4 @@
-package com.yulore.medhub.service;
+package com.yulore.util;
 
 public interface OrderedTaskExecutor {
     public void submit(final int ownerIdx, final Runnable task);

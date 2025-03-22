@@ -6,7 +6,7 @@ import com.yulore.medhub.api.CallApi;
 import com.yulore.medhub.api.ScriptApi;
 import com.yulore.medhub.service.ASRService;
 import com.yulore.medhub.service.BSTService;
-import com.yulore.medhub.service.OrderedTaskExecutor;
+import com.yulore.util.OrderedTaskExecutor;
 import com.yulore.medhub.task.PlayStreamPCMTask2;
 import com.yulore.medhub.task.SampleInfo;
 import com.yulore.medhub.vo.*;
