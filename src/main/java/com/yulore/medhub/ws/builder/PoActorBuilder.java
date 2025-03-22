@@ -62,8 +62,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
         oss_timer = timerProvider.getObject("oss.upload.duration", MetricCustomized.builder().tags(List.of("actor", "poio")).build());
         gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", MetricCustomized.builder().tags(List.of("actor", "poio")).build());
 
-        executor = executorProvider.apply("wsmsg");
-        ossExecutor = executorProvider.apply("longTimeExecutor");
+        executor = executorProvider.apply("longTimeExecutor");
     }
 
     // wss://domain/path?uuid=XX&tid=XXX&role=call
@@ -134,7 +133,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
                 (ctx) -> {
                     final long startUploadInMs = System.currentTimeMillis();
                     final Timer.Sample oss_sample = Timer.start();
-                    ossExecutor.execute(() -> {
+                    executor.execute(() -> {
                         ossProvider.getObject().putObject(ctx.bucketName(), ctx.objectName(), ctx.content());
                         oss_sample.stop(oss_timer);
                         log.info("[{}]: upload record to oss => bucket:{}/object:{}, cost {} ms",
@@ -253,7 +252,6 @@ public class PoActorBuilder implements WsHandlerBuilder {
     private final AtomicInteger _wscount = new AtomicInteger(0);
 
     private Executor executor;
-    private Executor ossExecutor;
     private Timer playback_timer;
     private Timer oss_timer;
     private Timer transmit_timer;

@@ -18,17 +18,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
 import java.nio.ByteBuffer;
 import java.util.List;
-import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
 @Slf4j
@@ -44,8 +41,6 @@ public class ReadStreamBuilder extends BaseStreamBuilder implements WsHandlerBui
         read_timer = timerProvider.getObject("rms.ro.duration", MetricCustomized.builder().tags(List.of("op", "read")).build());
         tell_timer = timerProvider.getObject("rms.ro.duration", MetricCustomized.builder().tags(List.of("op", "tell")).build());
         gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", MetricCustomized.builder().tags(List.of("actor", "rrms")).build());
-
-        executor = executorProvider.apply("wsmsg");
 
         cmds.register(VOSOpenStream.TYPE, "OpenStream",
                 ctx->handleOpenStreamCommand(ctx.payload(), ctx.ws(), ctx.actor(), ctx.sample()));
@@ -117,11 +112,7 @@ public class ReadStreamBuilder extends BaseStreamBuilder implements WsHandlerBui
         bst.buildStream(_ss::appendData, (isOK) -> _ss.appendCompleted());
     }
 
-    @Autowired
-    private BSTService bstService;
-
-    private final Function<String, Executor> executorProvider;
-    private Executor executor;
+    private final BSTService bstService;
     private final ObjectProvider<Timer> timerProvider;
     private final ObjectProvider<Gauge> gaugeProvider;
 
