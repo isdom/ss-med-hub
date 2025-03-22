@@ -17,12 +17,11 @@ import com.yulore.medhub.vo.cmd.VOStartTranscription;
 import com.yulore.medhub.ws.actor.ASRActor;
 import com.yulore.metric.MetricCustomized;
 import io.micrometer.core.instrument.Timer;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
@@ -34,6 +33,7 @@ import java.util.concurrent.*;
 import java.util.function.Function;
 
 @Slf4j
+@RequiredArgsConstructor
 @Service
 @ConditionalOnProperty(prefix = "nls", name = "asr-enabled", havingValue = "true")
 class ASRServiceImpl implements ASRService {
@@ -81,7 +81,7 @@ class ASRServiceImpl implements ASRService {
     }
 
     @PostConstruct
-    public void start() {
+    public void init() {
         //创建NlsClient实例应用全局创建一个即可。生命周期可和整个应用保持一致，默认服务地址为阿里云线上服务地址。
         _nlsClient = new NlsClient(_nls_url, "invalid_token");
         _txClient = new SpeechClient(AsrConstant.DEFAULT_RT_REQ_URL);
@@ -93,7 +93,7 @@ class ASRServiceImpl implements ASRService {
     }
 
     @PreDestroy
-    public void stop() throws InterruptedException {
+    public void release() throws InterruptedException {
         _nlsClient.shutdown();
         _txClient.shutdown();
 
@@ -558,19 +558,12 @@ class ASRServiceImpl implements ASRService {
     final List<ASRAgent> _asrAgents = new ArrayList<>();
     final List<TxASRAgent> _txasrAgents = new ArrayList<>();
 
-    @Autowired
-    private ObjectProvider<ScheduledExecutorService> schedulerProvider;
-
-    @Autowired
-    private RedissonClient redisson;
-
-    @Autowired
-    private Function<String, ExecutorService> executorProvider;
+    private final RedissonClient redisson;
+    private final Function<String, Executor> executorProvider;
+    private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
+    private final ObjectProvider<Timer> timerProvider;
 
     private Executor executor;
-
-    @Autowired
-    private ObjectProvider<Timer> timerProvider;
 
     private NlsClient _nlsClient;
 

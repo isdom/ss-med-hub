@@ -4,8 +4,6 @@ import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Lazy;
-import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Scope;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.stereotype.Component;
@@ -34,7 +32,13 @@ public class ExecutorRepo implements ApplicationListener<ContextClosedEvent> {
     }
 
     @Bean
-    public Function<String, ExecutorService> buildExecutorProvider() {
+    public Function<String, Executor> buildExecutorProvider() {
+        final var builder = buildExecutorServiceProvider();
+        return builder::apply;
+    }
+
+    @Bean
+    public Function<String, ExecutorService> buildExecutorServiceProvider() {
         return name -> {
             final AtomicReference<ExecutorService> created = new AtomicReference<>(null);
             final ExecutorService current = executors.computeIfAbsent(name, k -> {

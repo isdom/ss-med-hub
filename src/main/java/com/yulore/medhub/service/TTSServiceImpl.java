@@ -10,8 +10,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
@@ -158,7 +156,7 @@ class TTSServiceImpl implements TTSService {
     final List<CosyAgent> _cosyAgents = new ArrayList<>();
 
     private final RedissonClient redisson;
-    private final Function<String, ExecutorService> executorProvider;
+    private final Function<String, Executor> executorProvider;
     private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
     private final ObjectProvider<Timer> timerProvider;
 
