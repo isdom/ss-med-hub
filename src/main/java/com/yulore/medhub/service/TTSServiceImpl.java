@@ -34,7 +34,7 @@ class TTSServiceImpl implements TTSService {
         _nlsClient = new NlsClient(_nls_url, "invalid_token");
 
         initTTSAgents(_nlsClient);
-        executor = executorProvider.apply("nlsExecutor");
+        executor = executorProvider.apply("nls");
     }
 
     @PreDestroy

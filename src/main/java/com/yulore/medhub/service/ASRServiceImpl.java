@@ -89,7 +89,7 @@ class ASRServiceImpl implements ASRService {
         initASRAgents(_nlsClient);
         asr_started_timer = timerProvider.getObject("nls.asr.started.duration", null);
         txasr_started_timer = timerProvider.getObject("nls.txasr.started.duration", null);
-        executor = executorProvider.apply("nlsExecutor");
+        executor = executorProvider.apply("nls");
     }
 
     @PreDestroy
