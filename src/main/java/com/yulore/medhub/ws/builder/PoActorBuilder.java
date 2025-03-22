@@ -6,7 +6,6 @@ import com.yulore.medhub.api.CallApi;
 import com.yulore.medhub.api.ScriptApi;
 import com.yulore.medhub.service.ASRService;
 import com.yulore.medhub.service.BSTService;
-import com.yulore.medhub.service.CommandExecutor;
 import com.yulore.medhub.service.OrderedTaskExecutor;
 import com.yulore.medhub.task.PlayStreamPCMTask2;
 import com.yulore.medhub.task.SampleInfo;
@@ -26,7 +25,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -36,9 +34,11 @@ import javax.annotation.Resource;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 @Slf4j
@@ -48,6 +48,13 @@ import java.util.function.Supplier;
 public class PoActorBuilder implements WsHandlerBuilder {
     @PostConstruct
     public void init() {
+        cmds.register(VOStartTranscription.TYPE,"StartTranscription",
+            ctx-> asrService.startTranscription(ctx.actor(), ctx.payload(), ctx.ws())
+                    .handle((timer, ex)->ctx.sample().stop(timer))
+            )
+            .register(WSCommandVO.WSCMD_VOID,"StopTranscription",
+                    ctx-> asrService.stopTranscription(ctx.ws()));
+
         playback_timer = timerProvider.getObject("mh.playback.delay", MetricCustomized.builder().tags(List.of("actor", "poio")).build());
         transmit_timer = timerProvider.getObject("mh.transmit.delay", MetricCustomized.builder()
                 .tags(List.of("actor", "poio"))
@@ -56,8 +63,8 @@ public class PoActorBuilder implements WsHandlerBuilder {
         oss_timer = timerProvider.getObject("oss.upload.duration", MetricCustomized.builder().tags(List.of("actor", "poio")).build());
         gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", MetricCustomized.builder().tags(List.of("actor", "poio")).build());
 
-        cmdExecutor = cmdExecutorProvider.getObject("poio");
-        _ossExecutor = cmdExecutorProvider.getObject("longTimeExecutor");
+        executor = executorProvider.apply("wsmsg");
+        ossExecutor = executorProvider.apply("longTimeExecutor");
     }
 
     // wss://domain/path?uuid=XX&tid=XXX&role=call
@@ -128,8 +135,8 @@ public class PoActorBuilder implements WsHandlerBuilder {
                 (ctx) -> {
                     final long startUploadInMs = System.currentTimeMillis();
                     final Timer.Sample oss_sample = Timer.start();
-                    _ossExecutor.submit(() -> {
-                        _ossProvider.getObject().putObject(ctx.bucketName(), ctx.objectName(), ctx.content());
+                    ossExecutor.execute(() -> {
+                        ossProvider.getObject().putObject(ctx.bucketName(), ctx.objectName(), ctx.content());
                         oss_sample.stop(oss_timer);
                         log.info("[{}]: upload record to oss => bucket:{}/object:{}, cost {} ms",
                                 ctx.sessionId(), ctx.bucketName(), ctx.objectName(), System.currentTimeMillis() - startUploadInMs);
@@ -139,7 +146,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
             @Override
             public void onMessage(final WebSocket webSocket, final String message) {
                 final Timer.Sample sample = Timer.start();
-                cmdExecutor.submit(()-> {
+                executor.execute(()-> {
                     try {
                         cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket, sample);
                     } catch (Exception ex) {
@@ -169,7 +176,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
 
             @Override
             public void onClose(final WebSocket webSocket) {
-                cmdExecutor.submit(()-> {
+                executor.execute(()-> {
                     _wscount.decrementAndGet();
                     super.onClose(webSocket);
                 });
@@ -224,11 +231,6 @@ public class PoActorBuilder implements WsHandlerBuilder {
         return task::stop;
     }
 
-    private final ObjectProvider<OSS> _ossProvider;
-
-    @Autowired
-    private BSTService bstService;
-
     @Resource
     private CallApi _callApi;
 
@@ -247,33 +249,25 @@ public class PoActorBuilder implements WsHandlerBuilder {
     @Value("${oss.path}")
     private String _oss_path;
 
+    private final ObjectProvider<OSS> ossProvider;
+    private final BSTService bstService;
     private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
-    private final ObjectProvider<CommandExecutor> cmdExecutorProvider;
-    private CommandExecutor cmdExecutor;
-    private CommandExecutor _ossExecutor;
-
-    @Autowired
-    private ASRService asrService;
-
-    @Autowired
-    OrderedTaskExecutor orderedTaskExecutor;
+    private final Function<String, Executor> executorProvider;
+    private final ASRService asrService;
+    private final OrderedTaskExecutor orderedTaskExecutor;
 
     private final ObjectProvider<Timer> timerProvider;
     private final ObjectProvider<Gauge> gaugeProvider;
 
     private final AtomicInteger _wscount = new AtomicInteger(0);
 
+    private Executor executor;
+    private Executor ossExecutor;
     private Timer playback_timer;
     private Timer oss_timer;
     private Timer transmit_timer;
 
     final WSCommandRegistry<PoActor> cmds = new WSCommandRegistry<PoActor>()
-            .register(VOStartTranscription.TYPE,"StartTranscription",
-    ctx-> asrService.startTranscription(ctx.actor(), ctx.payload(), ctx.ws())
-                .handle((timer, ex)->ctx.sample().stop(timer))
-            )
-            .register(WSCommandVO.WSCMD_VOID,"StopTranscription",
-                      ctx-> asrService.stopTranscription(ctx.ws()))
             .register(VOPCMPlaybackStarted.TYPE,"PCMPlaybackStarted",
                     ctx->ctx.actor().notifyPlaybackStarted(ctx.payload(), playback_timer))
             .register(VOPCMPlaybackStopped.TYPE,"PCMPlaybackStopped",

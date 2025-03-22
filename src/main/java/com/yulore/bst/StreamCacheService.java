@@ -1,10 +1,8 @@
 package com.yulore.bst;
 
-import com.yulore.medhub.service.CommandExecutor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.tuple.Pair;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
@@ -12,25 +10,25 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 @Slf4j
 @RequiredArgsConstructor
 @Component
 public class StreamCacheService {
 
-    private final ObjectProvider<CommandExecutor> cmdExecutorProvider;
-    private CommandExecutor _longTimeExecutor;
-
-
+    private final Function<String, Executor> executorProvider;
+    private Executor executor;
     private final ConcurrentMap<String, LoadAndCahceTask> _key2task = new ConcurrentHashMap<>();
 
     @PostConstruct
     public void init() {
-        _longTimeExecutor = cmdExecutorProvider.getObject("longTimeExecutor");
+        executor = executorProvider.apply("longTimeExecutor");
     }
 
     public BuildStreamTask asCache(final BuildStreamTask sourceTask) {
@@ -62,7 +60,7 @@ public class StreamCacheService {
                 log.info("asCache: {} its_my_task", key);
                 // it's me, first start task
                 myTask.onCached(onPart, onCompleted);
-                _longTimeExecutor.submit(myTask::start);
+                executor.execute(myTask::start);
             }
         };
     }

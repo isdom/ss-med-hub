@@ -4,15 +4,12 @@ import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Scope;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
-
-import static org.springframework.beans.factory.config.ConfigurableBeanFactory.SCOPE_PROTOTYPE;
 
 @Component
 @Slf4j
@@ -22,13 +19,6 @@ public class ExecutorRepo implements ApplicationListener<ContextClosedEvent> {
         log.info("create ScheduledExecutorService");
         return Executors.newScheduledThreadPool(Runtime.getRuntime().availableProcessors() * 2,
                 new DefaultThreadFactory("scheduledExecutor"));
-    }
-
-    @Bean
-    @Scope(SCOPE_PROTOTYPE)
-    public CommandExecutor buildCmdExecutor(final String name) {
-        final Executor executor = buildExecutorProvider().apply(name);
-        return executor::execute;
     }
 
     @Bean

@@ -2,7 +2,6 @@ package com.yulore.medhub.ws.builder;
 
 import com.aliyun.oss.OSS;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.yulore.medhub.service.CommandExecutor;
 import com.yulore.medhub.session.StreamSession;
 import com.yulore.medhub.vo.*;
 import com.yulore.medhub.vo.cmd.VOSOpenStream;
@@ -25,8 +24,10 @@ import org.springframework.stereotype.Component;
 import javax.annotation.PostConstruct;
 import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 @Slf4j
@@ -48,8 +49,8 @@ public class WriteStreamBuilder extends BaseStreamBuilder implements WsHandlerBu
         oss_timer = timerProvider.getObject("oss.upload.duration", MetricCustomized.builder().tags(List.of("actor", "wrms")).build());
         gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", MetricCustomized.builder().tags(List.of("actor", "wrms")).build());
 
-        _ossExecutor = cmdExecutorProvider.getObject("longTimeExecutor");
-        executor = cmdExecutorProvider.getObject("wrms");
+        ossExecutor = executorProvider.apply("longTimeExecutor");
+        executor = executorProvider.apply("wsmsg");
 
         cmds.register(VOSOpenStream.TYPE, "OpenStream",
                 ctx->handleOpenStreamCommand(ctx.payload(), ctx.ws(), ctx.actor(), ctx.sample()));
@@ -61,7 +62,7 @@ public class WriteStreamBuilder extends BaseStreamBuilder implements WsHandlerBu
             @Override
             public void onMessage(final WebSocket webSocket, final String message) {
                 final Timer.Sample sample = Timer.start();
-                executor.submit(()-> {
+                executor.execute(()-> {
                     try {
                         cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket, sample);
                     } catch (JsonProcessingException ex) {
@@ -74,7 +75,7 @@ public class WriteStreamBuilder extends BaseStreamBuilder implements WsHandlerBu
             @Override
             public void onMessage(final WebSocket webSocket, final ByteBuffer bytes) {
                 final Timer.Sample sample = Timer.start();
-                executor.submit(()-> handleFileWriteCommand(bytes, _ss, webSocket, sample));
+                executor.execute(()-> handleFileWriteCommand(bytes, _ss, webSocket, sample));
             }
 
             @Override
@@ -109,9 +110,9 @@ public class WriteStreamBuilder extends BaseStreamBuilder implements WsHandlerBu
                 (ctx) -> {
                     final long startUploadInMs = System.currentTimeMillis();
                     final Timer.Sample oss_sample = Timer.start();
-                    _ossExecutor.submit(()->{
+                    ossExecutor.execute(()->{
                         try {
-                            _ossProvider.getObject().putObject(ctx.bucketName, ctx.objectName, ctx.content);
+                            ossProvider.getObject().putObject(ctx.bucketName, ctx.objectName, ctx.content);
                             oss_sample.stop(oss_timer);
                             log.info("[{}]: upload content to oss => bucket:{}/object:{}, cost {} ms",
                                     vo.session_id, ctx.bucketName, ctx.objectName, System.currentTimeMillis() - startUploadInMs);
@@ -135,13 +136,13 @@ public class WriteStreamBuilder extends BaseStreamBuilder implements WsHandlerBu
         sample.stop(write_timer);
     }
 
-    private final ObjectProvider<CommandExecutor> cmdExecutorProvider;
-    private final ObjectProvider<OSS> _ossProvider;
+    private final Function<String, Executor> executorProvider;
+    private final ObjectProvider<OSS> ossProvider;
     private final ObjectProvider<Timer> timerProvider;
     private final ObjectProvider<Gauge> gaugeProvider;
 
-    private CommandExecutor _ossExecutor;
-    private CommandExecutor executor;
+    private Executor ossExecutor;
+    private Executor executor;
 
     private final AtomicInteger _wscount = new AtomicInteger(0);
 }

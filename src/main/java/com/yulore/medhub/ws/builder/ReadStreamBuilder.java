@@ -3,7 +3,6 @@ package com.yulore.medhub.ws.builder;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.yulore.bst.*;
 import com.yulore.medhub.service.BSTService;
-import com.yulore.medhub.service.CommandExecutor;
 import com.yulore.medhub.session.StreamSession;
 import com.yulore.medhub.vo.*;
 import com.yulore.medhub.vo.cmd.VOSOpenStream;
@@ -27,8 +26,10 @@ import org.springframework.stereotype.Component;
 import javax.annotation.PostConstruct;
 import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 @Slf4j
@@ -48,7 +49,7 @@ public class ReadStreamBuilder extends BaseStreamBuilder implements WsHandlerBui
                 ctx->handleOpenStreamCommand(ctx.payload(), ctx.ws(), ctx.actor(), ctx.sample()));
         gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", MetricCustomized.builder().tags(List.of("actor", "rrms")).build());
 
-        executor = cmdExecutorProvider.getObject("rrms");
+        executor = executorProvider.apply("wsmsg");
     }
 
     @Override
@@ -58,7 +59,7 @@ public class ReadStreamBuilder extends BaseStreamBuilder implements WsHandlerBui
             @Override
             public void onMessage(final WebSocket webSocket, final String message) {
                 final Timer.Sample sample = Timer.start();
-                executor.submit(()-> {
+                executor.execute(()-> {
                     try {
                         cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket, sample);
                     } catch (JsonProcessingException ex) {
@@ -127,8 +128,8 @@ public class ReadStreamBuilder extends BaseStreamBuilder implements WsHandlerBui
     @Autowired
     private BSTService bstService;
 
-    private final ObjectProvider<CommandExecutor> cmdExecutorProvider;
-    private CommandExecutor executor;
+    private final Function<String, Executor> executorProvider;
+    private Executor executor;
     private final ObjectProvider<Timer> timerProvider;
     private final ObjectProvider<Gauge> gaugeProvider;
 

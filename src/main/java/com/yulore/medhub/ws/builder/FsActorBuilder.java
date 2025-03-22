@@ -3,7 +3,6 @@ package com.yulore.medhub.ws.builder;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.yulore.medhub.api.ScriptApi;
 import com.yulore.medhub.service.ASRService;
-import com.yulore.medhub.service.CommandExecutor;
 import com.yulore.medhub.service.OrderedTaskExecutor;
 import com.yulore.medhub.vo.WSCommandVO;
 import com.yulore.medhub.vo.cmd.*;
@@ -22,7 +21,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -32,9 +30,11 @@ import javax.annotation.Resource;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 @Slf4j
@@ -45,13 +45,20 @@ public class FsActorBuilder implements WsHandlerBuilder {
 
     @PostConstruct
     private void init() {
+        cmds.register(VOStartTranscription.TYPE,"StartTranscription",
+            ctx-> asrService.startTranscription(ctx.actor(), ctx.payload(), ctx.ws())
+                    .handle((timer, ex)->ctx.sample().stop(timer))
+            )
+            .register(WSCommandVO.WSCMD_VOID,"StopTranscription",
+                    ctx-> asrService.stopTranscription(ctx.ws()));
+
         playback_timer = timerProvider.getObject("mh.playback.delay", MetricCustomized.builder().tags(List.of("actor", "fsio")).build());
         transmit_timer = timerProvider.getObject("mh.transmit.delay", MetricCustomized.builder()
                 .tags(List.of("actor", "fsio"))
                 .maximumExpected(Duration.ofMinutes(1))
                 .build());
         gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", MetricCustomized.builder().tags(List.of("actor", "fsio")).build());
-        cmdExecutor = cmdExecutorProvider.getObject("fsio");
+        executor = executorProvider.apply("wsmsg");
     }
 
     @Override
@@ -111,7 +118,7 @@ public class FsActorBuilder implements WsHandlerBuilder {
             @Override
             public void onMessage(final WebSocket webSocket, final String message) {
                 final Timer.Sample sample = Timer.start();
-                cmdExecutor.submit(() -> {
+                executor.execute(() -> {
                     try {
                         cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket, sample);
                     } catch (JsonProcessingException ex) {
@@ -141,7 +148,7 @@ public class FsActorBuilder implements WsHandlerBuilder {
 
             @Override
             public void onClose(final WebSocket webSocket) {
-                cmdExecutor.submit(()-> {
+                executor.execute(()-> {
                     _wscount.decrementAndGet();
                     super.onClose(webSocket);
                 });
@@ -186,30 +193,19 @@ public class FsActorBuilder implements WsHandlerBuilder {
 
     private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
     private final ObjectProvider<HandlerUrlBuilder> urlProvider;
-    private final ObjectProvider<CommandExecutor> cmdExecutorProvider;
-    private CommandExecutor cmdExecutor;
-
-    @Autowired
-    private ASRService asrService;
-
-    @Autowired
-    OrderedTaskExecutor orderedTaskExecutor;
-
+    private final Function<String, Executor> executorProvider;
+    private final ASRService asrService;
+    private final OrderedTaskExecutor orderedTaskExecutor;
     private final ObjectProvider<Timer> timerProvider;
     private final ObjectProvider<Gauge> gaugeProvider;
 
     private final AtomicInteger _wscount = new AtomicInteger(0);
 
+    private Executor executor;
     private Timer playback_timer;
     private Timer transmit_timer;
 
     final WSCommandRegistry<FsActor> cmds = new WSCommandRegistry<FsActor>()
-            .register(VOStartTranscription.TYPE,"StartTranscription",
-    ctx-> asrService.startTranscription(ctx.actor(), ctx.payload(), ctx.ws())
-                .handle((timer, ex)->ctx.sample().stop(timer))
-            )
-            .register(WSCommandVO.WSCMD_VOID,"StopTranscription",
-                      ctx-> asrService.stopTranscription(ctx.ws()))
             .register(VOFSPlaybackStarted.TYPE,"FSPlaybackStarted",
                       ctx->ctx.actor().notifyFSPlaybackStarted(ctx.payload(), playback_timer))
             .register(VOFSPlaybackStopped.TYPE,"FSPlaybackStopped",
