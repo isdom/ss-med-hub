@@ -71,13 +71,13 @@ class ASRServiceImpl implements ASRService {
     }
 
     private static void stopAndCloseTranscriber(final WebSocket webSocket) {
-        final ASRActor session = webSocket.getAttachment();
-        if (session == null) {
+        final ASRActor<?> actor = webSocket.getAttachment();
+        if (actor == null) {
             log.error("stopAndCloseTranscriber: {} without ASRSession, abort", webSocket.getRemoteSocketAddress());
             return;
         }
 
-        session.stopAndCloseTranscriber();
+        actor.stopAndCloseTranscriber();
     }
 
     @PostConstruct
