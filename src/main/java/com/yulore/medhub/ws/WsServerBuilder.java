@@ -24,6 +24,7 @@ import java.net.*;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -45,6 +46,7 @@ public class WsServerBuilder {
         final Timer timer = timerProvider.getObject("mh.connected.delay", null);
         gaugeProvider.getObject((Supplier<Number>)_currentWSConnection::get, "mh.ws.count",
                 MetricCustomized.builder().tags(List.of("actor", "all")).build());
+        final Executor executor = executorProvider.apply("wsmsg");
 
         final WebSocketServer server = new WebSocketServer(new InetSocketAddress(configProps.host, configProps.port)) {
             @Override
@@ -90,16 +92,19 @@ public class WsServerBuilder {
 
             @Override
             public void onMessage(final WebSocket webSocket, final String message) {
-                log.info("received text message from {}: {}", webSocket.getRemoteSocketAddress(), message);
-                final Object attachment = webSocket.getAttachment();
-                if (attachment instanceof WsHandler handler) {
-                    try {
-                        handler.onMessage(webSocket, message);
-                    } catch (Exception ex) {
-                        log.warn("handler.onMessage: {}/{} with exception {}",
-                                webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
+                final Timer.Sample sample = Timer.start();
+                executor.execute(() -> {
+                    log.info("received text message from {}: {}", webSocket.getRemoteSocketAddress(), message);
+                    final Object attachment = webSocket.getAttachment();
+                    if (attachment instanceof WsHandler handler) {
+                        try {
+                            handler.onMessage(webSocket, message, sample);
+                        } catch (Exception ex) {
+                            log.warn("handler.onMessage: {}/{} with exception {}",
+                                    webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
+                        }
                     }
-                }
+                });
             }
 
             @Override
@@ -108,7 +113,7 @@ public class WsServerBuilder {
                 final int remaining = bytes.remaining();
                 if (attachment instanceof WsHandler handler) {
                     try {
-                        handler.onMessage(webSocket, bytes);
+                        handler.onMessage(webSocket, bytes, System.currentTimeMillis());
                     } catch (Exception ex) {
                         log.warn("handler.onMessage(Binary): {}/({} bytes) with exception {}",
                                 webSocket.getRemoteSocketAddress(), remaining, ExceptionUtil.exception2detail(ex));
@@ -224,6 +229,7 @@ public class WsServerBuilder {
     private long _check_interval;
 
     private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
+    private final Function<String, Executor> executorProvider;
 
     private final ObjectProvider<Inet4Address> ipv4Provider;
     private final RedissonClient redisson;

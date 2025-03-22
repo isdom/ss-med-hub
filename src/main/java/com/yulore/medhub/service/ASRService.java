@@ -8,6 +8,6 @@ import org.java_websocket.WebSocket;
 import java.util.concurrent.CompletionStage;
 
 public interface ASRService {
-    CompletionStage<Timer> startTranscription(final ASRActor actor, final VOStartTranscription vo, final WebSocket webSocket);
+    CompletionStage<Timer> startTranscription(final ASRActor<?> actor, final VOStartTranscription vo, final WebSocket webSocket);
     void stopTranscription(final WebSocket webSocket);
 }

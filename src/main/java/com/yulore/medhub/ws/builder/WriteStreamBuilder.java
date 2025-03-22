@@ -1,15 +1,14 @@
 package com.yulore.medhub.ws.builder;
 
 import com.aliyun.oss.OSS;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.yulore.medhub.session.StreamSession;
 import com.yulore.medhub.vo.*;
 import com.yulore.medhub.vo.cmd.VOSOpenStream;
+import com.yulore.medhub.ws.WSCommandRegistry;
 import com.yulore.medhub.ws.WsHandler;
 import com.yulore.medhub.ws.WsHandlerBuilder;
 import com.yulore.medhub.ws.actor.StreamActor;
 import com.yulore.metric.MetricCustomized;
-import com.yulore.util.ExceptionUtil;
 import com.yulore.util.VarsUtil;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Timer;
@@ -25,6 +24,7 @@ import javax.annotation.PostConstruct;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -39,7 +39,7 @@ public class WriteStreamBuilder extends BaseStreamBuilder implements WsHandlerBu
     private Timer oss_timer;
 
     @PostConstruct
-    public void start() {
+    private void init() {
         open_timer = timerProvider.getObject("rms.wr.duration", MetricCustomized.builder().tags(List.of("op", "open")).build());
         getlen_timer = timerProvider.getObject("rms.wr.duration", MetricCustomized.builder().tags(List.of("op", "getlen")).build());
         seek_timer = timerProvider.getObject("rms.wr.duration", MetricCustomized.builder().tags(List.of("op", "seek")).build());
@@ -59,23 +59,15 @@ public class WriteStreamBuilder extends BaseStreamBuilder implements WsHandlerBu
     @Override
     public WsHandler build(final String prefix, final WebSocket webSocket, final ClientHandshake handshake) {
         final StreamActor actor = new StreamActor() {
+
             @Override
-            public void onMessage(final WebSocket webSocket, final String message) {
-                final Timer.Sample sample = Timer.start();
-                executor.execute(()-> {
-                    try {
-                        cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket, sample);
-                    } catch (JsonProcessingException ex) {
-                        log.error("handleCommand {}: {}, an error occurred when parseAsJson: {}",
-                                webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
-                    }
-                });
+            protected WSCommandRegistry<StreamActor> commandRegistry() {
+                return cmds;
             }
 
             @Override
-            public void onMessage(final WebSocket webSocket, final ByteBuffer bytes) {
-                final Timer.Sample sample = Timer.start();
-                executor.execute(()-> handleFileWriteCommand(bytes, _ss, webSocket, sample));
+            public void onMessage(final WebSocket webSocket, final ByteBuffer bytes, final long timestampInMs) {
+                executor.execute(()-> handleFileWriteCommand(bytes, _ss, timestampInMs));
             }
 
             @Override
@@ -129,11 +121,10 @@ public class WriteStreamBuilder extends BaseStreamBuilder implements WsHandlerBu
         sample.stop(open_timer);
     }
 
-    private void handleFileWriteCommand(final ByteBuffer bytes, final StreamSession ss, final WebSocket webSocket, final Timer.Sample sample) {
-        final long startInMs = System.currentTimeMillis();
+    private void handleFileWriteCommand(final ByteBuffer bytes, final StreamSession ss, final long timestampInMs) {
         final int written = ss.writeToStream(bytes);
-        ss.sendEvent(startInMs, "FileWriteResult", new PayloadFileWriteResult(written));
-        sample.stop(write_timer);
+        ss.sendEvent(timestampInMs, "FileWriteResult", new PayloadFileWriteResult(written));
+        write_timer.record(System.currentTimeMillis() - timestampInMs, TimeUnit.MILLISECONDS);
     }
 
     private final Function<String, Executor> executorProvider;

@@ -16,7 +16,6 @@ import com.yulore.medhub.ws.WsHandler;
 import com.yulore.medhub.ws.WsHandlerBuilder;
 import com.yulore.medhub.ws.actor.PoActor;
 import com.yulore.metric.MetricCustomized;
-import com.yulore.util.ExceptionUtil;
 import com.yulore.util.VarsUtil;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Timer;
@@ -143,27 +142,19 @@ public class PoActorBuilder implements WsHandlerBuilder {
                     });
                 },
                 _sessionId -> WSEventVO.sendEvent(webSocket, "CallStarted", new PayloadCallStarted(_sessionId))) {
+
             @Override
-            public void onMessage(final WebSocket webSocket, final String message) {
-                final Timer.Sample sample = Timer.start();
-                executor.execute(()-> {
-                    try {
-                        cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket, sample);
-                    } catch (Exception ex) {
-                        log.error("handleCommand {}: {}, an error occurred: {}",
-                                webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
-                    }
-                });
+            protected WSCommandRegistry<PoActor> commandRegistry() {
+                return cmds;
             }
 
             long totalDelayInMs = 0;
 
             @Override
-            public void onMessage(final WebSocket webSocket, final ByteBuffer bytes) {
-                final long beginInMs = System.currentTimeMillis();
+            public void onMessage(final WebSocket webSocket, final ByteBuffer bytes, final long timestampInMs) {
                 orderedTaskExecutor.submit(actorIdx(), ()-> {
                     if (transmit(bytes)) {
-                        totalDelayInMs += System.currentTimeMillis() - beginInMs;
+                        totalDelayInMs += System.currentTimeMillis() - timestampInMs;
                         // transmit success
                         if ((transmitCount() % 50) == 0) {
                             transmit_timer.record(totalDelayInMs, TimeUnit.MILLISECONDS);
@@ -267,7 +258,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
     private Timer oss_timer;
     private Timer transmit_timer;
 
-    final WSCommandRegistry<PoActor> cmds = new WSCommandRegistry<PoActor>()
+    private final WSCommandRegistry<PoActor> cmds = new WSCommandRegistry<PoActor>()
             .register(VOPCMPlaybackStarted.TYPE,"PCMPlaybackStarted",
                     ctx->ctx.actor().notifyPlaybackStarted(ctx.payload(), playback_timer))
             .register(VOPCMPlaybackStopped.TYPE,"PCMPlaybackStopped",

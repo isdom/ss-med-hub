@@ -44,7 +44,7 @@ import java.util.function.Supplier;
  */
 @ToString
 @Slf4j
-public abstract class PoActor extends ASRActor implements WsHandler {
+public abstract class PoActor extends ASRActor<PoActor> implements WsHandler {
 
     private WebSocket _ws;
 

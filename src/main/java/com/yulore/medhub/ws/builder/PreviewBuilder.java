@@ -12,12 +12,12 @@ import com.yulore.medhub.ws.WsHandler;
 import com.yulore.medhub.ws.WsHandlerBuilder;
 import com.yulore.medhub.ws.actor.PreviewActor;
 import com.yulore.util.ExceptionUtil;
+import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -34,17 +34,13 @@ public class PreviewBuilder implements WsHandlerBuilder {
     public WsHandler build(final String prefix, final WebSocket webSocket, final ClientHandshake handshake) {
         final var actor = new PreviewActor() {
             @Override
-            public void onMessage(WebSocket webSocket, String message) {
+            public void onMessage(WebSocket webSocket, String message, final Timer.Sample sample) {
                 try {
                     handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, webSocket, this);
                 } catch (JsonProcessingException ex) {
                     log.error("handleHubCommand {}: {}, an error occurred when parseAsJson: {}",
                             webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
                 }
-            }
-
-            @Override
-            public void onMessage(WebSocket webSocket, ByteBuffer bytes) {
             }
         };
         webSocket.setAttachment(actor);
@@ -95,8 +91,6 @@ public class PreviewBuilder implements WsHandlerBuilder {
         }
     }
 
-    @Autowired
-    private BSTService bstService;
-
+    private final BSTService bstService;
     private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
 }

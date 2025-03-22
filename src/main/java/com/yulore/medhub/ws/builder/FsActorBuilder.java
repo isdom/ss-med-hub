@@ -1,6 +1,5 @@
 package com.yulore.medhub.ws.builder;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.yulore.medhub.api.ScriptApi;
 import com.yulore.medhub.service.ASRService;
 import com.yulore.medhub.service.OrderedTaskExecutor;
@@ -115,27 +114,19 @@ public class FsActorBuilder implements WsHandlerBuilder {
                 _test_enable_disconnect,
                 _test_disconnect_probability,
                 () -> webSocket.close(1006, "test_disconnect")) {
+
             @Override
-            public void onMessage(final WebSocket webSocket, final String message) {
-                final Timer.Sample sample = Timer.start();
-                executor.execute(() -> {
-                    try {
-                        cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket, sample);
-                    } catch (JsonProcessingException ex) {
-                        log.error("handleCommand {}: {}, an error occurred when parseAsJson: {}",
-                                webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
-                    }
-                });
+            protected WSCommandRegistry<FsActor> commandRegistry() {
+                return cmds;
             }
 
             long totalDelayInMs = 0;
 
             @Override
-            public void onMessage(final WebSocket webSocket, final ByteBuffer bytes) {
-                final long beginInMs = System.currentTimeMillis();
+            public void onMessage(final WebSocket webSocket, final ByteBuffer bytes, final long timestampInMs) {
                 orderedTaskExecutor.submit(actorIdx(), ()-> {
                     if (transmit(bytes)) {
-                        totalDelayInMs += System.currentTimeMillis() - beginInMs;
+                        totalDelayInMs += System.currentTimeMillis() - timestampInMs;
                         // transmit success
                         if ((transmitCount() % 50) == 0) {
                             transmit_timer.record(totalDelayInMs, TimeUnit.MILLISECONDS);
@@ -205,7 +196,7 @@ public class FsActorBuilder implements WsHandlerBuilder {
     private Timer playback_timer;
     private Timer transmit_timer;
 
-    final WSCommandRegistry<FsActor> cmds = new WSCommandRegistry<FsActor>()
+    private final WSCommandRegistry<FsActor> cmds = new WSCommandRegistry<FsActor>()
             .register(VOFSPlaybackStarted.TYPE,"FSPlaybackStarted",
                       ctx->ctx.actor().notifyFSPlaybackStarted(ctx.payload(), playback_timer))
             .register(VOFSPlaybackStopped.TYPE,"FSPlaybackStopped",

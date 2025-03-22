@@ -1,16 +1,15 @@
 package com.yulore.medhub.ws.builder;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.yulore.bst.*;
 import com.yulore.medhub.service.BSTService;
 import com.yulore.medhub.session.StreamSession;
 import com.yulore.medhub.vo.*;
 import com.yulore.medhub.vo.cmd.VOSOpenStream;
+import com.yulore.medhub.ws.WSCommandRegistry;
 import com.yulore.medhub.ws.WsHandler;
 import com.yulore.medhub.ws.WsHandlerBuilder;
 import com.yulore.medhub.ws.actor.StreamActor;
 import com.yulore.metric.MetricCustomized;
-import com.yulore.util.ExceptionUtil;
 import com.yulore.util.VarsUtil;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Timer;
@@ -44,33 +43,26 @@ public class ReadStreamBuilder extends BaseStreamBuilder implements WsHandlerBui
         seek_timer = timerProvider.getObject("rms.ro.duration", MetricCustomized.builder().tags(List.of("op", "seek")).build());
         read_timer = timerProvider.getObject("rms.ro.duration", MetricCustomized.builder().tags(List.of("op", "read")).build());
         tell_timer = timerProvider.getObject("rms.ro.duration", MetricCustomized.builder().tags(List.of("op", "tell")).build());
-
-        cmds.register(VOSOpenStream.TYPE, "OpenStream",
-                ctx->handleOpenStreamCommand(ctx.payload(), ctx.ws(), ctx.actor(), ctx.sample()));
         gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", MetricCustomized.builder().tags(List.of("actor", "rrms")).build());
 
         executor = executorProvider.apply("wsmsg");
+
+        cmds.register(VOSOpenStream.TYPE, "OpenStream",
+                ctx->handleOpenStreamCommand(ctx.payload(), ctx.ws(), ctx.actor(), ctx.sample()));
     }
 
     @Override
     public WsHandler build(final String prefix, final WebSocket webSocket, final ClientHandshake handshake) {
 
         final StreamActor actor = new StreamActor() {
+
             @Override
-            public void onMessage(final WebSocket webSocket, final String message) {
-                final Timer.Sample sample = Timer.start();
-                executor.execute(()-> {
-                    try {
-                        cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket, sample);
-                    } catch (JsonProcessingException ex) {
-                        log.error("handleCommand {}: {}, an error occurred when parseAsJson: {}",
-                                webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
-                    }
-                });
+            protected WSCommandRegistry<StreamActor> commandRegistry() {
+                return cmds;
             }
 
             @Override
-            public void onMessage(final WebSocket webSocket, final ByteBuffer bytes) {
+            public void onMessage(final WebSocket webSocket, final ByteBuffer bytes, final long timestampInMs) {
                 log.error("[{}]: Unsupported write command for readonly stream", _ss.sessionId());
             }
 

@@ -41,7 +41,7 @@ class ASRServiceImpl implements ASRService {
     private Timer txasr_started_timer;
 
     @Override
-    public CompletionStage<Timer>  startTranscription(final ASRActor actor, final VOStartTranscription vo, final WebSocket webSocket) {
+    public CompletionStage<Timer>  startTranscription(final ASRActor<?> actor, final VOStartTranscription vo, final WebSocket webSocket) {
         if (!actor.startTranscription()) {
             log.warn("StartTranscription: {}'s Session startTranscription already, ignore", webSocket.getRemoteSocketAddress());
             return CompletableFuture.failedStage(new RuntimeException("startTranscription already"));
@@ -190,7 +190,7 @@ class ASRServiceImpl implements ASRService {
         }
     }
 
-    private CompletionStage<Void> startWithTxasr(final WebSocket webSocket, final ASRActor actor, final VOStartTranscription vo) {
+    private CompletionStage<Void> startWithTxasr(final WebSocket webSocket, final ASRActor<?> actor, final VOStartTranscription vo) {
         final long startConnectingInMs = System.currentTimeMillis();
         return selectTxASRAgentAsync().thenCompose(agent -> {
             final CompletableFuture<Void> completableFuture = new CompletableFuture<>();
@@ -350,7 +350,7 @@ class ASRServiceImpl implements ASRService {
         };
     }
 
-    private CompletionStage<Void> startWithAliasr(final WebSocket webSocket, final ASRActor actor, final VOStartTranscription vo) {
+    private CompletionStage<Void> startWithAliasr(final WebSocket webSocket, final ASRActor<?> actor, final VOStartTranscription vo) {
         final long startConnectingInMs = System.currentTimeMillis();
         return selectASRAgentAsync().thenCompose( agent -> {
             final CompletableFuture<Void> completableFuture = new CompletableFuture<>();

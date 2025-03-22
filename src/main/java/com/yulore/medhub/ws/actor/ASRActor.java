@@ -23,7 +23,7 @@ import java.util.function.Consumer;
 
 @ToString
 @Slf4j
-public class ASRActor {
+public abstract class ASRActor<ACTOR extends CommandHandler<?>> extends CommandHandler<ACTOR> {
     private static final AtomicInteger currentCounter = new AtomicInteger(0);
 
     @Builder

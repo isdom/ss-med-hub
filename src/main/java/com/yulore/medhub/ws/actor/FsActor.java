@@ -29,7 +29,7 @@ import java.util.function.Supplier;
 
 @ToString
 @Slf4j
-public abstract class FsActor extends ASRActor implements WsHandler {
+public abstract class FsActor extends ASRActor<FsActor> implements WsHandler {
     static final long CHECK_IDLE_TIMEOUT = 5000L; // 5 seconds to report check idle to script engine
     final static String PLAYBACK_ID_NAME="vars_playback_id";
 
