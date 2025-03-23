@@ -1,6 +1,7 @@
 package com.yulore.util;
 
 import com.yulore.metric.MetricCustomized;
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.RequiredArgsConstructor;
@@ -22,8 +23,10 @@ public class OrderedTaskProcessor implements OrderedTaskExecutor {
     private static final int POOL_SIZE = Runtime.getRuntime().availableProcessors() * 2;
 
     private final ExecutorService[] workers = new ExecutorService[POOL_SIZE];
+    private final Counter[] taskCounters = new Counter[POOL_SIZE];
 
     private final ObjectProvider<Gauge> gaugeProvider;
+    private final ObjectProvider<Counter> counterProvider;
 
     @PostConstruct
     private void init() {
@@ -36,6 +39,8 @@ public class OrderedTaskProcessor implements OrderedTaskExecutor {
             gaugeProvider.getObject((Supplier<Number>)queue::size, "mh.transmit.qsize",
                     MetricCustomized.builder().tags(List.of("idx", Integer.toString(i))).build());
             workers[i] = executor;
+            taskCounters[i] = counterProvider.getObject("mh.transmit.cnt",
+                    MetricCustomized.builder().tags(List.of("idx", Integer.toString(i))).build());
             log.info("create ASR-Transmit-{}", i);
         }
     }
@@ -48,7 +53,9 @@ public class OrderedTaskProcessor implements OrderedTaskExecutor {
     }
 
     @Override
-    public void submit(final int ownerIdx, final Runnable task) {
-        workers[ownerIdx % POOL_SIZE].submit(task);
+    public void submit(final int id, final Runnable task) {
+        int idx = id % POOL_SIZE;
+        workers[idx].submit(task);
+        taskCounters[idx].increment();
     }
 }
