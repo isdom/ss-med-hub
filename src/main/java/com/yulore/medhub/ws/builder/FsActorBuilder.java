@@ -2,7 +2,7 @@ package com.yulore.medhub.ws.builder;
 
 import com.yulore.medhub.api.ScriptApi;
 import com.yulore.medhub.service.ASRService;
-import com.yulore.util.OrderedTaskExecutor;
+import com.yulore.util.OrderedExecutor;
 import com.yulore.medhub.vo.WSCommandVO;
 import com.yulore.medhub.vo.cmd.*;
 import com.yulore.medhub.ws.HandlerUrlBuilder;
@@ -124,7 +124,7 @@ public class FsActorBuilder implements WsHandlerBuilder {
 
             @Override
             public void onMessage(final WebSocket webSocket, final ByteBuffer bytes, final long timestampInMs) {
-                orderedTaskExecutor.submit(actorIdx(), ()-> {
+                orderedExecutor.submit(actorIdx(), ()-> {
                     if (transmit(bytes)) {
                         totalDelayInMs += System.currentTimeMillis() - timestampInMs;
                         // transmit success
@@ -186,7 +186,7 @@ public class FsActorBuilder implements WsHandlerBuilder {
     private final ObjectProvider<HandlerUrlBuilder> urlProvider;
     private final Function<String, Executor> executorProvider;
     private final ASRService asrService;
-    private final OrderedTaskExecutor orderedTaskExecutor;
+    private final OrderedExecutor orderedExecutor;
     private final ObjectProvider<Timer> timerProvider;
     private final ObjectProvider<Gauge> gaugeProvider;
 

@@ -18,7 +18,7 @@ import java.util.function.Supplier;
 @Slf4j
 @RequiredArgsConstructor
 @Service
-public class OrderedTaskProcessor implements OrderedTaskExecutor {
+public class OrderedProcessor implements OrderedExecutor {
     // 使用连接ID的哈希绑定固定线程
     private static final int POOL_SIZE = Runtime.getRuntime().availableProcessors() * 2;
 
