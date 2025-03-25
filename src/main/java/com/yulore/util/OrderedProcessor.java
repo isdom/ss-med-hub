@@ -53,9 +53,14 @@ public class OrderedProcessor implements OrderedExecutor {
     }
 
     @Override
-    public void submit(final int id, final Runnable task) {
-        int idx = id % POOL_SIZE;
-        workers[idx].submit(task);
-        taskCounters[idx].increment();
+    public void submit(final int idx, final Runnable task) {
+        int order = idx % POOL_SIZE;
+        workers[order].submit(task);
+        taskCounters[order].increment();
+    }
+
+    @Override
+    public int idx2order(final int idx) {
+        return idx % POOL_SIZE;
     }
 }
