@@ -8,7 +8,6 @@ import com.google.common.hash.Hashing;
 import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.medhub.nls.TTSAgent;
 import com.yulore.medhub.nls.TTSTask;
-import com.yulore.util.ExceptionUtil;
 import com.yulore.util.VarsUtil;
 import lombok.extern.slf4j.Slf4j;
 
