@@ -8,6 +8,7 @@ import com.google.common.hash.Hashing;
 import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.medhub.nls.TTSAgent;
 import com.yulore.medhub.nls.TTSTask;
+import com.yulore.util.ExceptionUtil;
 import com.yulore.util.VarsUtil;
 import lombok.extern.slf4j.Slf4j;
 
@@ -20,7 +21,9 @@ import java.util.function.Supplier;
 public class TTSStreamTask implements BuildStreamTask {
     final HashFunction _MD5 = Hashing.md5();
 
-    public TTSStreamTask(final String path, final Supplier<CompletionStage<TTSAgent>> getTTSAgent, final Consumer<SpeechSynthesizer> onSynthesizer) {
+    public TTSStreamTask(final String path,
+                         final Supplier<CompletionStage<TTSAgent>> getTTSAgent,
+                         final Consumer<SpeechSynthesizer> onSynthesizer) {
         _getTTSAgent = getTTSAgent;
         _onSynthesizer = onSynthesizer;
 
@@ -102,21 +105,37 @@ public class TTSStreamTask implements BuildStreamTask {
                         }
 
                         if (_onSynthesizer != null) {
-                            _onSynthesizer.accept(synthesizer);
+                            try {
+                                _onSynthesizer.accept(synthesizer);
+                            } catch (Exception ex2) {
+                                log.warn("TTSStreamTask_onSynthesizer failed", ex2);
+                            }
                         }
                     },
                     (bytes) -> {
                         final byte[] bytesArray = new byte[bytes.remaining()];
                         bytes.get(bytesArray, 0, bytesArray.length);
-                        onPart.accept(bytesArray);
+                        try {
+                            onPart.accept(bytesArray);
+                        } catch (Exception ex2) {
+                            log.warn("TTSStreamTask_onPart failed", ex2);
+                        }
                         log.info("TTSStreamTask: {}: onData {} bytes", idx.incrementAndGet(), bytesArray.length);
                     },
                     (response)->{
-                        onCompleted.accept(true);
+                        try {
+                            onCompleted.accept(true);
+                        } catch (Exception ex2) {
+                            log.warn("TTSStreamTask_onCompleted failed", ex2);
+                        }
                         log.info("TTSStreamTask: gen wav stream cost={} ms", System.currentTimeMillis() - startInMs);
                     },
                     (response)-> {
-                        onCompleted.accept(false);
+                        try {
+                            onCompleted.accept(false);
+                        } catch (Exception ex2) {
+                            log.warn("TTSStreamTask_onCompleted failed", ex2);
+                        }
                         log.warn("tts failed: {}", response);
                     });
             task.start();
