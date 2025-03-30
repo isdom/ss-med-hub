@@ -125,7 +125,7 @@ public class TTSStreamTask implements BuildStreamTask {
                         try {
                             onCompleted.accept(true);
                         } catch (Exception ex2) {
-                            log.warn("TTSStreamTask_onCompleted failed", ex2);
+                            log.warn("TTSStreamTask_onCompleted(true) failed", ex2);
                         }
                         log.info("TTSStreamTask: gen wav stream cost={} ms", System.currentTimeMillis() - startInMs);
                     },
@@ -133,7 +133,7 @@ public class TTSStreamTask implements BuildStreamTask {
                         try {
                             onCompleted.accept(false);
                         } catch (Exception ex2) {
-                            log.warn("TTSStreamTask_onCompleted failed", ex2);
+                            log.warn("TTSStreamTask_onCompleted(false) failed", ex2);
                         }
                         log.warn("tts failed: {}", response);
                     });
