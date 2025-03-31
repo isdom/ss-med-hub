@@ -8,6 +8,7 @@ import com.google.common.hash.Hashing;
 import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.medhub.nls.TTSAgent;
 import com.yulore.medhub.nls.TTSTask;
+import com.yulore.util.ExceptionUtil;
 import com.yulore.util.VarsUtil;
 import lombok.extern.slf4j.Slf4j;
 
@@ -107,7 +108,7 @@ public class TTSStreamTask implements BuildStreamTask {
                             try {
                                 _onSynthesizer.accept(synthesizer);
                             } catch (Exception ex2) {
-                                log.warn("TTSStreamTask_onSynthesizer failed", ex2);
+                                log.warn("TTSStreamTask_onSynthesizer failed: {}", ExceptionUtil.exception2detail(ex2));
                             }
                         }
                     },
@@ -117,7 +118,7 @@ public class TTSStreamTask implements BuildStreamTask {
                         try {
                             onPart.accept(bytesArray);
                         } catch (Exception ex2) {
-                            log.warn("TTSStreamTask_onPart failed", ex2);
+                            log.warn("TTSStreamTask_onPart failed: {}", ExceptionUtil.exception2detail(ex2));
                         }
                         log.info("TTSStreamTask: {}: onData {} bytes", idx.incrementAndGet(), bytesArray.length);
                     },
@@ -125,7 +126,7 @@ public class TTSStreamTask implements BuildStreamTask {
                         try {
                             onCompleted.accept(true);
                         } catch (Exception ex2) {
-                            log.warn("TTSStreamTask_onCompleted(true) failed", ex2);
+                            log.warn("TTSStreamTask_onCompleted(true) failed: {}", ExceptionUtil.exception2detail(ex2));
                         }
                         log.info("TTSStreamTask: gen wav stream cost={} ms", System.currentTimeMillis() - startInMs);
                     },
@@ -133,7 +134,7 @@ public class TTSStreamTask implements BuildStreamTask {
                         try {
                             onCompleted.accept(false);
                         } catch (Exception ex2) {
-                            log.warn("TTSStreamTask_onCompleted(false) failed", ex2);
+                            log.warn("TTSStreamTask_onCompleted(false) failed: {}", ExceptionUtil.exception2detail(ex2));
                         }
                         log.warn("tts failed: {}", response);
                     });
