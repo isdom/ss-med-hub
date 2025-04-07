@@ -136,7 +136,7 @@ public class TTSStreamTask implements BuildStreamTask {
                         } catch (Exception ex2) {
                             log.warn("TTSStreamTask_onCompleted(false) failed: {}", ExceptionUtil.exception2detail(ex2));
                         }
-                        log.warn("tts failed: {}", response);
+                        log.warn("TTSStreamTask_onFail: {}", response);
                     });
             task.start();
         });
