@@ -50,7 +50,7 @@ public class LimitAgent<AGENT extends LimitAgent<?>> {
             }
             if (selected != null) {
                 final Runnable doComplete = () -> {
-                    log.info("select agent({}): {}/{}", agent.getName(), agent.getConnectingOrConnectedCount().get(), agent.getLimit());
+                    log.info("select {}({}): {}/{}", agent.getClass().getSimpleName(), agent.getName(), agent.getConnectingOrConnectedCount().get(), agent.getLimit());
                     resultFuture.complete((AGENT) selected); // 成功选择
                 };
                 if (null != executor) {
