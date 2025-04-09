@@ -230,6 +230,12 @@ public abstract class PoActor extends ASRActor<PoActor> implements WsHandler {
                     if (response.getData() != null) {
                         if (response.getData().getAi_content_id() != null && doPlayback(response.getData())) {
                             return;
+                        } else {
+                            log.info("[{}]: [{}]-[{}]: checkIdle: ai_reply {}, !NOT! doPlayback", _clientIp, _sessionId, _uuid, response);
+                            if (response.getData().getHangup() == 1) {
+                                // hangup call
+                                _doHangup.accept(this);
+                            }
                         }
                     } else {
                         log.info("[{}]: [{}]-[{}]: checkIdle: ai_reply {}, do nothing", _clientIp, _sessionId, _uuid, response);
@@ -389,7 +395,11 @@ public abstract class PoActor extends ASRActor<PoActor> implements WsHandler {
                 if (response.getData().getAi_content_id() != null && doPlayback(response.getData())) {
                     // _lastReply = response.getData();
                 } else {
-                    if (isAiSpeaking && _currentPlaybackPaused.compareAndSet(true, false) ) {
+                    log.info("[{}]: [{}]-[{}]: interactWithScriptEngine: ai_reply {}, !NOT! doPlayback", _clientIp, _sessionId, _uuid, response);
+                    if (response.getData().getHangup() == 1) {
+                        // hangup call
+                        _doHangup.accept(this);
+                    } else if (isAiSpeaking && _currentPlaybackPaused.compareAndSet(true, false) ) {
                         _sendEvent.accept("PCMResumePlayback", new PayloadPCMEvent(_currentPlaybackId.get(), ""));
                         log.info("[{}]: [{}]-[{}]: notifySentenceEnd: resume_current ({}) for ai_reply ({}) without_new_ai_playback",
                                 _clientIp, _sessionId, _uuid, _currentPlaybackId.get(), payload.getResult());
