@@ -192,25 +192,29 @@ public abstract class FsActor extends ASRActor<FsActor> implements WsHandler {
     @Override
     public boolean transcriptionStarted() {
         if (super.transcriptionStarted()) {
-            try {
-                final ApiResponse<AIReplyVO> response =
-                        _scriptApi.ai_reply(_sessionId, _welcome, null, 0, null, 0);
-                if (response.getData() != null) {
-                    if (doPlayback(response.getData())) {
-                        // _lastReply = response.getData();
-                    }
-                } else {
-                    _sendEvent.accept("FSHangup", new PayloadFSHangup(_uuid, _sessionId));
-                    log.warn("[{}]: transcriptionStarted: ai_reply({}), hangup", _sessionId, response);
-                }
-            } catch (final Exception ex) {
-                _sendEvent.accept("FSHangup", new PayloadFSHangup(_uuid, _sessionId));
-                log.warn("[{}]: transcriptionStarted: ai_reply error, hangup, detail: {}", _sessionId, ExceptionUtil.exception2detail(ex));
-            }
+            playWelcome();
             return true;
         } else {
             log.warn("[{}]: transcriptionStarted called already, ignore", _sessionId);
             return false;
+        }
+    }
+
+    private void playWelcome() {
+        try {
+            final ApiResponse<AIReplyVO> response =
+                    _scriptApi.ai_reply(_sessionId, _welcome, null, 0, null, 0);
+            if (response.getData() != null) {
+                if (doPlayback(response.getData())) {
+                    // _lastReply = response.getData();
+                }
+            } else {
+                _sendEvent.accept("FSHangup", new PayloadFSHangup(_uuid, _sessionId));
+                log.warn("[{}]: transcriptionStarted: ai_reply({}), hangup", _sessionId, response);
+            }
+        } catch (final Exception ex) {
+            _sendEvent.accept("FSHangup", new PayloadFSHangup(_uuid, _sessionId));
+            log.warn("[{}]: transcriptionStarted: ai_reply error, hangup, detail: {}", _sessionId, ExceptionUtil.exception2detail(ex));
         }
     }
 
