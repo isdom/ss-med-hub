@@ -207,6 +207,9 @@ public abstract class FsActor extends ASRActor<FsActor> implements WsHandler {
             if (response.getData() != null) {
                 if (doPlayback(response.getData())) {
                     // _lastReply = response.getData();
+                } else if (response.getData().getHangup() == 1) {
+                    _sendEvent.accept("FSHangup", new PayloadFSHangup(_uuid, _sessionId));
+                    log.info("[{}]: playWelcome: hangup ({}) for ai_reply ({})", _sessionId, _sessionId, response.getData());
                 }
             } else {
                 _sendEvent.accept("FSHangup", new PayloadFSHangup(_uuid, _sessionId));
