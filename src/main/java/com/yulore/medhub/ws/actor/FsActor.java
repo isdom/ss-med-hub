@@ -519,8 +519,6 @@ public abstract class FsActor extends ASRActor<FsActor> implements WsHandler {
     private final String _rms_wav_prefix;
     private final HandlerUrlBuilder _handlerUrlBuilder;
 
-    // private AIReplyVO _lastReply;
-
     private final AtomicReference<String> _currentPlaybackId = new AtomicReference<>(null);
     private final AtomicBoolean _currentPlaybackPaused = new AtomicBoolean(false);
     private final AtomicReference<Supplier<Long>> _currentPlaybackDuration = new AtomicReference<>(()->0L);
