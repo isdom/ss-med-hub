@@ -306,7 +306,7 @@ public abstract class FsActor extends ASRActor<FsActor> implements WsHandler {
         final String ai_content_id = Long.toString(replyVO.getAi_content_id());
         log.info("[{}]: doPlayback: {}", _sessionId, replyVO);
 
-        final String file = reply2file(replyVO,
+        final String file = reply2rms(replyVO,
                 ()->String.format("%s=%s,content_id=%s,vars_start_timestamp=%d,playback_idx=%d",
                 PLAYBACK_ID_NAME, newPlaybackId, ai_content_id, System.currentTimeMillis() * 1000L, 0),
                 newPlaybackId);
@@ -331,7 +331,7 @@ public abstract class FsActor extends ASRActor<FsActor> implements WsHandler {
         }
     }
 
-    private String reply2file(final AIReplyVO vo, final Supplier<String> vars, final String playback_id) {
+    private String reply2rms(final AIReplyVO vo, final Supplier<String> vars, final String playback_id) {
         if ("cp".equals(vo.getVoiceMode())) {
             return _rms_cp_prefix.replace("{cpvars}", tryExtractCVOS(vo))
                     .replace("{uuid}", _uuid)
