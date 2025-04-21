@@ -15,7 +15,7 @@ import java.io.StringWriter;
 public class MetricsPusher {
     private final PushGateway pushGateway;
     private final PrometheusMeterRegistry registry;
-    private final String jobName = "medhub_tasks";
+    private final String jobName = "default";
 
     public MetricsPusher(final PushGateway pushGateway, final PrometheusMeterRegistry registry) {
         this.pushGateway = pushGateway;
