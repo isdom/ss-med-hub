@@ -9,7 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
 
 @Slf4j
-abstract class CommandHandler<ACTOR extends CommandHandler<?>> implements WsHandler {
+public abstract class CommandHandler<ACTOR extends CommandHandler<?>> implements WsHandler {
     @Override
     public void onMessage(final WebSocket webSocket, final String message, final Timer.Sample sample) {
         try {

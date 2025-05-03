@@ -1,8 +1,12 @@
 package com.yulore.medhub.ws.builder;
 
 import com.yulore.medhub.service.ASRService;
+import com.yulore.medhub.vo.cmd.AFSAddLocal;
+import com.yulore.medhub.vo.cmd.AFSRemoveLocal;
+import com.yulore.medhub.ws.WSCommandRegistry;
 import com.yulore.medhub.ws.WsHandler;
 import com.yulore.medhub.ws.WsHandlerBuilder;
+import com.yulore.medhub.ws.actor.CommandHandler;
 import com.yulore.metric.MetricCustomized;
 import com.yulore.util.OrderedExecutor;
 import io.micrometer.core.instrument.Gauge;
@@ -29,6 +33,11 @@ import java.util.function.Supplier;
 @ConditionalOnProperty(prefix = "feature", name = "afs_io", havingValue = "enabled")
 public class AfsIOBuilder implements WsHandlerBuilder {
 
+    private final WSCommandRegistry<AfsIO> cmds = new WSCommandRegistry<AfsIO>()
+            .register(AFSAddLocal.TYPE,"AddLocal", ctx->ctx.actor().addLocal(ctx.payload()))
+            .register(AFSRemoveLocal.TYPE,"RemoveLocal", ctx->ctx.actor().removeLocal(ctx.payload()))
+            ;
+
     @PostConstruct
     private void init() {
         //playback_timer = timerProvider.getObject("mh.playback.delay", MetricCustomized.builder().tags(List.of("actor", "fsio")).build());
@@ -40,10 +49,25 @@ public class AfsIOBuilder implements WsHandlerBuilder {
         executor = executorProvider.apply("wsmsg");
     }
 
+    abstract class AfsIO extends CommandHandler<AfsIO> {
+        @Override
+        protected WSCommandRegistry<AfsIO> commandRegistry() {
+            return cmds;
+        }
+
+        public void addLocal(final AFSAddLocal payload) {
+            log.info("AfsIO: addLocal {}", payload.localIdx);
+        }
+
+        public void removeLocal(final AFSRemoveLocal payload) {
+            log.info("AfsIO: removeLocal {}", payload.localIdx);
+        }
+    }
+
     @Override
     public WsHandler build(final String prefix, final WebSocket webSocket, final ClientHandshake handshake) {
         _wscount.incrementAndGet();
-        final WsHandler handler = new WsHandler() {
+        final WsHandler handler = new AfsIO() {
             @Override
             public void onMessage(final WebSocket webSocket, final ByteBuffer buffer, final long recvdInMs) {
                 final byte[] byte4 = new byte[8];
@@ -82,11 +106,6 @@ public class AfsIOBuilder implements WsHandlerBuilder {
             public void onClose(final WebSocket webSocket) {
                 _wscount.decrementAndGet();
                 log.info("afs_io onClose {}: ", webSocket);
-            }
-
-            @Override
-            public void onMessage(final WebSocket webSocket, final String message, final Timer.Sample sample) {
-                log.info("afs_io recv wsmsg {}: ", message);
             }
         };
 
