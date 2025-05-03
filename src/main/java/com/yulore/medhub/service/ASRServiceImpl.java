@@ -93,7 +93,7 @@ class ASRServiceImpl implements ASRService {
     }
 
     @PreDestroy
-    public void release() throws InterruptedException {
+    public void release() {
         _nlsClient.shutdown();
         _txClient.shutdown();
 
@@ -456,7 +456,7 @@ class ASRServiceImpl implements ASRService {
         return transcriber;
     }
 
-    private SpeechTranscriberListener buildTranscriberListener(final ASRActor actor,
+    private SpeechTranscriberListener buildTranscriberListener(final ASRActor<?> actor,
                                                                final CompletableFuture<Void> completableFuture,
                                                                final ASRAgent account,
                                                                final String sessionId,
@@ -538,6 +538,11 @@ class ASRServiceImpl implements ASRService {
                 actor.notifySpeechTranscriberFail();
             }
         };
+    }
+
+    @Override
+    public CompletionStage<ASROperator> startTranscription(final ASRConsumer consumer) {
+        return new CompletableFuture<>();
     }
 
     @Value("${nls.url}")
