@@ -20,6 +20,7 @@ import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
+import org.jetbrains.annotations.NotNull;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,6 +31,9 @@ import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 @Slf4j
@@ -542,7 +546,166 @@ class ASRServiceImpl implements ASRService {
 
     @Override
     public CompletionStage<ASROperator> startTranscription(final ASRConsumer consumer) {
-        return new CompletableFuture<>();
+        return startWithAliasr(consumer);
+    }
+
+    private CompletionStage<ASROperator> startWithAliasr(final ASRConsumer consumer /*, final VOStartTranscription vo*/) {
+        final long startConnectingInMs = System.currentTimeMillis();
+        return selectASRAgentAsync().thenCompose( agent -> agent2operator(consumer, agent, startConnectingInMs));
+    }
+
+    private CompletableFuture<ASROperator> agent2operator(final ASRConsumer consumer, final ASRAgent agent, final long startConnectingInMs) {
+        final CompletableFuture<ASROperator> completableFuture = new CompletableFuture<>();
+
+        try {
+            final AtomicBoolean isConnected = new AtomicBoolean(false);
+            final AtomicReference<SpeechTranscriber> transcriberRef = new AtomicReference<>(null);
+
+            final SpeechTranscriber transcriber = buildSpeechTranscriber(
+                    agent, buildTranscriberListener(consumer, response -> {
+                        //task_id是调用方和服务端通信的唯一标识，遇到问题时，需要提供此task_id。
+                        log.info("onTranscriberStart: task_id={}, name={}, status={}, cost={} ms",
+                                response.getTaskId(),
+                                response.getName(),
+                                response.getStatus(),
+                                System.currentTimeMillis() - startConnectingInMs);
+                        if (isConnected.compareAndSet(false, true)) {
+                            agent.incConnected();
+                        }
+                        completableFuture.complete(createASROperator(agent, transcriberRef.get(), isConnected));
+                    }));
+
+            transcriberRef.set(transcriber);
+
+            /*
+            if (vo.speech_noise_threshold != null) {
+                // ref: https://help.aliyun.com/zh/isi/developer-reference/websocket#sectiondiv-rz2-i36-2gv
+                transcriber.addCustomedParam("speech_noise_threshold", Float.parseFloat(vo.speech_noise_threshold));
+            }
+            */
+
+            transcriber.start();
+        } catch (Exception ex) {
+            log.error("startWithAliasr failed", ex);
+            completableFuture.completeExceptionally(ex);
+        }
+        return completableFuture;
+    }
+
+    @NotNull
+    private ASROperator createASROperator(final ASRAgent agent, final SpeechTranscriber transcriber, final AtomicBoolean isConnected) {
+        final AtomicBoolean isClosed = new AtomicBoolean(false);
+        return new ASROperator() {
+            @Override
+            public boolean transmit(final byte[] data) {
+                try {
+                    transcriber.send(data);
+                    return true;
+                } catch (Exception ex) {
+                    log.warn("ASR transmit failed", ex);
+                    return false;
+                }
+            }
+
+            @Override
+            public void close() {
+                if (isClosed.compareAndSet(false, true)) {
+                    try {
+                        try {
+                            //通知服务端语音数据发送完毕，等待服务端处理完成。
+                            long now = System.currentTimeMillis();
+                            log.info("transcriber wait for complete");
+                            transcriber.stop();
+                            log.info("transcriber stop() latency : {} ms", System.currentTimeMillis() - now);
+                        } catch (final Exception ex2) {
+                            log.warn("transcriber.stop() failed", ex2);
+                        }
+
+                        transcriber.close();
+
+                        if (isConnected.get()) {
+                            // 对于已经标记了 TranscriptionStarted 的会话, 将其使用的 ASR Account 已连接通道减少一
+                            agent.decConnected();
+                        }
+                    } finally {
+                        agent.decConnectionAsync().whenComplete((current, ex2) -> {
+                            log.info("release asr({}): {}/{}", agent.getName(), current, agent.getLimit());
+                        });
+                    }
+                } else {
+                    log.warn("asrOperator:{} has already closed", this);
+                }
+            }
+        };
+    }
+
+    private SpeechTranscriberListener buildTranscriberListener(final ASRConsumer consumer,
+                                                               final Consumer<SpeechTranscriberResponse> onTranscriberStart
+                                                               ) {
+        return new SpeechTranscriberListener() {
+            @Override
+            public void onTranscriberStart(final SpeechTranscriberResponse response) {
+                onTranscriberStart.accept(response);
+            }
+
+            @Override
+            public void onSentenceBegin(final SpeechTranscriberResponse response) {
+                log.info("onSentenceBegin: task_id={}, name={}, status={}",
+                        response.getTaskId(), response.getName(), response.getStatus());
+                consumer.onSentenceBegin(new PayloadSentenceBegin(response.getTransSentenceIndex(), response.getTransSentenceTime()));
+            }
+
+            @Override
+            public void onSentenceEnd(final SpeechTranscriberResponse response) {
+                log.info("onSentenceEnd: task_id={}, name={}, status={}, index={}, result={}, confidence={}, begin_time={}, time={}",
+                        response.getTaskId(),
+                        response.getName(),
+                        response.getStatus(),
+                        response.getTransSentenceIndex(),
+                        response.getTransSentenceText(),
+                        response.getConfidence(),
+                        response.getSentenceBeginTime(),
+                        response.getTransSentenceTime());
+                consumer.onSentenceEnd(
+                        new PayloadSentenceEnd(response.getTransSentenceIndex(),
+                                response.getTransSentenceTime(),
+                                response.getSentenceBeginTime(),
+                                response.getTransSentenceText(),
+                                response.getConfidence()));
+            }
+
+            @Override
+            public void onTranscriptionResultChange(final SpeechTranscriberResponse response) {
+                log.info("onTranscriptionResultChange: task_id={}, name={}, status={}, index={}, result={}, time={}",
+                        response.getTaskId(),
+                        response.getName(),
+                        response.getStatus(),
+                        response.getTransSentenceIndex(),
+                        response.getTransSentenceText(),
+                        response.getTransSentenceTime());
+                consumer.onTranscriptionResultChanged(
+                        new PayloadTranscriptionResultChanged(response.getTransSentenceIndex(),
+                                response.getTransSentenceTime(),
+                                response.getTransSentenceText()));
+            }
+
+            @Override
+            public void onTranscriptionComplete(final SpeechTranscriberResponse response) {
+                log.info("onTranscriptionComplete: task_id={}, name={}, status={}",
+                        response.getTaskId(),
+                        response.getName(),
+                        response.getStatus());
+            }
+
+            @Override
+            public void onFail(final SpeechTranscriberResponse response) {
+                log.warn("onFail: task_id={}, status={}, status_text={}",
+                        response.getTaskId(),
+                        response.getStatus(),
+                        response.getStatusText());
+                consumer.onTranscriberFail();
+            }
+        };
     }
 
     @Value("${nls.url}")
