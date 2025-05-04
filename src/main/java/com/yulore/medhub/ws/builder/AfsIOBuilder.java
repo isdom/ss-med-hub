@@ -1,5 +1,6 @@
 package com.yulore.medhub.ws.builder;
 
+import com.yulore.medhub.vo.WSEventVO;
 import com.yulore.medhub.vo.cmd.AFSAddLocal;
 import com.yulore.medhub.vo.cmd.AFSRemoveLocal;
 import com.yulore.medhub.ws.WSCommandRegistry;
@@ -26,6 +27,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -36,7 +39,7 @@ import java.util.function.Supplier;
 public class AfsIOBuilder implements WsHandlerBuilder {
 
     private final WSCommandRegistry<AfsIO> cmds = new WSCommandRegistry<AfsIO>()
-            .register(AFSAddLocal.TYPE,"AddLocal", ctx->ctx.actor().addLocal(ctx.payload()))
+            .register(AFSAddLocal.TYPE,"AddLocal", ctx->ctx.actor().addLocal(ctx.payload(), ctx.ws()))
             .register(AFSRemoveLocal.TYPE,"RemoveLocal", ctx->ctx.actor().removeLocal(ctx.payload()))
             ;
 
@@ -57,9 +60,25 @@ public class AfsIOBuilder implements WsHandlerBuilder {
             return cmds;
         }
 
-        public void addLocal(final AFSAddLocal payload) {
+        public void addLocal(final AFSAddLocal payload, final WebSocket ws) {
             log.info("AfsIO => addLocal: {}", payload);
-            final var actor = actorProvider.getObject(payload);
+            final var actor = actorProvider.getObject(new AfsActor.Context() {
+                public int localIdx() {
+                    return payload.localIdx;
+                }
+                public String uuid() {
+                    return payload.uuid;
+                }
+                public String sessionId() {
+                    return payload.sessionId;
+                }
+                public String welcome() {
+                    return payload.welcome;
+                }
+               public BiConsumer<String, Object> sendEvent() {
+                    return (name,obj)-> WSEventVO.sendEvent(ws, name, obj);
+                }
+            });
             idx2actor.put(payload.localIdx, actor);
             actor.startTranscription();
         }
@@ -85,7 +104,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
         final WsHandler handler = new AfsIO() {
             @Override
             public void onMessage(final WebSocket webSocket, final ByteBuffer buffer, final long recvdInMs) {
-                final byte[] byte4 = new byte[8];
+                final byte[] byte4 = new byte[4];
                 buffer.get(byte4, 0, 4);
                 // 将小端字节序转换为 int
                 final int localIdx =
@@ -93,13 +112,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                         ((byte4[2] & 0xFF) << 16) |
                         ((byte4[1] & 0xFF) << 8)  |
                         (byte4[0] & 0xFF);          // 最低有效字节（小端的第一个字节）
-                orderedExecutor.submit(localIdx, ()->{
-                    actorOf(localIdx).transmit(buffer, recvdInMs);
-//                    final var ctx = idx2actor.get(localIdx);
-//                    if (ctx != null) {
-//                        ctx.transmit(buffer, recvdInMs);
-//                    }
-                });
+                orderedExecutor.submit(localIdx, ()->actorOf(localIdx).transmit(buffer, recvdInMs));
             }
 
             @Override

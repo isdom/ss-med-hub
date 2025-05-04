@@ -7,7 +7,6 @@ import com.yulore.medhub.service.ASRConsumer;
 import com.yulore.medhub.service.ASROperator;
 import com.yulore.medhub.service.ASRService;
 import com.yulore.medhub.vo.*;
-import com.yulore.medhub.vo.cmd.AFSAddLocal;
 import com.yulore.util.ExceptionUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,6 +19,7 @@ import java.nio.ByteBuffer;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 
 import static org.springframework.beans.factory.config.ConfigurableBeanFactory.SCOPE_PROTOTYPE;
 
@@ -27,17 +27,26 @@ import static org.springframework.beans.factory.config.ConfigurableBeanFactory.S
 @Component
 @Scope(SCOPE_PROTOTYPE)
 public class AfsActor {
-    public AfsActor(final AFSAddLocal payload) {
-        localIdx = payload.localIdx;
-        uuid = payload.uuid;
-        sessionId = payload.sessionId;
-        welcome = payload.welcome;
+    public interface Context {
+        int localIdx();
+        String uuid();
+        String sessionId();
+        String welcome();
+        BiConsumer<String, Object> sendEvent();
+    }
+    public AfsActor(final Context ctx) {
+        this.localIdx = ctx.localIdx();
+        this.uuid = ctx.uuid();
+        this.sessionId = ctx.sessionId();
+        this.welcome = ctx.welcome();
+        this.sendEvent = ctx.sendEvent();
     }
 
     private final int localIdx;
     private final String uuid;
     private final String sessionId;
     private final String welcome;
+    private final BiConsumer<String, Object> sendEvent;
 
     @Autowired
     private ASRService _asrService;
@@ -143,29 +152,31 @@ public class AfsActor {
     }
 
     public void transmit(final ByteBuffer buffer, final long recvdInMs) {
-        final byte[] byte8 = new byte[8];
-        buffer.get(byte8, 0, 8);
-        // 将小端字节序转换为 long
-        final long startInMss =
-                ((byte8[7] & 0xFFL) << 56) |  // 最高有效字节（小端的最后一个字节）
-                        ((byte8[5] & 0xFFL) << 40) |
-                        ((byte8[6] & 0xFFL) << 48) |
-                        ((byte8[4] & 0xFFL) << 32) |
-                        ((byte8[3] & 0xFFL) << 24) |
-                        ((byte8[2] & 0xFFL) << 16) |
-                        ((byte8[1] & 0xFFL) << 8)  |
-                        (byte8[0] & 0xFFL);          // 最低有效字节（小端的第一个字节）
+        if (!isClosed.get()) {
+            final byte[] byte8 = new byte[8];
+            buffer.get(byte8);
+            // 将小端字节序转换为 long
+            final long startInMss =
+                    ((byte8[7] & 0xFFL) << 56) |  // 最高有效字节（小端的最后一个字节）
+                            ((byte8[5] & 0xFFL) << 40) |
+                            ((byte8[6] & 0xFFL) << 48) |
+                            ((byte8[4] & 0xFFL) << 32) |
+                            ((byte8[3] & 0xFFL) << 24) |
+                            ((byte8[2] & 0xFFL) << 16) |
+                            ((byte8[1] & 0xFFL) << 8)  |
+                            (byte8[0] & 0xFFL);          // 最低有效字节（小端的第一个字节）
 
-        final var operator = opRef.get();
-        if (operator != null) {
-            final byte[] pcm = new byte[buffer.remaining()];
-            buffer.get(pcm);
-            operator.transmit(pcm);
+            final var operator = opRef.get();
+            if (operator != null) {
+                final byte[] pcm = new byte[buffer.remaining()];
+                buffer.get(pcm);
+                operator.transmit(pcm);
+            }
+
+            final long nowInMs = System.currentTimeMillis();
+            log.info("afs_io => localIdx: {}/recvd delay: {} ms/process delay: {} ms",
+                    localIdx, recvdInMs - startInMss / 1000L, nowInMs - startInMss / 1000L);
         }
-
-        final long nowInMs = System.currentTimeMillis();
-        log.info("afs_io => localIdx: {}/recvd delay: {} ms/process delay: {} ms",
-                localIdx, recvdInMs - startInMss / 1000L, nowInMs - startInMss / 1000L);
     }
 
     public void close() {
