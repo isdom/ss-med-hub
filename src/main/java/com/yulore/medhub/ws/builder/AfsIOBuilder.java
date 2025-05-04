@@ -65,11 +65,11 @@ public class AfsIOBuilder implements WsHandlerBuilder {
         }
 
         public void removeLocal(final AFSRemoveLocal payload) {
-            log.info("AfsIO: removeLocal {}", payload.localIdx);
             final var actor = idx2actor.remove(payload.localIdx);
             if (actor != null) {
                 actor.close();
             }
+            log.info("AfsIO: removeLocal {}", payload.localIdx);
         }
 
         AfsActor actorOf(final int localIdx) {
