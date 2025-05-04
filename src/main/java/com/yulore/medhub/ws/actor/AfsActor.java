@@ -18,6 +18,7 @@ import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
 import java.nio.ByteBuffer;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.springframework.beans.factory.config.ConfigurableBeanFactory.SCOPE_PROTOTYPE;
@@ -45,6 +46,7 @@ public class AfsActor {
     private ScriptApi _scriptApi;
 
     private final AtomicReference<ASROperator> opRef = new AtomicReference<>(null);
+    private final AtomicBoolean isClosed = new AtomicBoolean(false);
 
     @PostConstruct
     private void playWelcome() {
@@ -60,7 +62,7 @@ public class AfsActor {
                 }
             } else {
 //                _sendEvent.accept("FSHangup", new PayloadFSHangup(_uuid, _sessionId));
-//                log.warn("[{}]: transcriptionStarted: ai_reply({}), hangup", _sessionId, response);
+//                log.warn("[{}]: playWelcome: ai_reply({}), hangup", _sessionId, response);
             }
         } catch (final Exception ex) {
 //            _sendEvent.accept("FSHangup", new PayloadFSHangup(_uuid, _sessionId));
@@ -129,6 +131,13 @@ public class AfsActor {
                 log.warn("startTranscription failed", ex);
             } else {
                 opRef.set(operator);
+                if (isClosed.get()) {
+                    // means close() method has been called
+                    final var op = opRef.getAndSet(null);
+                    if (op != null) { // means when close() called, operator !NOT! set yet
+                        op.close();
+                    }
+                }
             }
         });
     }
@@ -160,9 +169,11 @@ public class AfsActor {
     }
 
     public void close() {
-        final ASROperator operator = opRef.getAndSet(null);
-        if (null != operator) {
-            operator.close();
+        if (isClosed.compareAndSet(false, true)) {
+            final ASROperator operator = opRef.getAndSet(null);
+            if (null != operator) {
+                operator.close();
+            }
         }
     }
 }
