@@ -13,4 +13,7 @@ public class AFSAddLocal {
     public static final TypeReference<WSCommandVO<AFSAddLocal>> TYPE = new TypeReference<>() {};
 
     public int localIdx;
+    public String uuid;
+    public String sessionId;
+    public String welcome;
 }

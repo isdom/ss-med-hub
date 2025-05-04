@@ -1,16 +1,11 @@
 package com.yulore.medhub.ws.builder;
 
-import com.yulore.medhub.service.ASRConsumer;
-import com.yulore.medhub.service.ASROperator;
-import com.yulore.medhub.service.ASRService;
-import com.yulore.medhub.vo.PayloadSentenceBegin;
-import com.yulore.medhub.vo.PayloadSentenceEnd;
-import com.yulore.medhub.vo.PayloadTranscriptionResultChanged;
 import com.yulore.medhub.vo.cmd.AFSAddLocal;
 import com.yulore.medhub.vo.cmd.AFSRemoveLocal;
 import com.yulore.medhub.ws.WSCommandRegistry;
 import com.yulore.medhub.ws.WsHandler;
 import com.yulore.medhub.ws.WsHandlerBuilder;
+import com.yulore.medhub.ws.actor.AfsActor;
 import com.yulore.medhub.ws.actor.CommandHandler;
 import com.yulore.metric.MetricCustomized;
 import com.yulore.util.OrderedExecutor;
@@ -31,7 +26,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -64,53 +58,25 @@ public class AfsIOBuilder implements WsHandlerBuilder {
         }
 
         public void addLocal(final AFSAddLocal payload) {
-            log.info("AfsIO: addLocal {}", payload.localIdx);
-            final var ctx = new AfsCtx();
-            idx2ctx.put(payload.localIdx, ctx);
-            asrService.startTranscription(new ASRConsumer() {
-                @Override
-                public void onSentenceBegin(PayloadSentenceBegin payload) {
-                }
-
-                @Override
-                public void onTranscriptionResultChanged(PayloadTranscriptionResultChanged payload) {
-                    log.info("afs_io => onTranscriptionResultChanged: {}", payload);
-                }
-
-                @Override
-                public void onSentenceEnd(PayloadSentenceEnd payload) {
-                    log.info("afs_io => onSentenceEnd: {}", payload);
-                }
-
-                @Override
-                public void onTranscriberFail() {
-                    log.warn("afs_io => onTranscriberFail");
-                }
-            }).whenComplete((operator, ex) -> {
-                if (ex != null) {
-                    log.warn("startTranscription failed", ex);
-                } else {
-                    ctx.asrRef.set(operator);
-                }
-            });
+            log.info("AfsIO => addLocal: {}", payload);
+            final var actor = actorProvider.getObject(payload);
+            idx2actor.put(payload.localIdx, actor);
+            actor.startTranscription();
         }
 
         public void removeLocal(final AFSRemoveLocal payload) {
             log.info("AfsIO: removeLocal {}", payload.localIdx);
-            final AfsCtx ctx = idx2ctx.remove(payload.localIdx);
-            if (ctx != null) {
-                final ASROperator operator = ctx.asrRef.get();
-                if (null != operator) {
-                    operator.close();
-                }
+            final var actor = idx2actor.remove(payload.localIdx);
+            if (actor != null) {
+                actor.close();
             }
         }
 
-        final ConcurrentMap<Integer, AfsCtx> idx2ctx = new ConcurrentHashMap<>();
-    }
+        AfsActor actorOf(final int localIdx) {
+            return idx2actor.get(localIdx);
+        }
 
-    class AfsCtx {
-        final AtomicReference<ASROperator> asrRef = new AtomicReference<>(null);
+        final ConcurrentMap<Integer, AfsActor> idx2actor = new ConcurrentHashMap<>();
     }
 
     @Override
@@ -127,34 +93,12 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                         ((byte4[2] & 0xFF) << 16) |
                         ((byte4[1] & 0xFF) << 8)  |
                         (byte4[0] & 0xFF);          // 最低有效字节（小端的第一个字节）
-
                 orderedExecutor.submit(localIdx, ()->{
-                    final byte[] byte8 = new byte[8];
-                    buffer.get(byte8, 0, 8);
-                    // 将小端字节序转换为 long
-                    final long startInMss =
-                            ((byte8[7] & 0xFFL) << 56) |  // 最高有效字节（小端的最后一个字节）
-                            ((byte8[5] & 0xFFL) << 40) |
-                            ((byte8[6] & 0xFFL) << 48) |
-                            ((byte8[4] & 0xFFL) << 32) |
-                            ((byte8[3] & 0xFFL) << 24) |
-                            ((byte8[2] & 0xFFL) << 16) |
-                            ((byte8[1] & 0xFFL) << 8)  |
-                            (byte8[0] & 0xFFL);          // 最低有效字节（小端的第一个字节）
-
-                    final var ctx = idx2ctx.get(localIdx);
-                    if (ctx != null) {
-                        final var operator = ctx.asrRef.get();
-                        if (operator != null) {
-                            final byte[] pcm = new byte[buffer.remaining()];
-                            buffer.get(pcm);
-                            operator.transmit(pcm);
-                        }
-                    }
-
-                    final long nowInMs = System.currentTimeMillis();
-                    log.info("afs_io => localIdx: {}/recvd delay: {} ms/process delay: {} ms",
-                            localIdx, recvdInMs - startInMss / 1000L, nowInMs - startInMss / 1000L);
+                    actorOf(localIdx).transmit(buffer, recvdInMs);
+//                    final var ctx = idx2actor.get(localIdx);
+//                    if (ctx != null) {
+//                        ctx.transmit(buffer, recvdInMs);
+//                    }
                 });
             }
 
@@ -174,8 +118,9 @@ public class AfsIOBuilder implements WsHandlerBuilder {
         return handler;
     }
 
+
+    private final ObjectProvider<AfsActor> actorProvider;
     private final Function<String, Executor> executorProvider;
-    private final ASRService asrService;
     private final OrderedExecutor orderedExecutor;
     private final ObjectProvider<Timer> timerProvider;
     private final ObjectProvider<Gauge> gaugeProvider;

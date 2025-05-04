@@ -215,7 +215,7 @@ public abstract class FsActor extends ASRActor<FsActor> implements WsHandler {
             }
         } catch (final Exception ex) {
             _sendEvent.accept("FSHangup", new PayloadFSHangup(_uuid, _sessionId));
-            log.warn("[{}]: transcriptionStarted: ai_reply error, hangup, detail: {}", _sessionId, ExceptionUtil.exception2detail(ex));
+            log.warn("[{}]: playWelcome: ai_reply error, hangup, detail: {}", _sessionId, ExceptionUtil.exception2detail(ex));
         }
     }
 
