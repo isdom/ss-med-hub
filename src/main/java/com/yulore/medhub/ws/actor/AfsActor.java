@@ -121,7 +121,7 @@ public class AfsActor {
                     replyVO.getAi_content_id(),
                     replyVO.getCancel_on_speak(),
                     replyVO.getHangup() == 1);
-            sendEvent.accept("FSStartPlayback", // new PayloadFSStartPlayback(_uuid, newPlaybackId, ai_content_id, file)
+            sendEvent.accept("StartPlayback",
                     AFSStartPlaybackEvent.builder()
                             .localIdx(localIdx)
                             .playback_id(newPlaybackId)
