@@ -9,11 +9,8 @@ import lombok.ToString;
 @Data
 @ToString
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class AFSAddLocal {
-    public static final TypeReference<WSCommandVO<AFSAddLocal>> TYPE = new TypeReference<>() {};
+public class AFSRemoveLocalCommand {
+    public static final TypeReference<WSCommandVO<AFSRemoveLocalCommand>> TYPE = new TypeReference<>() {};
 
     public int localIdx;
-    public String uuid;
-    public String sessionId;
-    public String welcome;
 }

@@ -1,8 +1,13 @@
 package com.yulore.medhub.ws.builder;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mgnt.utils.StringUnicodeEncoderDecoder;
+import com.yulore.medhub.api.AIReplyVO;
 import com.yulore.medhub.vo.WSEventVO;
-import com.yulore.medhub.vo.cmd.AFSAddLocal;
-import com.yulore.medhub.vo.cmd.AFSRemoveLocal;
+import com.yulore.medhub.vo.cmd.AFSAddLocalCommand;
+import com.yulore.medhub.vo.cmd.AFSRemoveLocalCommand;
+import com.yulore.medhub.ws.HandlerUrlBuilder;
 import com.yulore.medhub.ws.WSCommandRegistry;
 import com.yulore.medhub.ws.WsHandler;
 import com.yulore.medhub.ws.WsHandlerBuilder;
@@ -17,6 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -28,7 +34,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -39,8 +45,8 @@ import java.util.function.Supplier;
 public class AfsIOBuilder implements WsHandlerBuilder {
 
     private final WSCommandRegistry<AfsIO> cmds = new WSCommandRegistry<AfsIO>()
-            .register(AFSAddLocal.TYPE,"AddLocal", ctx->ctx.actor().addLocal(ctx.payload(), ctx.ws()))
-            .register(AFSRemoveLocal.TYPE,"RemoveLocal", ctx->ctx.actor().removeLocal(ctx.payload()))
+            .register(AFSAddLocalCommand.TYPE,"AddLocal", ctx->ctx.actor().addLocal(ctx.payload(), ctx.ws()))
+            .register(AFSRemoveLocalCommand.TYPE,"RemoveLocal", ctx->ctx.actor().removeLocal(ctx.payload()))
             ;
 
     @PostConstruct
@@ -60,7 +66,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
             return cmds;
         }
 
-        public void addLocal(final AFSAddLocal payload, final WebSocket ws) {
+        public void addLocal(final AFSAddLocalCommand payload, final WebSocket ws) {
             log.info("AfsIO => addLocal: {}", payload);
             final var actor = actorProvider.getObject(new AfsActor.Context() {
                 public int localIdx() {
@@ -75,7 +81,10 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                 public String welcome() {
                     return payload.welcome;
                 }
-               public BiConsumer<String, Object> sendEvent() {
+                public BiFunction<AIReplyVO, Supplier<String>, String> reply2Rms() {
+                    return (reply, vars) -> reply2rms(payload.uuid, reply, vars);
+                }
+                public BiConsumer<String, Object> sendEvent() {
                     return (name,obj)-> WSEventVO.sendEvent(ws, name, obj);
                 }
             });
@@ -83,7 +92,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
             actor.startTranscription();
         }
 
-        public void removeLocal(final AFSRemoveLocal payload) {
+        public void removeLocal(final AFSRemoveLocalCommand payload) {
             final var actor = idx2actor.remove(payload.localIdx);
             if (actor != null) {
                 actor.close();
@@ -131,8 +140,57 @@ public class AfsIOBuilder implements WsHandlerBuilder {
         return handler;
     }
 
+    @Value("${rms.cp_prefix}")
+    private String _rms_cp_prefix;
+
+    @Value("${rms.tts_prefix}")
+    private String _rms_tts_prefix;
+
+    @Value("${rms.wav_prefix}")
+    private String _rms_wav_prefix;
+
+    private String reply2rms(final String uuid, final AIReplyVO vo, final Supplier<String> vars) {
+        if ("cp".equals(vo.getVoiceMode())) {
+            return _rms_cp_prefix.replace("{cpvars}", tryExtractCVOS(vo))
+                    .replace("{uuid}", uuid)
+                    .replace("{rrms}", urlProvider.getObject().get("read_rms"))
+                    .replace("{vars}", vars.get())
+                    + "cps.wav"
+                    ;
+        }
+
+        if ("tts".equals(vo.getVoiceMode())) {
+            return _rms_tts_prefix
+                    .replace("{uuid}", uuid)
+                    .replace("{rrms}", urlProvider.getObject().get("read_rms"))
+                    .replace("{vars}", String.format("text=%s,%s",
+                            StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(vo.getReply_content()),
+                            vars.get()))
+                    + "tts.wav"
+                    ;
+        }
+
+        if ("wav".equals(vo.getVoiceMode())) {
+            return _rms_wav_prefix
+                    .replace("{uuid}", uuid)
+                    .replace("{rrms}", urlProvider.getObject().get("read_rms"))
+                    .replace("{vars}", vars.get())
+                    + vo.getAi_speech_file();
+        }
+
+        return null;
+    }
+
+    private String tryExtractCVOS(final AIReplyVO vo) {
+        try {
+            return new ObjectMapper().writeValueAsString(vo.getCps());
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     private final ObjectProvider<AfsActor> actorProvider;
+    private final ObjectProvider<HandlerUrlBuilder> urlProvider;
     private final Function<String, Executor> executorProvider;
     private final OrderedExecutor orderedExecutor;
     private final ObjectProvider<Timer> timerProvider;
