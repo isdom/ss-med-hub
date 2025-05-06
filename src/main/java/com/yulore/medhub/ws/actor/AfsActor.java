@@ -52,6 +52,7 @@ public class AfsActor {
         BiFunction<AIReplyVO, Supplier<String>, String> reply2Rms();
         BiConsumer<String, Object> sendEvent();
     }
+
     public AfsActor(final Context ctx) {
         this.localIdx = ctx.localIdx();
         this.uuid = ctx.uuid();
@@ -78,83 +79,6 @@ public class AfsActor {
 
     private final AtomicReference<ASROperator> opRef = new AtomicReference<>(null);
     private final AtomicBoolean isClosed = new AtomicBoolean(false);
-
-    @PostConstruct
-    private void playWelcome() {
-        try {
-            final ApiResponse<AIReplyVO> response =
-                    _scriptApi.ai_reply(sessionId, welcome, null, 0, null, 0);
-            log.info("[{}]: playWelcome: call ai_reply with {} => response: {}", sessionId, welcome, response);
-            if (response.getData() != null) {
-                if (!doPlayback(response.getData())) {
-                    if (response.getData().getHangup() == 1) {
-                        doHangup();
-                        log.info("[{}] playWelcome: hangup ({}) for ai_reply ({})", sessionId, sessionId, response.getData());
-                    }
-                }
-            } else {
-                doHangup();
-                log.warn("[{}] playWelcome: ai_reply({}), hangup", sessionId, response);
-            }
-        } catch (final Exception ex) {
-            doHangup();
-            log.warn("[{}]: playWelcome: ai_reply error, hangup, detail: {}", sessionId, ExceptionUtil.exception2detail(ex));
-        }
-    }
-
-    private void doHangup() {
-        sendEvent.accept("Hangup", AFSHangupEvent.builder()
-                .localIdx(localIdx)
-                .hangupInMs(System.currentTimeMillis())
-                .build());
-    }
-
-    private boolean doPlayback(final AIReplyVO replyVO) {
-        if (replyVO.getVoiceMode() == null || replyVO.getAi_content_id() == null) {
-            return false;
-        }
-
-        final String newPlaybackId = UUID.randomUUID().toString();
-        final String ai_content_id = Long.toString(replyVO.getAi_content_id());
-        log.info("[{}] doPlayback: {}", sessionId, replyVO);
-
-        final long now = System.currentTimeMillis();
-        final String file = reply2Rms.apply(replyVO,
-                () -> String.format("vars_playback_id=%s,content_id=%s,vars_start_timestamp=%d,playback_idx=%d",
-                        newPlaybackId, ai_content_id, now * 1000L, 0));
-
-        if (file != null) {
-            final String prevPlaybackId = _currentPlaybackId.getAndSet(null);
-            if (prevPlaybackId != null) {
-                sendEvent.accept("StopPlayback",
-                        AFSStopPlaybackEvent.builder()
-                                .localIdx(localIdx)
-                                .playback_id(prevPlaybackId)
-                                .stopEventInMs(now)
-                                .build()
-                );
-            }
-            _currentPlaybackId.set(newPlaybackId);
-            _currentPlaybackPaused.set(false);
-            _currentPlaybackDuration.set(()->0L);
-            createPlaybackMemo(newPlaybackId,
-                    replyVO.getAi_content_id(),
-                    replyVO.getCancel_on_speak(),
-                    replyVO.getHangup() == 1);
-            sendEvent.accept("StartPlayback",
-                    AFSStartPlaybackEvent.builder()
-                            .localIdx(localIdx)
-                            .playback_id(newPlaybackId)
-                            .content_id(ai_content_id)
-                            .file(file)
-                            .build()
-                    );
-            log.info("[{}] doPlayback [{}] as {}", sessionId, file, newPlaybackId);
-            return true;
-        } else {
-            return false;
-        }
-    }
 
     public void startTranscription() {
         _asrService.startTranscription(new ASRConsumer() {
@@ -280,6 +204,83 @@ public class AfsActor {
         }
     }
 
+    @PostConstruct
+    private void playWelcome() {
+        try {
+            final ApiResponse<AIReplyVO> response =
+                    _scriptApi.ai_reply(sessionId, welcome, null, 0, null, 0);
+            log.info("[{}]: playWelcome: call ai_reply with {} => response: {}", sessionId, welcome, response);
+            if (response.getData() != null) {
+                if (!doPlayback(response.getData())) {
+                    if (response.getData().getHangup() == 1) {
+                        doHangup();
+                        log.info("[{}] playWelcome: hangup ({}) for ai_reply ({})", sessionId, sessionId, response.getData());
+                    }
+                }
+            } else {
+                doHangup();
+                log.warn("[{}] playWelcome: ai_reply({}), hangup", sessionId, response);
+            }
+        } catch (final Exception ex) {
+            doHangup();
+            log.warn("[{}]: playWelcome: ai_reply error, hangup, detail: {}", sessionId, ExceptionUtil.exception2detail(ex));
+        }
+    }
+
+    private void doHangup() {
+        sendEvent.accept("Hangup", AFSHangupEvent.builder()
+                .localIdx(localIdx)
+                .hangupInMs(System.currentTimeMillis())
+                .build());
+    }
+
+    private boolean doPlayback(final AIReplyVO replyVO) {
+        if (replyVO.getVoiceMode() == null || replyVO.getAi_content_id() == null) {
+            return false;
+        }
+
+        final String newPlaybackId = UUID.randomUUID().toString();
+        final String ai_content_id = Long.toString(replyVO.getAi_content_id());
+        log.info("[{}] doPlayback: {}", sessionId, replyVO);
+
+        final long now = System.currentTimeMillis();
+        final String file = reply2Rms.apply(replyVO,
+                () -> String.format("vars_playback_id=%s,content_id=%s,vars_start_timestamp=%d,playback_idx=%d",
+                        newPlaybackId, ai_content_id, now * 1000L, 0));
+
+        if (file != null) {
+            final String prevPlaybackId = _currentPlaybackId.getAndSet(null);
+            if (prevPlaybackId != null) {
+                sendEvent.accept("StopPlayback",
+                        AFSStopPlaybackEvent.builder()
+                                .localIdx(localIdx)
+                                .playback_id(prevPlaybackId)
+                                .stopEventInMs(now)
+                                .build()
+                );
+            }
+            _currentPlaybackId.set(newPlaybackId);
+            _currentPlaybackPaused.set(false);
+            _currentPlaybackDuration.set(()->0L);
+            createPlaybackMemo(newPlaybackId,
+                    replyVO.getAi_content_id(),
+                    replyVO.getCancel_on_speak(),
+                    replyVO.getHangup() == 1);
+            sendEvent.accept("StartPlayback",
+                    AFSStartPlaybackEvent.builder()
+                            .localIdx(localIdx)
+                            .playback_id(newPlaybackId)
+                            .content_id(ai_content_id)
+                            .file(file)
+                            .build()
+            );
+            log.info("[{}] doPlayback [{}] as {}", sessionId, file, newPlaybackId);
+            return true;
+        } else {
+            return false;
+        }
+    }
+
     private boolean isAiSpeaking() {
         return _currentPlaybackId.get() != null;
     }
@@ -388,7 +389,7 @@ public class AfsActor {
     @Builder
     @Data
     @ToString
-    public static class PlaybackMemo {
+    private static class PlaybackMemo {
         public final int playbackIdx;
         public final String contentId;
         public final boolean cancelOnSpeak;
