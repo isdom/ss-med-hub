@@ -31,6 +31,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import static org.springframework.beans.factory.config.ConfigurableBeanFactory.SCOPE_PROTOTYPE;
@@ -44,6 +45,7 @@ public class AfsActor {
         String uuid();
         String sessionId();
         String welcome();
+        Consumer<Runnable> runOn();
         BiFunction<AIReplyVO, Supplier<String>, String> reply2Rms();
         BiConsumer<String, Object> sendEvent();
     }
@@ -52,6 +54,7 @@ public class AfsActor {
         this.uuid = ctx.uuid();
         this.sessionId = ctx.sessionId();
         this.welcome = ctx.welcome();
+        this.runOn = ctx.runOn();
         this.reply2Rms = ctx.reply2Rms();
         this.sendEvent = ctx.sendEvent();
     }
@@ -60,6 +63,7 @@ public class AfsActor {
     private final String uuid;
     private final String sessionId;
     private final String welcome;
+    private final Consumer<Runnable> runOn;
     private final BiFunction<AIReplyVO, Supplier<String>, String> reply2Rms;
     private final BiConsumer<String, Object> sendEvent;
 
@@ -148,8 +152,10 @@ public class AfsActor {
 
             @Override
             public void onSentenceEnd(final PayloadSentenceEnd payload) {
-                log.info("afs_io => onSentenceEnd: {}", payload);
-                whenASRSentenceEnd(payload);
+                runOn.accept(()->{
+                    log.info("afs_io => onSentenceEnd: {}", payload);
+                    whenASRSentenceEnd(payload);
+                });
             }
 
             @Override

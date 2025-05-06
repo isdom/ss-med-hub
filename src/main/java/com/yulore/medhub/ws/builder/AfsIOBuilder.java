@@ -34,10 +34,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
-import java.util.function.Function;
-import java.util.function.Supplier;
+import java.util.function.*;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -82,6 +79,9 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                 }
                 public String welcome() {
                     return payload.welcome;
+                }
+                public Consumer<Runnable> runOn() {
+                    return runnable -> orderedExecutor.submit(payload.localIdx, runnable);
                 }
                 public BiFunction<AIReplyVO, Supplier<String>, String> reply2Rms() {
                     return (reply, vars) -> reply2rms(payload.uuid, reply, vars);
