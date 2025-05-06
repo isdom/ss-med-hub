@@ -9,6 +9,7 @@ import com.yulore.medhub.service.ASRService;
 import com.yulore.medhub.vo.*;
 import com.yulore.medhub.vo.cmd.AFSPlaybackStarted;
 import com.yulore.medhub.vo.cmd.AFSPlaybackStopped;
+import com.yulore.medhub.vo.event.AFSHangupEvent;
 import com.yulore.medhub.vo.event.AFSStartPlaybackEvent;
 import com.yulore.medhub.vo.event.AFSStopPlaybackEvent;
 import com.yulore.util.ExceptionUtil;
@@ -87,18 +88,25 @@ public class AfsActor {
             if (response.getData() != null) {
                 if (!doPlayback(response.getData())) {
                     if (response.getData().getHangup() == 1) {
-//                    _sendEvent.accept("FSHangup", new PayloadFSHangup(_uuid, _sessionId));
-//                    log.info("[{}]: playWelcome: hangup ({}) for ai_reply ({})", _sessionId, _sessionId, response.getData());
+                        doHangup();
+                        log.info("[{}] playWelcome: hangup ({}) for ai_reply ({})", sessionId, sessionId, response.getData());
                     }
                 }
             } else {
-//                _sendEvent.accept("FSHangup", new PayloadFSHangup(_uuid, _sessionId));
-//                log.warn("[{}]: playWelcome: ai_reply({}), hangup", _sessionId, response);
+                doHangup();
+                log.warn("[{}] playWelcome: ai_reply({}), hangup", sessionId, response);
             }
         } catch (final Exception ex) {
-//            _sendEvent.accept("FSHangup", new PayloadFSHangup(_uuid, _sessionId));
+            doHangup();
             log.warn("[{}]: playWelcome: ai_reply error, hangup, detail: {}", sessionId, ExceptionUtil.exception2detail(ex));
         }
+    }
+
+    private void doHangup() {
+        sendEvent.accept("Hangup", AFSHangupEvent.builder()
+                .localIdx(localIdx)
+                .hangupInMs(System.currentTimeMillis())
+                .build());
     }
 
     private boolean doPlayback(final AIReplyVO replyVO) {
@@ -265,7 +273,7 @@ public class AfsActor {
             log.info("[{}] playbackStopped: current playback_id matched:{}, clear current PlaybackId", sessionId, vo.playback_id);
             if (memoFor(vo.playback_id).isHangup()) {
                 // hangup call
-                sendEvent.accept("Hangup", null/*new PayloadFSHangup(_uuid, _sessionId)*/); // TODO: impl hangup
+                doHangup();
             }
         } else {
             log.info("[{}] stopped playback_id:{} is !NOT! current playback_id:{}, ignored", sessionId, vo.playback_id, _currentPlaybackId.get());
@@ -307,7 +315,7 @@ public class AfsActor {
                 }
                 if (!doPlayback(response.getData()))  {
                     if (response.getData().getHangup() == 1) {
-                        sendEvent.accept("FSHangup", null/*new PayloadFSHangup(_uuid, _sessionId)*/);
+                        doHangup();
                         log.info("[{}] whenASRSentenceEnd : hangup ({}) for ai_reply ({})", sessionId, sessionId, response.getData());
                     }
                     if (isAiSpeaking && _currentPlaybackPaused.compareAndSet(true, false) ) {
