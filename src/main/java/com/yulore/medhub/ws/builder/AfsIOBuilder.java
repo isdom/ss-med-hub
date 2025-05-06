@@ -7,6 +7,7 @@ import com.yulore.medhub.api.AIReplyVO;
 import com.yulore.medhub.vo.WSEventVO;
 import com.yulore.medhub.vo.cmd.AFSAddLocalCommand;
 import com.yulore.medhub.vo.cmd.AFSPlaybackStarted;
+import com.yulore.medhub.vo.cmd.AFSPlaybackStopped;
 import com.yulore.medhub.vo.cmd.AFSRemoveLocalCommand;
 import com.yulore.medhub.ws.HandlerUrlBuilder;
 import com.yulore.medhub.ws.WSCommandRegistry;
@@ -46,6 +47,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
             .register(AFSAddLocalCommand.TYPE,"AddLocal", ctx->ctx.actor().addLocal(ctx.payload(), ctx.ws()))
             .register(AFSRemoveLocalCommand.TYPE,"RemoveLocal", ctx->ctx.actor().removeLocal(ctx.payload()))
             .register(AFSPlaybackStarted.TYPE,"PlaybackStarted", ctx->ctx.actor().playbackStarted(ctx.payload()))
+            .register(AFSPlaybackStopped.TYPE,"PlaybackStopped", ctx->ctx.actor().playbackStopped(ctx.payload()))
             ;
 
     @PostConstruct
@@ -65,7 +67,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
             return cmds;
         }
 
-        public void addLocal(final AFSAddLocalCommand payload, final WebSocket ws) {
+        void addLocal(final AFSAddLocalCommand payload, final WebSocket ws) {
             log.info("AfsIO => addLocal: {}", payload);
             final var actor = actorProvider.getObject(new AfsActor.Context() {
                 public int localIdx() {
@@ -94,7 +96,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
             actor.startTranscription();
         }
 
-        public void removeLocal(final AFSRemoveLocalCommand payload) {
+        void removeLocal(final AFSRemoveLocalCommand payload) {
             final var actor = idx2actor.remove(payload.localIdx);
             if (actor != null) {
                 actor.close();
@@ -102,12 +104,20 @@ public class AfsIOBuilder implements WsHandlerBuilder {
             log.info("AfsIO: removeLocal {}", payload.localIdx);
         }
 
-        public void playbackStarted(final AFSPlaybackStarted payload) {
-            final var actor = idx2actor.get(payload.localIdx);
+        void playbackStarted(final AFSPlaybackStarted vo) {
+            final var actor = idx2actor.get(vo.localIdx);
             if (actor != null) {
-                actor.playbackStarted(payload);
+                actor.playbackStarted(vo);
             }
-            log.info("AfsIO: playbackStarted {}", payload.localIdx);
+            log.info("AfsIO: playbackStarted {}", vo);
+        }
+
+        void playbackStopped(final AFSPlaybackStopped vo) {
+            final var actor = idx2actor.get(vo.localIdx);
+            if (actor != null) {
+                actor.playbackStopped(vo);
+            }
+            log.info("AfsIO: playbackStopped {}", vo);
         }
 
         AfsActor actorOf(final int localIdx) {

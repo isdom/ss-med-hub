@@ -8,7 +8,9 @@ import com.yulore.medhub.service.ASROperator;
 import com.yulore.medhub.service.ASRService;
 import com.yulore.medhub.vo.*;
 import com.yulore.medhub.vo.cmd.AFSPlaybackStarted;
+import com.yulore.medhub.vo.cmd.AFSPlaybackStopped;
 import com.yulore.medhub.vo.event.AFSStartPlaybackEvent;
+import com.yulore.medhub.vo.event.AFSStopPlaybackEvent;
 import com.yulore.util.ExceptionUtil;
 import io.micrometer.core.instrument.Timer;
 import lombok.Builder;
@@ -81,7 +83,7 @@ public class AfsActor {
         try {
             final ApiResponse<AIReplyVO> response =
                     _scriptApi.ai_reply(sessionId, welcome, null, 0, null, 0);
-            log.warn("[{}]: playWelcome: call ai_reply with {} => response: {}", sessionId, welcome, response);
+            log.info("[{}]: playWelcome: call ai_reply with {} => response: {}", sessionId, welcome, response);
             if (response.getData() != null) {
                 if (!doPlayback(response.getData())) {
                     if (response.getData().getHangup() == 1) {
@@ -108,14 +110,21 @@ public class AfsActor {
         final String ai_content_id = Long.toString(replyVO.getAi_content_id());
         log.info("[{}] doPlayback: {}", sessionId, replyVO);
 
+        final long now = System.currentTimeMillis();
         final String file = reply2Rms.apply(replyVO,
                 () -> String.format("vars_playback_id=%s,content_id=%s,vars_start_timestamp=%d,playback_idx=%d",
-                        newPlaybackId, ai_content_id, System.currentTimeMillis() * 1000L, 0));
+                        newPlaybackId, ai_content_id, now * 1000L, 0));
 
         if (file != null) {
             final String prevPlaybackId = _currentPlaybackId.getAndSet(null);
             if (prevPlaybackId != null) {
-                sendEvent.accept("FSStopPlayback", null/*new PayloadFSChangePlayback(_uuid, prevPlaybackId)*/);
+                sendEvent.accept("StopPlayback",
+                        AFSStopPlaybackEvent.builder()
+                                .localIdx(localIdx)
+                                .playback_id(prevPlaybackId)
+                                .stopEventInMs(now)
+                                .build()
+                );
             }
             _currentPlaybackId.set(newPlaybackId);
             _currentPlaybackPaused.set(false);
@@ -243,6 +252,23 @@ public class AfsActor {
             }
         } else {
             log.warn("[{}] currentPlaybackId is null BUT playbackStarted with: {}", sessionId, vo.playback_id);
+        }
+    }
+
+    public void playbackStopped(final AFSPlaybackStopped vo) {
+        if (_currentPlaybackId.get() != null
+                && vo.playback_id != null
+                && vo.playback_id.equals(_currentPlaybackId.get()) ) {
+            _currentPlaybackId.set(null);
+            _currentPlaybackDuration.set(()->0L);
+            _idleStartInMs.set(System.currentTimeMillis());
+            log.info("[{}] playbackStopped: current playback_id matched:{}, clear current PlaybackId", sessionId, vo.playback_id);
+            if (memoFor(vo.playback_id).isHangup()) {
+                // hangup call
+                sendEvent.accept("Hangup", null/*new PayloadFSHangup(_uuid, _sessionId)*/); // TODO: impl hangup
+            }
+        } else {
+            log.info("[{}] stopped playback_id:{} is !NOT! current playback_id:{}, ignored", sessionId, vo.playback_id, _currentPlaybackId.get());
         }
     }
 
