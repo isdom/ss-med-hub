@@ -6,6 +6,7 @@ import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.medhub.api.AIReplyVO;
 import com.yulore.medhub.vo.WSEventVO;
 import com.yulore.medhub.vo.cmd.AFSAddLocalCommand;
+import com.yulore.medhub.vo.cmd.AFSPlaybackStarted;
 import com.yulore.medhub.vo.cmd.AFSRemoveLocalCommand;
 import com.yulore.medhub.ws.HandlerUrlBuilder;
 import com.yulore.medhub.ws.WSCommandRegistry;
@@ -47,6 +48,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
     private final WSCommandRegistry<AfsIO> cmds = new WSCommandRegistry<AfsIO>()
             .register(AFSAddLocalCommand.TYPE,"AddLocal", ctx->ctx.actor().addLocal(ctx.payload(), ctx.ws()))
             .register(AFSRemoveLocalCommand.TYPE,"RemoveLocal", ctx->ctx.actor().removeLocal(ctx.payload()))
+            .register(AFSPlaybackStarted.TYPE,"PlaybackStarted", ctx->ctx.actor().playbackStarted(ctx.payload()))
             ;
 
     @PostConstruct
@@ -98,6 +100,14 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                 actor.close();
             }
             log.info("AfsIO: removeLocal {}", payload.localIdx);
+        }
+
+        public void playbackStarted(final AFSPlaybackStarted payload) {
+            final var actor = idx2actor.get(payload.localIdx);
+            if (actor != null) {
+                actor.playbackStarted(payload);
+            }
+            log.info("AfsIO: playbackStarted {}", payload.localIdx);
         }
 
         AfsActor actorOf(final int localIdx) {

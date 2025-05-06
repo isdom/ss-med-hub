@@ -7,6 +7,7 @@ import com.yulore.medhub.service.ASRConsumer;
 import com.yulore.medhub.service.ASROperator;
 import com.yulore.medhub.service.ASRService;
 import com.yulore.medhub.vo.*;
+import com.yulore.medhub.vo.cmd.AFSPlaybackStarted;
 import com.yulore.medhub.vo.event.AFSStartPlaybackEvent;
 import com.yulore.util.ExceptionUtil;
 import io.micrometer.core.instrument.Timer;
@@ -94,8 +95,6 @@ public class AfsActor {
         }
     }
 
-    final static String PLAYBACK_ID_NAME="vars_playback_id";
-
     private boolean doPlayback(final AIReplyVO replyVO) {
         if (replyVO.getVoiceMode() == null || replyVO.getAi_content_id() == null) {
             return false;
@@ -106,8 +105,8 @@ public class AfsActor {
         log.info("[{}] doPlayback: {}", sessionId, replyVO);
 
         final String file = reply2Rms.apply(replyVO,
-                ()->String.format("%s=%s,content_id=%s,vars_start_timestamp=%d,playback_idx=%d",
-                        PLAYBACK_ID_NAME, newPlaybackId, ai_content_id, System.currentTimeMillis() * 1000L, 0));
+                () -> String.format("vars_playback_id=%s,content_id=%s,vars_start_timestamp=%d,playback_idx=%d",
+                        newPlaybackId, ai_content_id, System.currentTimeMillis() * 1000L, 0));
 
         if (file != null) {
             final String prevPlaybackId = _currentPlaybackId.getAndSet(null);
@@ -195,9 +194,11 @@ public class AfsActor {
                 operator.transmit(pcm);
             }
 
+            /*
             final long nowInMs = System.currentTimeMillis();
             log.info("afs_io => localIdx: {}/recvd delay: {} ms/process delay: {} ms",
                     localIdx, recvdInMs - startInMss / 1000L, nowInMs - startInMss / 1000L);
+             */
         }
     }
 
@@ -209,6 +210,33 @@ public class AfsActor {
             }
 
             _id2memo.clear();
+        }
+    }
+
+    public void playbackStarted(final AFSPlaybackStarted vo) {
+        log.info("afs_io({}) => playbackStarted: playback_id:{}/started delay: {} ms/full cost: {} ms",
+                localIdx, vo.playback_id,
+                (vo.eventInMss - vo.startInMss) / 1000L,
+                System.currentTimeMillis() - vo.startInMss / 1000L);
+
+        final PlaybackMemo playbackMemo = memoFor(vo.playback_id);
+        // TODO: playbackMemo.sampleWhenCreate.stop(playback_timer);
+
+        final long playbackStartedInMs = System.currentTimeMillis();
+        playbackMemo.setBeginInMs(playbackStartedInMs);
+
+        final String currentPlaybackId = _currentPlaybackId.get();
+        if (currentPlaybackId != null) {
+            if (currentPlaybackId.equals(vo.playback_id)) {
+                _currentPlaybackDuration.set(()->System.currentTimeMillis() - playbackStartedInMs);
+                log.info("[{}] playbackStarted => current playbackid: {} Matched",
+                        sessionId, vo.playback_id);
+            } else {
+                log.info("[{}] playbackStarted => current playbackid: {} mismatch started playbackid: {}, ignore",
+                        sessionId, currentPlaybackId, vo.playback_id);
+            }
+        } else {
+            log.warn("[{}] currentPlaybackId is null BUT playbackStarted with: {}", sessionId, vo.playback_id);
         }
     }
 
