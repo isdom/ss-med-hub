@@ -28,6 +28,7 @@ import java.nio.ByteBuffer;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -119,12 +120,14 @@ public class AfsActor {
         });
     }
 
-    public void transmit(final ByteBuffer buffer, final long recvdInMs) {
+    private int transmitCount = 0;
+    private long transmitDelayPer50 = 0, handleCostPer50 = 0;
+    public void transmit(final ByteBuffer buffer, final long recvdInMs, final Timer td_timer, final Timer hc_timer) {
         if (!isClosed.get()) {
             final byte[] byte8 = new byte[8];
             buffer.get(byte8);
             // 将小端字节序转换为 long
-            final long startInMss =
+            final long fsReadFrameInMss =
                     ((byte8[7] & 0xFFL) << 56) |  // 最高有效字节（小端的最后一个字节）
                     ((byte8[5] & 0xFFL) << 40) |
                     ((byte8[6] & 0xFFL) << 48) |
@@ -136,16 +139,23 @@ public class AfsActor {
 
             final var operator = opRef.get();
             if (operator != null) {
-                final byte[] pcm = new byte[buffer.remaining()];
-                buffer.get(pcm);
-                operator.transmit(pcm);
+                final byte[] frame = new byte[buffer.remaining()];
+                buffer.get(frame);
+                operator.transmit(frame);
+                final long now = System.currentTimeMillis();
+                transmitDelayPer50 += now - fsReadFrameInMss / 1000L;
+                handleCostPer50 += now - recvdInMs;
+                transmitCount++;
+                if ( transmitCount >= 50 ) {
+                    // record delay & cost each 50 times
+                    td_timer.record(transmitDelayPer50, TimeUnit.MILLISECONDS);
+                    hc_timer.record(handleCostPer50, TimeUnit.MILLISECONDS);
+                    // reset counter / delay / cost
+                    transmitCount = 0;
+                    transmitDelayPer50 = 0;
+                    handleCostPer50 = 0;
+                }
             }
-
-            /*
-            final long nowInMs = System.currentTimeMillis();
-            log.info("afs_io => localIdx: {}/recvd delay: {} ms/process delay: {} ms",
-                    localIdx, recvdInMs - startInMss / 1000L, nowInMs - startInMss / 1000L);
-             */
         }
     }
 

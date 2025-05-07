@@ -129,6 +129,13 @@ public class AfsIOBuilder implements WsHandlerBuilder {
 
     @Override
     public WsHandler build(final String prefix, final WebSocket webSocket, final ClientHandshake handshake) {
+        final String ipv4 = webSocket.getRemoteSocketAddress().getAddress().getHostAddress();
+        final Timer td_timer = transmit_delay_timers.computeIfAbsent(ipv4,
+                ip -> timerProvider.getObject("mh.afs.asr.transmit.delay",
+                        MetricCustomized.builder().tags(List.of("afs", ip)).build()));
+        final Timer hc_timer = handle_cost_timers.computeIfAbsent(ipv4,
+                ip -> timerProvider.getObject("mh.afs.asr.handle.cost",
+                        MetricCustomized.builder().tags(List.of("afs", ip)).build()));
         _wscount.incrementAndGet();
         final WsHandler handler = new AfsIO() {
             @Override
@@ -141,7 +148,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                         ((byte4[2] & 0xFF) << 16) |
                         ((byte4[1] & 0xFF) << 8)  |
                         (byte4[0] & 0xFF);          // 最低有效字节（小端的第一个字节）
-                orderedExecutor.submit(localIdx, ()->actorOf(localIdx).transmit(buffer, recvdInMs));
+                orderedExecutor.submit(localIdx, ()->actorOf(localIdx).transmit(buffer, recvdInMs, td_timer, hc_timer));
             }
 
             @Override
@@ -220,5 +227,6 @@ public class AfsIOBuilder implements WsHandlerBuilder {
 
     private Executor executor;
     private Timer playback_timer;
-    private Timer transmit_timer;
+    private final ConcurrentMap<String, Timer> transmit_delay_timers = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Timer> handle_cost_timers = new ConcurrentHashMap<>();
 }
