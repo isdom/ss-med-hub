@@ -99,6 +99,8 @@ public class FsActorBuilder implements WsHandlerBuilder {
         final String sessionId = handshake.getFieldValue("x-sessionid");
         final String welcome = handshake.getFieldValue("x-welcome");
         final String recordStartTimestamp = handshake.getFieldValue("x-rst");
+
+        final Executor wsmsg = executorProvider.apply("wsmsg");
         final FsActor actor = new FsActor(
                 uuid,
                 sessionId,
@@ -118,6 +120,11 @@ public class FsActorBuilder implements WsHandlerBuilder {
             @Override
             protected WSCommandRegistry<FsActor> commandRegistry() {
                 return cmds;
+            }
+
+            @Override
+            public void onMessage(final WebSocket webSocket, final String message, final Timer.Sample sample) {
+                wsmsg.execute(()->super.onMessage(webSocket, message, sample));
             }
 
             long totalDelayInMs = 0;

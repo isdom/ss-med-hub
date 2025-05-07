@@ -46,7 +46,7 @@ public class WsServerBuilder {
         final Timer timer = timerProvider.getObject("mh.connected.delay", null);
         gaugeProvider.getObject((Supplier<Number>)_currentWSConnection::get, "mh.ws.count",
                 MetricCustomized.builder().tags(List.of("actor", "all")).build());
-        final Executor executor = executorProvider.apply("wsmsg");
+        // final Executor executor = executorProvider.apply("wsmsg");
 
         final WebSocketServer server = new WebSocketServer(new InetSocketAddress(configProps.host, configProps.port)) {
             @Override
@@ -93,8 +93,8 @@ public class WsServerBuilder {
             @Override
             public void onMessage(final WebSocket webSocket, final String message) {
                 final Timer.Sample sample = Timer.start();
-                executor.execute(() -> {
-                    log.info("received text message from {}: {}", webSocket.getRemoteSocketAddress(), message);
+                // executor.execute(() -> {
+                    // log.info("received text message from {}: {}", webSocket.getRemoteSocketAddress(), message);
                     final Object attachment = webSocket.getAttachment();
                     if (attachment instanceof WsHandler handler) {
                         try {
@@ -104,7 +104,7 @@ public class WsServerBuilder {
                                     webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
                         }
                     }
-                });
+                //});
             }
 
             @Override
@@ -229,7 +229,7 @@ public class WsServerBuilder {
     private long _check_interval;
 
     private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
-    private final Function<String, Executor> executorProvider;
+    //private final Function<String, Executor> executorProvider;
 
     private final ObjectProvider<Inet4Address> ipv4Provider;
     private final RedissonClient redisson;

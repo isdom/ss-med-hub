@@ -114,6 +114,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
         final String uuid = VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "uuid", '&');
         final String tid = VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "tid", '&');
         final String clientIp = handshake.getFieldValue("X-Forwarded-For");
+        final Executor wsmsg = executorProvider.apply("wsmsg");
         final PoActor actor = new PoActor(
                 clientIp,
                 uuid,
@@ -145,6 +146,11 @@ public class PoActorBuilder implements WsHandlerBuilder {
             @Override
             protected WSCommandRegistry<PoActor> commandRegistry() {
                 return cmds;
+            }
+
+            @Override
+            public void onMessage(final WebSocket webSocket, final String message, final Timer.Sample sample) {
+                wsmsg.execute(()->super.onMessage(webSocket, message, sample));
             }
 
             long totalDelayInMs = 0;

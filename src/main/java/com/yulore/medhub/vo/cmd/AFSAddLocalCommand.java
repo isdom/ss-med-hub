@@ -16,4 +16,5 @@ public class AFSAddLocalCommand {
     public String uuid;
     public String sessionId;
     public String welcome;
+    public long answerInMss;
 }

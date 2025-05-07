@@ -9,9 +9,8 @@ import lombok.ToString;
 @Data
 @ToString
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class AFSRemoveLocalCommand {
-    public static final TypeReference<WSCommandVO<AFSRemoveLocalCommand>> TYPE = new TypeReference<>() {};
+public class AFSCommand {
+    public static final TypeReference<WSCommandVO<AFSCommand>> TYPE = new TypeReference<>() {};
 
     public int localIdx;
-    public long hangupInMss;
 }

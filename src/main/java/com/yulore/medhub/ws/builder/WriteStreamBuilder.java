@@ -66,6 +66,11 @@ public class WriteStreamBuilder extends BaseStreamBuilder implements WsHandlerBu
             }
 
             @Override
+            public void onMessage(final WebSocket webSocket, final String message, final Timer.Sample sample) {
+                executor.execute(()->super.onMessage(webSocket, message, sample));
+            }
+
+            @Override
             public void onMessage(final WebSocket webSocket, final ByteBuffer bytes, final long timestampInMs) {
                 executor.execute(()-> handleFileWriteCommand(bytes, _ss, timestampInMs));
             }

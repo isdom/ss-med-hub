@@ -25,7 +25,7 @@ public class WSCommandRegistry<ACTOR> {
         return this;
     }
 
-    public void handleCommand(final WSCommandVO<Void> cmd, final String message, final ACTOR actor, final WebSocket ws, final Timer.Sample sample) throws JsonProcessingException {
+    public void handleCommand(final WSCommandVO<?> cmd, final String message, final ACTOR actor, final WebSocket ws, final Timer.Sample sample) throws JsonProcessingException {
         final Pair<?,?> pair = _command2handler.get(cmd.getHeader().get("name"));
         if (pair != null) {
             final Consumer<CommandContext<?,?>> consumer = (Consumer<CommandContext<?,?>>)pair.getSecond();

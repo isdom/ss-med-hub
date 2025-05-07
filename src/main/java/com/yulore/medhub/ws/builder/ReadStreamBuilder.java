@@ -24,8 +24,10 @@ import org.springframework.stereotype.Component;
 import javax.annotation.PostConstruct;
 import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 @Slf4j
@@ -49,11 +51,17 @@ public class ReadStreamBuilder extends BaseStreamBuilder implements WsHandlerBui
     @Override
     public WsHandler build(final String prefix, final WebSocket webSocket, final ClientHandshake handshake) {
 
+        final Executor wsmsg = executorProvider.apply("wsmsg");
         final StreamActor actor = new StreamActor() {
 
             @Override
             protected WSCommandRegistry<StreamActor> commandRegistry() {
                 return cmds;
+            }
+
+            @Override
+            public void onMessage(final WebSocket webSocket, final String message, final Timer.Sample sample) {
+                wsmsg.execute(()->super.onMessage(webSocket, message, sample));
             }
 
             @Override
@@ -113,6 +121,7 @@ public class ReadStreamBuilder extends BaseStreamBuilder implements WsHandlerBui
     }
 
     private final BSTService bstService;
+    private final Function<String, Executor> executorProvider;
     private final ObjectProvider<Timer> timerProvider;
     private final ObjectProvider<Gauge> gaugeProvider;
 
