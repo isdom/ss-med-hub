@@ -238,10 +238,9 @@ public class AfsIOBuilder implements WsHandlerBuilder {
             }
         };
 
-        session_gauges.computeIfAbsent(ipv4,
-        ip -> gaugeProvider.getObject((Supplier<Number>)afs.idx2actor::size, "mh.afs.session",
+        session_gauges.put(ipv4, gaugeProvider.getObject((Supplier<Number>)afs.idx2actor::size, "mh.afs.session",
                 MetricCustomized.builder()
-                        .tags(List.of("afs", ip))
+                        .tags(List.of("afs", ipv4))
                         .build()));
 
         webSocket.setAttachment(afs);
