@@ -24,7 +24,6 @@ import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
-import java.nio.ByteBuffer;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -122,25 +121,12 @@ public class AfsActor {
 
     private int transmitCount = 0;
     private long transmitDelayPer50 = 0, handleCostPer50 = 0;
-    public void transmit(final ByteBuffer buffer, final long recvdInMs, final Timer td_timer, final Timer hc_timer) {
+    public void transmit(final byte[] frame, final long fsReadFrameInMss, final long recvdInMs, final Timer td_timer, final Timer hc_timer) {
         if (!isClosed.get()) {
-            final byte[] byte8 = new byte[8];
-            buffer.get(byte8);
-            // 将小端字节序转换为 long
-            final long fsReadFrameInMss =
-                    ((byte8[7] & 0xFFL) << 56) |  // 最高有效字节（小端的最后一个字节）
-                    ((byte8[5] & 0xFFL) << 40) |
-                    ((byte8[6] & 0xFFL) << 48) |
-                    ((byte8[4] & 0xFFL) << 32) |
-                    ((byte8[3] & 0xFFL) << 24) |
-                    ((byte8[2] & 0xFFL) << 16) |
-                    ((byte8[1] & 0xFFL) << 8)  |
-                    (byte8[0] & 0xFFL);          // 最低有效字节（小端的第一个字节）
-
             final var operator = opRef.get();
             if (operator != null) {
-                final byte[] frame = new byte[buffer.remaining()];
-                buffer.get(frame);
+                //final byte[] frame = new byte[buffer.remaining()];
+                //buffer.get(frame);
                 operator.transmit(frame);
                 final long now = System.currentTimeMillis();
                 transmitDelayPer50 += now - fsReadFrameInMss / 1000L;

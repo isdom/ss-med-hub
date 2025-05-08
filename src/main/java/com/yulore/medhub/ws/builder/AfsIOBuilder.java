@@ -187,17 +187,43 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                 }
             }
 
+            final byte[] bytes2 = new byte[2];
+            final byte[] bytes4 = new byte[4];
+            final byte[] bytes8 = new byte[8];
+
             @Override
             public void onMessage(final WebSocket webSocket, final ByteBuffer buffer, final long recvdInMs) {
-                final byte[] byte4 = new byte[4];
-                buffer.get(byte4, 0, 4);
-                // 将小端字节序转换为 int
-                final int localIdx =
-                        ((byte4[3] & 0xFF) << 24) |
-                        ((byte4[2] & 0xFF) << 16) |
-                        ((byte4[1] & 0xFF) << 8)  |
-                        (byte4[0] & 0xFF);          // 最低有效字节（小端的第一个字节）
-                orderedExecutor.submit(localIdx, ()->actorOf(localIdx).transmit(buffer, recvdInMs, td_timer, hc_timer));
+                int cnt = 0;
+                while (buffer.remaining() > 0) {
+                    buffer.get(bytes2);
+                    final int len = bytes2[0] | ((int)bytes2[1] << 8);
+
+                    buffer.get(bytes4);
+                    // 将小端字节序转换为 int
+                    final int localIdx =
+                            ((bytes4[3] & 0xFF) << 24) |
+                            ((bytes4[2] & 0xFF) << 16) |
+                            ((bytes4[1] & 0xFF) << 8)  |
+                            (bytes4[0] & 0xFF);          // 最低有效字节（小端的第一个字节）
+
+                    buffer.get(bytes8);
+                    // 将小端字节序转换为 long
+                    final long fsReadFrameInMss =
+                            ((bytes8[7] & 0xFFL) << 56) |  // 最高有效字节（小端的最后一个字节）
+                            ((bytes8[5] & 0xFFL) << 40) |
+                            ((bytes8[6] & 0xFFL) << 48) |
+                            ((bytes8[4] & 0xFFL) << 32) |
+                            ((bytes8[3] & 0xFFL) << 24) |
+                            ((bytes8[2] & 0xFFL) << 16) |
+                            ((bytes8[1] & 0xFFL) << 8)  |
+                            (bytes8[0] & 0xFFL);          // 最低有效字节（小端的第一个字节）
+
+                    final byte[] data = new byte[len - 4 - 8];
+                    buffer.get(data);
+                    orderedExecutor.submit(localIdx, ()->actorOf(localIdx).transmit(data, fsReadFrameInMss, recvdInMs, td_timer, hc_timer));
+                    cnt++;
+                }
+                log.info("onMessage: handle {} blks, cost {} ms", cnt, System.currentTimeMillis() - recvdInMs);
             }
 
             @Override
