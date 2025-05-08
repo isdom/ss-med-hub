@@ -155,6 +155,12 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                                 .tags(List.of("afs", ip))
                                 .build()));
 
+        final Timer frame_cost_timer = frame_cost_timers.computeIfAbsent(ipv4,
+                ip -> timerProvider.getObject("mh.afs.asr.frame.cost",
+                        MetricCustomized.builder()
+                                .tags(List.of("afs", ip))
+                                .build()));
+
         final WSCommandRegistry<AfsIO> cmds = new WSCommandRegistry<AfsIO>()
                 .register(AFSAddLocalCommand.TYPE,"AddLocal",
                         ctx->ctx.actor().addLocal(ctx.payload(), ctx.ws(), answer_delay_timer))
@@ -191,6 +197,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
             final byte[] bytes4 = new byte[4];
             final byte[] bytes8 = new byte[8];
 
+            final AtomicInteger blk_cnt = new AtomicInteger(0);
             @Override
             public void onMessage(final WebSocket webSocket, final ByteBuffer buffer, final long recvdInMs) {
                 int cnt = 0;
@@ -223,7 +230,9 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                     orderedExecutor.submit(localIdx, ()->actorOf(localIdx).transmit(data, fsReadFrameInMss, recvdInMs, td_timer, hc_timer));
                     cnt++;
                 }
-                log.info("onMessage: handle {} blks, cost {} ms", cnt, System.currentTimeMillis() - recvdInMs);
+                // log.info("onMessage: handle {} blks, cost {} ms", cnt, System.currentTimeMillis() - recvdInMs);
+                blk_cnt.set(cnt);
+                frame_cost_timer.record(System.currentTimeMillis() - recvdInMs, TimeUnit.MILLISECONDS);
             }
 
             @Override
@@ -239,6 +248,11 @@ public class AfsIOBuilder implements WsHandlerBuilder {
         };
 
         session_gauges.put(ipv4, gaugeProvider.getObject((Supplier<Number>)afs.idx2actor::size, "mh.afs.session",
+                MetricCustomized.builder()
+                        .tags(List.of("afs", ipv4))
+                        .build()));
+
+        blkcnt_gauges.put(ipv4, gaugeProvider.getObject((Supplier<Number>)afs.blk_cnt::get, "mh.afs.asr.frame.blk",
                 MetricCustomized.builder()
                         .tags(List.of("afs", ipv4))
                         .build()));
@@ -311,5 +325,8 @@ public class AfsIOBuilder implements WsHandlerBuilder {
     private final ConcurrentMap<String, Timer> hangup_delay_timers = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Timer> playback_reaction_timers = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Timer> playback_delay_timers = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Timer> frame_cost_timers = new ConcurrentHashMap<>();
+
     private final ConcurrentMap<String, Gauge> session_gauges = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Gauge> blkcnt_gauges = new ConcurrentHashMap<>();
 }
