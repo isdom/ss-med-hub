@@ -11,6 +11,9 @@ public class MetricCustomized {
     public String description = "";
 
     @Builder.Default
+    public String baseUnit = "";
+
+    @Builder.Default
     public List<String> tags = List.of();
 
     @Builder.Default

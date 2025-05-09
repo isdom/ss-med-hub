@@ -1,7 +1,10 @@
 package com.yulore.metric;
 
 import com.yulore.util.NetworkUtil;
-import io.micrometer.core.instrument.*;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
@@ -62,6 +65,9 @@ public class MetricsRepo {
             builder.description(customized.description);
             if (!customized.tags.isEmpty()) {
                 builder.tags(customized.tags.toArray(EMPTY_STRING_ARRAY));
+            }
+            if (!customized.baseUnit.isEmpty()) {
+                builder.baseUnit(customized.baseUnit);
             }
         }
 
