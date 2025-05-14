@@ -17,6 +17,7 @@ import com.yulore.util.ExceptionUtil;
 import com.yulore.util.OrderedExecutor;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Timer;
+import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
@@ -30,9 +31,7 @@ import javax.annotation.PostConstruct;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.*;
 
@@ -227,7 +226,14 @@ public class AfsIOBuilder implements WsHandlerBuilder {
 
                     final byte[] data = new byte[len - 4 - 8];
                     buffer.get(data);
-                    orderedExecutor.submit(localIdx, ()->actorOf(localIdx).transmit(data, fsReadFrameInMss, recvdInMs, td_timer, hc_timer));
+                    // orderedExecutor.submit(
+                    mediaExecutor.submit(
+                            localIdx, ()->{
+                                final var actor = actorOf(localIdx);
+                                if (null != actor) {
+                                    actor.transmit(data, fsReadFrameInMss, recvdInMs, td_timer, hc_timer);
+                                }
+                            });
                     cnt++;
                 }
                 // log.info("onMessage: handle {} blks, cost {} ms", cnt, System.currentTimeMillis() - recvdInMs);
@@ -310,6 +316,43 @@ public class AfsIOBuilder implements WsHandlerBuilder {
             throw new RuntimeException(e);
         }
     }
+
+    final static class MediaExecutor implements OrderedExecutor {
+        // 使用连接ID的哈希绑定固定线程
+        private static final int POOL_SIZE = Runtime.getRuntime().availableProcessors() * 2;
+
+        private final ExecutorService[] workers = new ExecutorService[POOL_SIZE];
+
+        MediaExecutor() {
+            for (int i = 0; i < POOL_SIZE; i++) {
+                final ThreadPoolExecutor executor = new ThreadPoolExecutor(1, 1,
+                        0L, TimeUnit.MILLISECONDS,
+                        new LinkedBlockingQueue<>(),
+                        new DefaultThreadFactory("Handle-Media-" + i));
+                workers[i] = executor;
+                log.info("create Handle-Media-{}", i);
+            }
+        }
+
+        public void release() {
+            for (int i = 0; i < POOL_SIZE; i++) {
+                workers[i].shutdownNow();
+            }
+        }
+
+        @Override
+        public void submit(final int idx, final Runnable task) {
+            final int order = idx % POOL_SIZE;
+            workers[order].submit(task);
+        }
+
+        @Override
+        public int idx2order(final int idx) {
+            return idx % POOL_SIZE;
+        }
+    }
+
+    private final MediaExecutor mediaExecutor = new MediaExecutor();
 
     private final ObjectProvider<AfsActor> afsProvider;
     private final ObjectProvider<HandlerUrlBuilder> urlProvider;
