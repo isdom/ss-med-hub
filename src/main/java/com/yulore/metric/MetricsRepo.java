@@ -53,8 +53,8 @@ public class MetricsRepo {
 
     @Bean
     @Scope(SCOPE_PROTOTYPE)
-    public DisposableGauge buildGauge(final Supplier<Number> f, final String name, final MetricCustomized customized) {
-        log.info("Gauge: create {} with tags:{}", name, customized != null ? customized.tags : "");
+    public DisposableGauge buildDisposableGauge(final Supplier<Number> f, final String name, final MetricCustomized customized) {
+        log.info("DisposableGauge: create {} with tags:{}", name, customized != null ? customized.tags : "");
         final var builder = Gauge.builder(name, f)
                 .tags("hostname", HOSTNAME)
                 .tags("ip", LOCAL_IP)
@@ -83,6 +83,29 @@ public class MetricsRepo {
                 meterRegistry.remove(gauge);
             }
         };
+    }
+
+    @Bean
+    @Scope(SCOPE_PROTOTYPE)
+    public Gauge buildGauge(final Supplier<Number> f, final String name, final MetricCustomized customized) {
+        log.info("Gauge: create {} with tags:{}", name, customized != null ? customized.tags : "");
+        final var builder = Gauge.builder(name, f)
+                .tags("hostname", HOSTNAME)
+                .tags("ip", LOCAL_IP)
+                .tags("ns", System.getenv("NACOS_NAMESPACE"))
+                .tags("srv", System.getenv("NACOS_DATAID"));
+
+        if (customized != null) {
+            builder.description(customized.description);
+            if (!customized.tags.isEmpty()) {
+                builder.tags(customized.tags.toArray(EMPTY_STRING_ARRAY));
+            }
+            if (!customized.baseUnit.isEmpty()) {
+                builder.baseUnit(customized.baseUnit);
+            }
+        }
+
+        return builder.register(meterRegistry);
     }
 
     @Bean
