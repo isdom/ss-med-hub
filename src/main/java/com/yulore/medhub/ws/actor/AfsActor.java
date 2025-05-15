@@ -159,6 +159,33 @@ public class AfsActor {
         }
     }
 
+    public void checkIdle() {
+        // TODO:
+    }
+
+    @PostConstruct
+    private void playWelcome() {
+        try {
+            final ApiResponse<AIReplyVO> response =
+                    _scriptApi.ai_reply(sessionId, welcome, null, 0, null, 0);
+            log.info("[{}]: playWelcome: call ai_reply with {} => response: {}", sessionId, welcome, response);
+            if (response.getData() != null) {
+                if (!doPlayback(response.getData())) {
+                    if (response.getData().getHangup() == 1) {
+                        doHangup();
+                        log.info("[{}] playWelcome: hangup ({}) for ai_reply ({})", sessionId, sessionId, response.getData());
+                    }
+                }
+            } else {
+                doHangup();
+                log.warn("[{}] playWelcome: ai_reply({}), hangup", sessionId, response);
+            }
+        } catch (final Exception ex) {
+            doHangup();
+            log.warn("[{}]: playWelcome: ai_reply error, hangup, detail: {}", sessionId, ExceptionUtil.exception2detail(ex));
+        }
+    }
+
     public void playbackStarted(final AFSPlaybackStarted vo) {
         log.info("afs_io({}) => playbackStarted: playback_id:{}/started delay: {} ms/full cost: {} ms",
                 localIdx, vo.playback_id,
@@ -200,29 +227,6 @@ public class AfsActor {
             }
         } else {
             log.info("[{}] stopped playback_id:{} is !NOT! current playback_id:{}, ignored", sessionId, vo.playback_id, _currentPlaybackId.get());
-        }
-    }
-
-    @PostConstruct
-    private void playWelcome() {
-        try {
-            final ApiResponse<AIReplyVO> response =
-                    _scriptApi.ai_reply(sessionId, welcome, null, 0, null, 0);
-            log.info("[{}]: playWelcome: call ai_reply with {} => response: {}", sessionId, welcome, response);
-            if (response.getData() != null) {
-                if (!doPlayback(response.getData())) {
-                    if (response.getData().getHangup() == 1) {
-                        doHangup();
-                        log.info("[{}] playWelcome: hangup ({}) for ai_reply ({})", sessionId, sessionId, response.getData());
-                    }
-                }
-            } else {
-                doHangup();
-                log.warn("[{}] playWelcome: ai_reply({}), hangup", sessionId, response);
-            }
-        } catch (final Exception ex) {
-            doHangup();
-            log.warn("[{}]: playWelcome: ai_reply error, hangup, detail: {}", sessionId, ExceptionUtil.exception2detail(ex));
         }
     }
 
@@ -280,17 +284,26 @@ public class AfsActor {
         }
     }
 
-    private boolean isAiSpeaking() {
-        return _currentPlaybackId.get() != null;
+    /* TODO:
+    private void whenASRSentenceBegin(final PayloadSentenceBegin payload) {
+        _isUserSpeak.set(true);
+        _currentSentenceBeginInMs.set(System.currentTimeMillis());
+        if (isAICancelOnSpeak()) {
+            final String playback_id = _currentPlaybackId.get();
+            _sendEvent.accept("FSStopPlayback", new PayloadFSChangePlayback(_uuid, playback_id));
+            log.info("[{}]: stop current playing ({}) for cancel_on_speak is true", _sessionId, playback_id);
+        }
     }
 
-    private String currentAiContentId() {
-        return isAiSpeaking() ? memoFor(_currentPlaybackId.get()).contentId : null;
+    private boolean isAICancelOnSpeak() {
+        final String playbackId = _currentPlaybackId.get();
+        if (playbackId != null) {
+            return memoFor(playbackId).isCancelOnSpeak();
+        } else {
+            return false;
+        }
     }
-
-    private int currentSpeakingDuration() {
-        return isAiSpeaking() ?  _currentPlaybackDuration.get().get().intValue() : 0;
-    }
+    */
 
     private void whenASRSentenceEnd(final PayloadSentenceEnd payload) {
         final long sentenceEndInMs = System.currentTimeMillis();
@@ -364,6 +377,18 @@ public class AfsActor {
                     end_event_time);
             log.info("[{}]: user report_asrtime ({})'s response: {}", sessionId, userContentId, resp);
         }
+    }
+
+    private boolean isAiSpeaking() {
+        return _currentPlaybackId.get() != null;
+    }
+
+    private String currentAiContentId() {
+        return isAiSpeaking() ? memoFor(_currentPlaybackId.get()).contentId : null;
+    }
+
+    private int currentSpeakingDuration() {
+        return isAiSpeaking() ?  _currentPlaybackDuration.get().get().intValue() : 0;
     }
 
     private void createPlaybackMemo(final String playbackId,
