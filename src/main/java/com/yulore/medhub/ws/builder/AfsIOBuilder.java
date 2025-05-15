@@ -12,11 +12,10 @@ import com.yulore.medhub.ws.WSCommandRegistry;
 import com.yulore.medhub.ws.WsHandler;
 import com.yulore.medhub.ws.WsHandlerBuilder;
 import com.yulore.medhub.ws.actor.AfsActor;
+import com.yulore.metric.DisposableGauge;
 import com.yulore.metric.MetricCustomized;
 import com.yulore.util.ExceptionUtil;
 import com.yulore.util.OrderedExecutor;
-import io.micrometer.core.instrument.Gauge;
-import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.RequiredArgsConstructor;
@@ -199,10 +198,10 @@ public class AfsIOBuilder implements WsHandlerBuilder {
 
             final AtomicInteger blk_cnt = new AtomicInteger(0);
 
-            final Gauge session_gauge = gaugeProvider.getObject((Supplier<Number>)idx2actor::size, "mh.afs.session",
+            final DisposableGauge session_gauge = gaugeProvider.getObject((Supplier<Number>)idx2actor::size, "mh.afs.session",
                     MetricCustomized.builder().tags(List.of("afs", ipv4)).build());
 
-            final Gauge blkcnt_gauge = gaugeProvider.getObject((Supplier<Number>)blk_cnt::get, "mh.afs.asr.frame.blk",
+            final DisposableGauge blkcnt_gauge = gaugeProvider.getObject((Supplier<Number>)blk_cnt::get, "mh.afs.asr.frame.blk",
                     MetricCustomized.builder().tags(List.of("afs", ipv4)).build());
 
             @Override
@@ -259,8 +258,8 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                 _wscount.decrementAndGet();
                 log.info("afs_io onClose {}: ", webSocket);
                 // remove gauges binding to this AfsIO instance
-                meterRegistry.remove(session_gauge);
-                meterRegistry.remove(blkcnt_gauge);
+                session_gauge.dispose();
+                blkcnt_gauge.dispose();
             }
         };
 
@@ -359,7 +358,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
     private final ObjectProvider<HandlerUrlBuilder> urlProvider;
     private final OrderedExecutor orderedExecutor;
     private final ObjectProvider<Timer> timerProvider;
-    private final ObjectProvider<Gauge> gaugeProvider;
+    private final ObjectProvider<DisposableGauge> gaugeProvider;
 
     private final AtomicInteger _wscount = new AtomicInteger(0);
 
@@ -370,6 +369,4 @@ public class AfsIOBuilder implements WsHandlerBuilder {
     private final ConcurrentMap<String, Timer> playback_reaction_timers = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Timer> playback_delay_timers = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Timer> frame_cost_timers = new ConcurrentHashMap<>();
-
-    final MeterRegistry meterRegistry;
 }
