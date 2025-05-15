@@ -16,6 +16,7 @@ import com.yulore.metric.MetricCustomized;
 import com.yulore.util.ExceptionUtil;
 import com.yulore.util.OrderedExecutor;
 import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.RequiredArgsConstructor;
@@ -197,6 +198,13 @@ public class AfsIOBuilder implements WsHandlerBuilder {
             final byte[] bytes8 = new byte[8];
 
             final AtomicInteger blk_cnt = new AtomicInteger(0);
+
+            final Gauge session_gauge = gaugeProvider.getObject((Supplier<Number>)idx2actor::size, "mh.afs.session",
+                    MetricCustomized.builder().tags(List.of("afs", ipv4)).build());
+
+            final Gauge blkcnt_gauge = gaugeProvider.getObject((Supplier<Number>)blk_cnt::get, "mh.afs.asr.frame.blk",
+                    MetricCustomized.builder().tags(List.of("afs", ipv4)).build());
+
             @Override
             public void onMessage(final WebSocket webSocket, final ByteBuffer buffer, final long recvdInMs) {
                 int cnt = 0;
@@ -250,18 +258,11 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                 // TODO: close all session create by this actor
                 _wscount.decrementAndGet();
                 log.info("afs_io onClose {}: ", webSocket);
+                // remove gauges binding to this AfsIO instance
+                meterRegistry.remove(session_gauge);
+                meterRegistry.remove(blkcnt_gauge);
             }
         };
-
-        session_gauges.put(ipv4, gaugeProvider.getObject((Supplier<Number>)afs.idx2actor::size, "mh.afs.session",
-                MetricCustomized.builder()
-                        .tags(List.of("afs", ipv4))
-                        .build()));
-
-        blkcnt_gauges.put(ipv4, gaugeProvider.getObject((Supplier<Number>)afs.blk_cnt::get, "mh.afs.asr.frame.blk",
-                MetricCustomized.builder()
-                        .tags(List.of("afs", ipv4))
-                        .build()));
 
         webSocket.setAttachment(afs);
         log.info("afs_io connected {}", handshake);
@@ -370,6 +371,5 @@ public class AfsIOBuilder implements WsHandlerBuilder {
     private final ConcurrentMap<String, Timer> playback_delay_timers = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Timer> frame_cost_timers = new ConcurrentHashMap<>();
 
-    private final ConcurrentMap<String, Gauge> session_gauges = new ConcurrentHashMap<>();
-    private final ConcurrentMap<String, Gauge> blkcnt_gauges = new ConcurrentHashMap<>();
+    final MeterRegistry meterRegistry;
 }
