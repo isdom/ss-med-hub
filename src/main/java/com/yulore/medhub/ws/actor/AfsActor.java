@@ -48,6 +48,7 @@ public class AfsActor {
         String uuid();
         String sessionId();
         String welcome();
+        long answerInMss();
         Consumer<Runnable> runOn();
         BiFunction<AIReplyVO, Supplier<String>, String> reply2Rms();
         BiConsumer<String, Object> sendEvent();
@@ -58,6 +59,8 @@ public class AfsActor {
         this.uuid = ctx.uuid();
         this.sessionId = ctx.sessionId();
         this.welcome = ctx.welcome();
+        // TODO: assume answer timestamp as record start timestamp, maybe using real rst?
+        this._recordStartInMs.set(ctx.answerInMss() / 1000L);
         this.runOn = ctx.runOn();
         this.reply2Rms = ctx.reply2Rms();
         this.sendEvent = ctx.sendEvent();

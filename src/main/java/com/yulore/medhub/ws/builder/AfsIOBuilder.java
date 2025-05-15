@@ -65,6 +65,9 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                 public String welcome() {
                     return vo.welcome;
                 }
+                public long answerInMss() {
+                    return vo.answerInMss;
+                }
                 public Consumer<Runnable> runOn() {
                     return runnable -> orderedExecutor.submit(vo.localIdx, runnable);
                 }
