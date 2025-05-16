@@ -1,8 +1,8 @@
 package com.yulore.util;
 
+import com.yulore.metric.DisposableGauge;
 import com.yulore.metric.MetricCustomized;
 import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.Gauge;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,7 +25,7 @@ public class OrderedProcessor implements OrderedExecutor {
     private final ExecutorService[] workers = new ExecutorService[POOL_SIZE];
     private final Counter[] taskCounters = new Counter[POOL_SIZE];
 
-    private final ObjectProvider<Gauge> gaugeProvider;
+    private final ObjectProvider<DisposableGauge> gaugeProvider;
     private final ObjectProvider<Counter> counterProvider;
 
     @PostConstruct
