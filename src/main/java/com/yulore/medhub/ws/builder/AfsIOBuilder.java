@@ -257,7 +257,14 @@ public class AfsIOBuilder implements WsHandlerBuilder {
 
             @Override
             public void onClose(final WebSocket webSocket) {
-                // TODO: close all session create by this actor
+                // TODO: close all session create by this actor, 2025-05-16, Very important!
+                if (!idx2actor.isEmpty()) {
+                    for (var entry : idx2actor.entrySet()) {
+                        entry.getValue().close();
+                    }
+                    idx2actor.clear();
+                }
+
                 _wscount.decrementAndGet();
                 log.info("afs_io onClose {}: ", webSocket);
                 // remove gauges binding to this AfsIO instance

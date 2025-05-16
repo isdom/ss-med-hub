@@ -22,7 +22,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -87,6 +86,10 @@ public class AfsActor {
         _asrService.startTranscription(new ASRConsumer() {
             @Override
             public void onSentenceBegin(PayloadSentenceBegin payload) {
+                runOn.accept(()-> {
+                    log.info("afs_io => onSentenceBegin: {}", payload);
+                    whenASRSentenceBegin(payload);
+                });
             }
 
             @Override
@@ -117,6 +120,9 @@ public class AfsActor {
                     if (op != null) { // means when close() called, operator !NOT! set yet
                         op.close();
                     }
+                } else {
+                    // afs session not closed
+                    playWelcome();
                 }
             }
         });
@@ -128,8 +134,6 @@ public class AfsActor {
         if (!isClosed.get()) {
             final var operator = opRef.get();
             if (operator != null) {
-                //final byte[] frame = new byte[buffer.remaining()];
-                //buffer.get(frame);
                 operator.transmit(frame);
                 final long now = System.currentTimeMillis();
                 transmitDelayPer50 += now - fsReadFrameInMss / 1000L;
@@ -143,6 +147,10 @@ public class AfsActor {
                     transmitCount = 0;
                     transmitDelayPer50 = 0;
                     handleCostPer50 = 0;
+                }
+                if (_asrStartedInMs.compareAndSet(0, now)) {
+                    // ref: https://help.aliyun.com/zh/isi/developer-reference/websocket#sectiondiv-iry-g6n-uqt
+                    log.info("[{}]: asr audio start at {} ms", sessionId, _asrStartedInMs.get());
                 }
             }
         }
@@ -163,12 +171,11 @@ public class AfsActor {
         // TODO:
     }
 
-    @PostConstruct
     private void playWelcome() {
         try {
             final ApiResponse<AIReplyVO> response =
                     _scriptApi.ai_reply(sessionId, welcome, null, 0, null, 0);
-            log.info("[{}]: playWelcome: call ai_reply with {} => response: {}", sessionId, welcome, response);
+            log.info("[{}] playWelcome: call ai_reply with {} => response: {}", sessionId, welcome, response);
             if (response.getData() != null) {
                 if (!doPlayback(response.getData())) {
                     if (response.getData().getHangup() == 1) {
@@ -182,7 +189,7 @@ public class AfsActor {
             }
         } catch (final Exception ex) {
             doHangup();
-            log.warn("[{}]: playWelcome: ai_reply error, hangup, detail: {}", sessionId, ExceptionUtil.exception2detail(ex));
+            log.warn("[{}] playWelcome: ai_reply error, hangup, detail: {}", sessionId, ExceptionUtil.exception2detail(ex));
         }
     }
 
@@ -202,8 +209,7 @@ public class AfsActor {
         if (currentPlaybackId != null) {
             if (currentPlaybackId.equals(vo.playback_id)) {
                 _currentPlaybackDuration.set(()->System.currentTimeMillis() - playbackStartedInMs);
-                log.info("[{}] playbackStarted => current playbackid: {} Matched",
-                        sessionId, vo.playback_id);
+                log.info("[{}] playbackStarted => current playbackid: {} Matched", sessionId, vo.playback_id);
             } else {
                 log.info("[{}] playbackStarted => current playbackid: {} mismatch started playbackid: {}, ignore",
                         sessionId, currentPlaybackId, vo.playback_id);
@@ -284,14 +290,20 @@ public class AfsActor {
         }
     }
 
-    /* TODO:
     private void whenASRSentenceBegin(final PayloadSentenceBegin payload) {
         _isUserSpeak.set(true);
         _currentSentenceBeginInMs.set(System.currentTimeMillis());
         if (isAICancelOnSpeak()) {
             final String playback_id = _currentPlaybackId.get();
-            _sendEvent.accept("FSStopPlayback", new PayloadFSChangePlayback(_uuid, playback_id));
-            log.info("[{}]: stop current playing ({}) for cancel_on_speak is true", _sessionId, playback_id);
+            sendEvent.accept("StopPlayback",
+                    AFSStopPlaybackEvent.builder()
+                            .localIdx(localIdx)
+                            .playback_id(playback_id)
+                            .stopEventInMs(_currentSentenceBeginInMs.get())
+                            .build()
+            );
+            // sendEvent.accept("FSStopPlayback", new PayloadFSChangePlayback(_uuid, playback_id));
+            log.info("[{}] whenASRSentenceBegin: stop current playing ({}) for cancel_on_speak is true", sessionId, playback_id);
         }
     }
 
@@ -303,7 +315,6 @@ public class AfsActor {
             return false;
         }
     }
-    */
 
     private void whenASRSentenceEnd(final PayloadSentenceEnd payload) {
         final long sentenceEndInMs = System.currentTimeMillis();
