@@ -6,6 +6,7 @@ import com.yulore.medhub.api.CallApi;
 import com.yulore.medhub.api.ScriptApi;
 import com.yulore.medhub.service.ASRService;
 import com.yulore.medhub.service.BSTService;
+import com.yulore.metric.DisposableGauge;
 import com.yulore.util.OrderedExecutor;
 import com.yulore.medhub.task.PlayStreamPCMTask2;
 import com.yulore.medhub.task.SampleInfo;
@@ -17,7 +18,6 @@ import com.yulore.medhub.ws.WsHandlerBuilder;
 import com.yulore.medhub.ws.actor.PoActor;
 import com.yulore.metric.MetricCustomized;
 import com.yulore.util.VarsUtil;
-import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -253,7 +253,7 @@ public class PoActorBuilder implements WsHandlerBuilder {
     private final OrderedExecutor orderedExecutor;
 
     private final ObjectProvider<Timer> timerProvider;
-    private final ObjectProvider<Gauge> gaugeProvider;
+    private final ObjectProvider<DisposableGauge> gaugeProvider;
 
     private final AtomicInteger _wscount = new AtomicInteger(0);
 

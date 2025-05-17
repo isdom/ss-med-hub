@@ -9,9 +9,9 @@ import com.yulore.medhub.ws.WSCommandRegistry;
 import com.yulore.medhub.ws.WsHandler;
 import com.yulore.medhub.ws.WsHandlerBuilder;
 import com.yulore.medhub.ws.actor.StreamActor;
+import com.yulore.metric.DisposableGauge;
 import com.yulore.metric.MetricCustomized;
 import com.yulore.util.VarsUtil;
-import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -123,7 +123,7 @@ public class ReadStreamBuilder extends BaseStreamBuilder implements WsHandlerBui
     private final BSTService bstService;
     private final Function<String, Executor> executorProvider;
     private final ObjectProvider<Timer> timerProvider;
-    private final ObjectProvider<Gauge> gaugeProvider;
+    private final ObjectProvider<DisposableGauge> gaugeProvider;
 
     private final AtomicInteger _wscount = new AtomicInteger(0);
 }

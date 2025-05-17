@@ -85,6 +85,7 @@ public class MetricsRepo {
         };
     }
 
+    /*
     @Bean
     @Scope(SCOPE_PROTOTYPE)
     public Gauge buildGauge(final Supplier<Number> f, final String name, final MetricCustomized customized) {
@@ -107,6 +108,7 @@ public class MetricsRepo {
 
         return builder.register(meterRegistry);
     }
+    */
 
     @Bean
     @Scope(SCOPE_PROTOTYPE)

@@ -2,6 +2,7 @@ package com.yulore.medhub.ws.builder;
 
 import com.yulore.medhub.api.ScriptApi;
 import com.yulore.medhub.service.ASRService;
+import com.yulore.metric.DisposableGauge;
 import com.yulore.util.OrderedExecutor;
 import com.yulore.medhub.vo.WSCommandVO;
 import com.yulore.medhub.vo.cmd.*;
@@ -13,7 +14,6 @@ import com.yulore.medhub.ws.WsHandler;
 import com.yulore.medhub.ws.WsHandlerBuilder;
 import com.yulore.metric.MetricCustomized;
 import com.yulore.util.ExceptionUtil;
-import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -195,7 +195,7 @@ public class FsActorBuilder implements WsHandlerBuilder {
     private final ASRService asrService;
     private final OrderedExecutor orderedExecutor;
     private final ObjectProvider<Timer> timerProvider;
-    private final ObjectProvider<Gauge> gaugeProvider;
+    private final ObjectProvider<DisposableGauge> gaugeProvider;
 
     private final AtomicInteger _wscount = new AtomicInteger(0);
 
