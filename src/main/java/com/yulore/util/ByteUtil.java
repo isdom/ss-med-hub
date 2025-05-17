@@ -14,8 +14,8 @@ public class ByteUtil {
 
     public static long _8BLE_to_long(final byte[] bytes, final int offset) {
         return ((bytes[offset+7] & 0xFFL) << 56) |  // 最高有效字节（小端的最后一个字节）
-                ((bytes[offset+5] & 0xFFL) << 40) |
                 ((bytes[offset+6] & 0xFFL) << 48) |
+                ((bytes[offset+5] & 0xFFL) << 40) |
                 ((bytes[offset+4] & 0xFFL) << 32) |
                 ((bytes[offset+3] & 0xFFL) << 24) |
                 ((bytes[offset+2] & 0xFFL) << 16) |
