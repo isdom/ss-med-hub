@@ -1,7 +1,7 @@
 package com.yulore.util;
 
+import com.yulore.metric.DisposableGauge;
 import com.yulore.metric.MetricCustomized;
-import io.micrometer.core.instrument.Gauge;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -82,5 +82,5 @@ public class ExecutorRepo implements ApplicationListener<ContextClosedEvent> {
     }
 
     private final ConcurrentMap<String, ExecutorService> executors = new ConcurrentHashMap<>();
-    private final ObjectProvider<Gauge> gaugeProvider;
+    private final ObjectProvider<DisposableGauge> gaugeProvider;
 }
