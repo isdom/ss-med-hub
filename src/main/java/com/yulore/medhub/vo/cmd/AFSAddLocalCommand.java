@@ -17,4 +17,5 @@ public class AFSAddLocalCommand {
     public String sessionId;
     public String welcome;
     public long answerInMss;
+    public int idleTimeout;
 }

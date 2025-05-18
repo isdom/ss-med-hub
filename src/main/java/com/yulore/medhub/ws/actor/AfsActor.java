@@ -48,6 +48,7 @@ public class AfsActor {
         String sessionId();
         String welcome();
         long answerInMss();
+        int idleTimeout();
         Consumer<Runnable> runOn();
         BiFunction<AIReplyVO, Supplier<String>, String> reply2Rms();
         BiConsumer<String, Object> sendEvent();
@@ -60,6 +61,8 @@ public class AfsActor {
         this.welcome = ctx.welcome();
         // TODO: assume answer timestamp as record start timestamp, maybe using real rst?
         this._recordStartInMs.set(ctx.answerInMss() / 1000L);
+
+        this._idleTimeout = ctx.idleTimeout();
         this.runOn = ctx.runOn();
         this.reply2Rms = ctx.reply2Rms();
         this.sendEvent = ctx.sendEvent();
@@ -168,7 +171,35 @@ public class AfsActor {
     }
 
     public void checkIdle() {
-        // TODO:
+        final long idleTime = System.currentTimeMillis() - _idleStartInMs.get();
+        if (sessionId != null      // user answered
+            && !_isUserSpeak.get()  // user not speak
+            && !isAiSpeaking()      // AI not speak
+            && _idleTimeout > 0
+        ) {
+            if (idleTime > _idleTimeout) {
+                log.info("[{}] checkIdle: idle duration: {} ms >=: [{}] ms", sessionId, idleTime, _idleTimeout);
+                try {
+                    final ApiResponse<AIReplyVO> response =
+                            _scriptApi.ai_reply(sessionId, null, idleTime, 0, null, 0);
+                    log.info("[{}] checkIdle: ai_reply {}", sessionId, response);
+                    if (response.getData() != null) {
+                        if (doPlayback(response.getData())) {
+                        } else if (response.getData().getHangup() == 1) {
+                            doHangup();
+                            // _sendEvent.accept("FSHangup", new PayloadFSHangup(_uuid, _sessionId));
+                            log.info("[{}] checkIdle: hangup ({}) for ai_reply ({})", sessionId, sessionId, response.getData());
+                        }
+                    } else {
+                        log.info("[{}] checkIdle: ai_reply's data is null, do_nothing", sessionId);
+                    }
+                } catch (final Exception ex) {
+                    log.warn("[{}] checkIdle: ai_reply error, detail: {}", sessionId, ExceptionUtil.exception2detail(ex));
+                }
+            }
+        }
+        log.info("[{}] checkIdle: is_speaking: {}/is_playing: {}/idle duration: {} ms/idle_timeout: {} ms",
+                sessionId, _isUserSpeak.get(), isAiSpeaking(), idleTime, _idleTimeout);
     }
 
     private void playWelcome() {
@@ -439,6 +470,8 @@ public class AfsActor {
     private final AtomicReference<String> _currentPlaybackId = new AtomicReference<>(null);
     private final AtomicBoolean _currentPlaybackPaused = new AtomicBoolean(false);
     private final AtomicReference<Supplier<Long>> _currentPlaybackDuration = new AtomicReference<>(()->0L);
+
+    private final int _idleTimeout;
 
     private final AtomicLong _idleStartInMs = new AtomicLong(System.currentTimeMillis());
     private final AtomicBoolean _isUserSpeak = new AtomicBoolean(false);
