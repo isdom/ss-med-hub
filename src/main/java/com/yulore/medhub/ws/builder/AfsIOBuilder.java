@@ -26,11 +26,13 @@ import org.java_websocket.handshake.ClientHandshake;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
 import java.nio.ByteBuffer;
 import java.time.Duration;
+import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -120,6 +122,17 @@ public class AfsIOBuilder implements WsHandlerBuilder {
         }
 
         final ConcurrentMap<Integer, AfsActor> idx2actor = new ConcurrentHashMap<>();
+    }
+
+    private final Collection<AfsIO> _allAfs = new ConcurrentLinkedQueue<>();
+
+    @Scheduled(fixedDelay = 1_000)  // 每1秒推送一次
+    private void checkIdleForAll() {
+        for (var afs : _allAfs) {
+            for (var actor : afs.idx2actor.values()) {
+                orderedExecutor.submit(actor.localIdx(), actor::checkIdle);
+            }
+        }
     }
 
     @Override
@@ -241,6 +254,8 @@ public class AfsIOBuilder implements WsHandlerBuilder {
 
             @Override
             public void onClose(final WebSocket webSocket) {
+                _allAfs.remove(this);
+
                 // TODO: close all session create by this actor, 2025-05-16, Very important!
                 if (!idx2actor.isEmpty()) {
                     for (var entry : idx2actor.entrySet()) {
@@ -258,6 +273,8 @@ public class AfsIOBuilder implements WsHandlerBuilder {
         };
 
         webSocket.setAttachment(afs);
+        _allAfs.add(afs);
+
         log.info("afs_io connected {}", handshake);
         return afs;
     }

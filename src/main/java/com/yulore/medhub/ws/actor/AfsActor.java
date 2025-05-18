@@ -68,6 +68,10 @@ public class AfsActor {
         this.sendEvent = ctx.sendEvent();
     }
 
+    public int localIdx() {
+        return this.localIdx;
+    }
+
     private final int localIdx;
     private final String uuid;
     private final String sessionId;
