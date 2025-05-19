@@ -36,6 +36,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.*;
 
 @Slf4j
@@ -50,6 +51,27 @@ public class AfsIOBuilder implements WsHandlerBuilder {
     }
 
     abstract class AfsIO implements WsHandler {
+        AfsIO() {
+            for (int idx = 0; idx < MAX_IDX; idx++) {
+                idx2agent[idx] = new AtomicReference<>(null);
+            }
+        }
+
+        AfsActor idx2agent(final int localIdx) {
+            if (localIdx > 0 && localIdx<= MAX_IDX) {
+                return idx2agent[localIdx - 1].get();
+            } else {
+                throw new ArrayIndexOutOfBoundsException("idx2actor:"+localIdx);
+            }
+        }
+
+        private void saveActor(final int localIdx, final AfsActor actor) {
+                idx2agent[localIdx - 1].set(actor);
+        }
+
+        private AfsActor removeActor(final int localIdx) {
+            return idx2agent[localIdx - 1].getAndSet(null);
+        }
 
         void addLocal(final AFSAddLocalCommand vo, final WebSocket ws, final Timer timer) {
             timer.record(System.currentTimeMillis() - vo.answerInMss / 1000L, TimeUnit.MILLISECONDS);
@@ -84,14 +106,17 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                     return (name,obj)-> WSEventVO.sendEvent(ws, name, obj);
                 }
             });
-            idx2actor.put(vo.localIdx, actor);
+            //idx2actor.put(vo.localIdx, actor);
+            actorCount.incrementAndGet();
+            saveActor(vo.localIdx, actor);
             actor.startTranscription();
         }
 
         void removeLocal(final AFSRemoveLocalCommand vo, final Timer timer) {
             timer.record(System.currentTimeMillis() - vo.hangupInMss / 1000L, TimeUnit.MILLISECONDS);
 
-            final var actor = idx2actor.remove(vo.localIdx);
+            actorCount.decrementAndGet();
+            final var actor = removeActor(vo.localIdx); //idx2actor.remove(vo.localIdx);
             if (actor != null) {
                 actor.close();
             }
@@ -102,7 +127,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
             final long now = System.currentTimeMillis();
             reaction_timer.record(vo.eventInMss - vo.startInMss, TimeUnit.MICROSECONDS);
             delay_timer.record(now - vo.startInMss / 1000L, TimeUnit.MILLISECONDS);
-            final var actor = idx2actor.get(vo.localIdx);
+            final var actor = idx2agent(vo.localIdx); //idx2actor.get(vo.localIdx);
             if (actor != null) {
                 actor.playbackStarted(vo);
             }
@@ -110,18 +135,24 @@ public class AfsIOBuilder implements WsHandlerBuilder {
         }
 
         void playbackStopped(final AFSPlaybackStopped vo) {
-            final var actor = idx2actor.get(vo.localIdx);
+            final var actor = idx2agent(vo.localIdx); //idx2actor.get(vo.localIdx);
             if (actor != null) {
                 actor.playbackStopped(vo);
             }
             log.info("AfsIO: playbackStopped {}", vo);
         }
 
-        AfsActor actorOf(final int localIdx) {
-            return idx2actor.get(localIdx);
-        }
+        // AfsActor actorOf(final int localIdx) {
+        //    return idx2actor.get(localIdx);
+        //}
 
-        final ConcurrentMap<Integer, AfsActor> idx2actor = new ConcurrentHashMap<>();
+        // final ConcurrentMap<Integer, AfsActor> idx2actor = new ConcurrentHashMap<>();
+
+        private final int MAX_IDX = 4096;
+
+        @SuppressWarnings("unchecked")
+        final AtomicReference<AfsActor>[] idx2agent = new AtomicReference[MAX_IDX];
+        final AtomicInteger actorCount = new AtomicInteger(0);
     }
 
     private final Collection<AfsIO> _allAfs = new ConcurrentLinkedQueue<>();
@@ -129,8 +160,11 @@ public class AfsIOBuilder implements WsHandlerBuilder {
     @Scheduled(fixedDelay = 1_000)  // 每1秒推送一次
     private void checkIdleForAll() {
         for (var afs : _allAfs) {
-            for (var actor : afs.idx2actor.values()) {
-                orderedExecutor.submit(actor.localIdx(), actor::checkIdle);
+            for (var ref : afs.idx2agent) {
+                final var actor = ref.get();
+                if (actor != null) {
+                    orderedExecutor.submit(actor.localIdx(), actor::checkIdle);
+                }
             }
         }
     }
@@ -216,7 +250,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
 
             final AtomicInteger blk_cnt = new AtomicInteger(0);
 
-            final DisposableGauge session_gauge = gaugeProvider.getObject((Supplier<Number>)idx2actor::size, "mh.afs.session",
+            final DisposableGauge session_gauge = gaugeProvider.getObject((Supplier<Number>)actorCount::get, "mh.afs.session",
                     MetricCustomized.builder().tags(List.of("afs", ipv4)).build());
 
             final DisposableGauge blkcnt_gauge = gaugeProvider.getObject((Supplier<Number>)blk_cnt::get, "mh.afs.asr.frame.blk",
@@ -237,7 +271,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                     buffer.get(data);
                     mediaExecutor.submit(
                             localIdx, ()->{
-                                final var actor = actorOf(localIdx);
+                                final var actor = idx2agent(localIdx); //actorOf(localIdx);
                                 if (null != actor) {
                                     actor.transmit(data, fsReadFrameInMss, recvdInMs, td_timer, hc_timer);
                                 }
@@ -257,12 +291,19 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                 _allAfs.remove(this);
 
                 // TODO: close all session create by this actor, 2025-05-16, Very important!
-                if (!idx2actor.isEmpty()) {
-                    for (var entry : idx2actor.entrySet()) {
-                        entry.getValue().close();
+//                if (!idx2actor.isEmpty()) {
+//                    for (var entry : idx2actor.entrySet()) {
+//                        entry.getValue().close();
+//                    }
+//                    idx2actor.clear();
+//                }
+                for (var ref : idx2agent) {
+                    final var actor = ref.get();
+                    if (actor != null) {
+                        orderedExecutor.submit(actor.localIdx(), actor::close);
                     }
-                    idx2actor.clear();
                 }
+                actorCount.set(0);
 
                 _wscount.decrementAndGet();
                 log.info("afs_io onClose {}: ", webSocket);
