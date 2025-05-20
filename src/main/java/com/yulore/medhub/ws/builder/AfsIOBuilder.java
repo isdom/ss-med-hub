@@ -57,7 +57,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
             }
         }
 
-        AfsActor idx2agent(final int localIdx) {
+        AfsActor idx2actor(final int localIdx) {
             if (localIdx > 0 && localIdx<= MAX_IDX) {
                 return idx2agent[localIdx - 1].get();
             } else {
@@ -106,7 +106,6 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                     return (name,obj)-> WSEventVO.sendEvent(ws, name, obj);
                 }
             });
-            //idx2actor.put(vo.localIdx, actor);
             actorCount.incrementAndGet();
             saveActor(vo.localIdx, actor);
             actor.startTranscription();
@@ -116,7 +115,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
             timer.record(System.currentTimeMillis() - vo.hangupInMss / 1000L, TimeUnit.MILLISECONDS);
 
             actorCount.decrementAndGet();
-            final var actor = removeActor(vo.localIdx); //idx2actor.remove(vo.localIdx);
+            final var actor = removeActor(vo.localIdx);
             if (actor != null) {
                 actor.close();
             }
@@ -127,7 +126,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
             final long now = System.currentTimeMillis();
             reaction_timer.record(vo.eventInMss - vo.startInMss, TimeUnit.MICROSECONDS);
             delay_timer.record(now - vo.startInMss / 1000L, TimeUnit.MILLISECONDS);
-            final var actor = idx2agent(vo.localIdx); //idx2actor.get(vo.localIdx);
+            final var actor = idx2actor(vo.localIdx);
             if (actor != null) {
                 actor.playbackStarted(vo);
             }
@@ -135,18 +134,12 @@ public class AfsIOBuilder implements WsHandlerBuilder {
         }
 
         void playbackStopped(final AFSPlaybackStopped vo) {
-            final var actor = idx2agent(vo.localIdx); //idx2actor.get(vo.localIdx);
+            final var actor = idx2actor(vo.localIdx);
             if (actor != null) {
                 actor.playbackStopped(vo);
             }
             log.info("AfsIO: playbackStopped {}", vo);
         }
-
-        // AfsActor actorOf(final int localIdx) {
-        //    return idx2actor.get(localIdx);
-        //}
-
-        // final ConcurrentMap<Integer, AfsActor> idx2actor = new ConcurrentHashMap<>();
 
         private final int MAX_IDX = 4096;
 
@@ -271,7 +264,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                     buffer.get(data);
                     mediaExecutor.submit(
                             localIdx, ()->{
-                                final var actor = idx2agent(localIdx); //actorOf(localIdx);
+                                final var actor = idx2actor(localIdx);
                                 if (null != actor) {
                                     actor.transmit(data, fsReadFrameInMss, recvdInMs, td_timer, hc_timer);
                                 }
@@ -291,12 +284,6 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                 _allAfs.remove(this);
 
                 // TODO: close all session create by this actor, 2025-05-16, Very important!
-//                if (!idx2actor.isEmpty()) {
-//                    for (var entry : idx2actor.entrySet()) {
-//                        entry.getValue().close();
-//                    }
-//                    idx2actor.clear();
-//                }
                 for (var ref : idx2agent) {
                     final var actor = ref.get();
                     if (actor != null) {
