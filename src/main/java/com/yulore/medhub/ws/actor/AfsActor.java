@@ -269,6 +269,21 @@ public class AfsActor {
         } else {
             log.info("[{}] stopped playback_id:{} is !NOT! current playback_id:{}, ignored", sessionId, vo.playback_id, _currentPlaybackId.get());
         }
+        // call _scriptApi.report_content for AI
+        {
+            final var memo = memoFor(vo.playback_id);
+            final var resp =_scriptApi.report_content(
+                    sessionId,
+                    memo.contentId,
+                    memo.playbackIdx,
+                    "AI",
+                    _recordStartInMs.get(),
+                    vo.startInMss / 1000L,
+                    vo.eventInMss / 1000L,
+                    vo.playbackMs);
+            log.info("[{}] ai report_content ({})'s response: {}", sessionId, memo.contentId, resp);
+            // TODO, when close(), check and report last playback
+        }
     }
 
     private void doHangup() {

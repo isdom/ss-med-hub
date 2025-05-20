@@ -16,4 +16,5 @@ public class AFSPlaybackStopped {
     public String playback_id;
     public long eventInMss;
     public long startInMss;
+    public int playbackMs;
 }
