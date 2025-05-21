@@ -170,6 +170,21 @@ public class AfsActor {
                 operator.close();
             }
 
+            if (isAiSpeaking()) {
+                // last playback still playing
+                final var memo = memoFor(_currentPlaybackId.get());
+                final var resp =_scriptApi.report_content(
+                        sessionId,
+                        memo.contentId,
+                        memo.playbackIdx,
+                        "AI",
+                        _recordStartInMs.get(),
+                        memo.beginInMs,
+                        System.currentTimeMillis(), // stop now
+                        currentSpeakingDuration());
+                log.info("[{}] close(): ai report_content ({})'s response: {}", sessionId, memo.contentId, resp);
+            }
+
             _id2memo.clear();
         }
     }
@@ -256,8 +271,8 @@ public class AfsActor {
 
     public void playbackStopped(final AFSPlaybackStopped vo) {
         if (_currentPlaybackId.get() != null
-                && vo.playback_id != null
-                && vo.playback_id.equals(_currentPlaybackId.get()) ) {
+            && vo.playback_id != null
+            && vo.playback_id.equals(_currentPlaybackId.get()) ) {
             _currentPlaybackId.set(null);
             _currentPlaybackDuration.set(()->0L);
             _idleStartInMs.set(System.currentTimeMillis());
