@@ -367,7 +367,6 @@ public class AfsActor {
                             .stopEventInMs(_currentSentenceBeginInMs.get())
                             .build()
             );
-            // sendEvent.accept("FSStopPlayback", new PayloadFSChangePlayback(_uuid, playback_id));
             log.info("[{}] whenASRSentenceBegin: stop current playing ({}) for cancel_on_speak is true", sessionId, playback_id);
         }
     }
