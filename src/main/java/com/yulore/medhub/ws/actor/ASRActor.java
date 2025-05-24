@@ -158,6 +158,7 @@ public abstract class ASRActor<ACTOR extends CommandHandler<?>> extends CommandH
         }
         log.info("{} 's ASRActor close(), lasted: {} s, check idle {} times",
                 _sessionId, (System.currentTimeMillis() - _sessionBeginInMs) / 1000.0f, _checkIdleCount.get());
+        _id2memo.clear();
     }
 
     public SpeechTranscriber onSpeechTranscriberCreated(final SpeechTranscriber speechTranscriber) {
