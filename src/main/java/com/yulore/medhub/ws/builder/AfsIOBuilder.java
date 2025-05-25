@@ -287,7 +287,8 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                 for (var ref : idx2agent) {
                     final var actor = ref.get();
                     if (actor != null) {
-                        orderedExecutor.submit(actor.localIdx(), actor::close);
+                        //orderedExecutor.submit(actor.localIdx(), actor::close);
+                        actor.close();
                     }
                 }
                 actorCount.set(0);

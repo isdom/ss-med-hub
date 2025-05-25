@@ -25,6 +25,7 @@ import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
@@ -87,10 +88,10 @@ class ASRServiceImpl implements ASRService {
     @PostConstruct
     public void init() {
         //创建NlsClient实例应用全局创建一个即可。生命周期可和整个应用保持一致，默认服务地址为阿里云线上服务地址。
-        _nlsClient = new NlsClient(_nls_url, "invalid_token");
+        _aliClient = new NlsClient(_nls_url, "invalid_token");
         _txClient = new SpeechClient(AsrConstant.DEFAULT_RT_REQ_URL);
 
-        initASRAgents(_nlsClient);
+        initASRAgents(_aliClient);
         asr_started_timer = timerProvider.getObject("nls.asr.started.duration", null);
         txasr_started_timer = timerProvider.getObject("nls.txasr.started.duration", null);
         executor = executorProvider.apply("nls");
@@ -98,10 +99,11 @@ class ASRServiceImpl implements ASRService {
 
     @PreDestroy
     public void release() {
-        _nlsClient.shutdown();
+        // TODO: close all asr-operator
+        _aliClient.shutdown();
         _txClient.shutdown();
 
-        log.info("NlsServiceImpl: shutdown");
+        log.info("ASRServiceImpl: shutdown");
     }
 
     private void initASRAgents(final NlsClient client) {
@@ -159,7 +161,7 @@ class ASRServiceImpl implements ASRService {
         }
         log.info("txasr agent init, count:{}", _txasrAgents.size());
 
-        schedulerProvider.getObject().scheduleAtFixedRate(this::checkAndUpdateASRToken, 0, 10, TimeUnit.MINUTES);
+        // schedulerProvider.getObject().scheduleAtFixedRate(this::checkAndUpdateASRToken, 0, 10, TimeUnit.MINUTES);
     }
 
     public CompletionStage<ASRAgent> selectASRAgentAsync() {
@@ -188,6 +190,8 @@ class ASRServiceImpl implements ASRService {
                 });
     }
 
+    //    schedulerProvider.getObject().scheduleAtFixedRate(this::checkAndUpdateASRToken, 0, 10, TimeUnit.MINUTES);
+    @Scheduled(initialDelay = 0, fixedRate = 10, timeUnit = TimeUnit.MINUTES)  // 每1秒推送一次
     private void checkAndUpdateASRToken() {
         for (final ASRAgent agent : _asrAgents) {
             agent.checkAndUpdateAccessToken();
@@ -594,6 +598,7 @@ class ASRServiceImpl implements ASRService {
 
     @NotNull
     private ASROperator createASROperator(final ASRAgent agent, final SpeechTranscriber transcriber, final AtomicBoolean isConnected) {
+        // TODO: collect all asr-operator for close them all when application shutdown
         final AtomicBoolean isClosed = new AtomicBoolean(false);
         return new ASROperator() {
             @Override
@@ -728,12 +733,12 @@ class ASRServiceImpl implements ASRService {
 
     private final RedissonClient redisson;
     private final Function<String, Executor> executorProvider;
-    private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
+    // private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
     private final ObjectProvider<Timer> timerProvider;
 
     private Executor executor;
 
-    private NlsClient _nlsClient;
+    private NlsClient _aliClient;
 
     private SpeechClient _txClient;
 }
