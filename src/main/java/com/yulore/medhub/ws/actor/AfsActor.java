@@ -106,9 +106,10 @@ public class AfsActor {
 
             @Override
             public void onSentenceEnd(final PayloadSentenceEnd payload) {
+                final long sentenceEndInMs = System.currentTimeMillis();
                 runOn.accept(()->{
                     log.info("afs_io => onSentenceEnd: {}", payload);
-                    whenASRSentenceEnd(payload);
+                    whenASRSentenceEnd(payload, sentenceEndInMs);
                 });
             }
 
@@ -380,8 +381,7 @@ public class AfsActor {
         }
     }
 
-    private void whenASRSentenceEnd(final PayloadSentenceEnd payload) {
-        final long sentenceEndInMs = System.currentTimeMillis();
+    private void whenASRSentenceEnd(final PayloadSentenceEnd payload, final long sentenceEndInMs) {
         _isUserSpeak.set(false);
         _idleStartInMs.set(sentenceEndInMs);
 
@@ -421,8 +421,10 @@ public class AfsActor {
 
         {
             // report USER speak timing
-            final long start_speak_timestamp = _asrStartedInMs.get() + payload.getBegin_time();
-            final long stop_speak_timestamp = _asrStartedInMs.get() + payload.getTime();
+            // final long start_speak_timestamp = _asrStartedInMs.get() + payload.getBegin_time();
+            final long start_speak_timestamp = _currentSentenceBeginInMs.get();
+            // final long stop_speak_timestamp = _asrStartedInMs.get() + payload.getTime();
+            final long stop_speak_timestamp = sentenceEndInMs;
             final long user_speak_duration = stop_speak_timestamp - start_speak_timestamp;
 
             final ApiResponse<Void> resp = _scriptApi.report_content(
