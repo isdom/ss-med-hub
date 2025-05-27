@@ -141,6 +141,14 @@ public class AfsIOBuilder implements WsHandlerBuilder {
             log.info("AfsIO: playbackStopped {}", vo);
         }
 
+        void recordStarted(final AFSRecordStarted vo) {
+            final var actor = idx2actor(vo.localIdx);
+            if (actor != null) {
+                actor.recordStarted(vo);
+            }
+            log.info("AfsIO: recordStarted {}", vo);
+        }
+
         private final int MAX_IDX = 4096;
 
         @SuppressWarnings("unchecked")
@@ -216,6 +224,8 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                         ctx->ctx.actor().playbackStarted(ctx.payload(), playback_reaction_timer, playback_delay_timer))
                 .register(AFSPlaybackStopped.TYPE,"PlaybackStopped",
                         ctx->ctx.actor().playbackStopped(ctx.payload()))
+                .register(AFSRecordStarted.TYPE,"RecordStarted",
+                        ctx->ctx.actor().recordStarted(ctx.payload()))
                 ;
 
         _wscount.incrementAndGet();

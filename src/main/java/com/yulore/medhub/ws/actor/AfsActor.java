@@ -9,6 +9,7 @@ import com.yulore.medhub.service.ASRService;
 import com.yulore.medhub.vo.*;
 import com.yulore.medhub.vo.cmd.AFSPlaybackStarted;
 import com.yulore.medhub.vo.cmd.AFSPlaybackStopped;
+import com.yulore.medhub.vo.cmd.AFSRecordStarted;
 import com.yulore.medhub.vo.event.AFSHangupEvent;
 import com.yulore.medhub.vo.event.AFSStartPlaybackEvent;
 import com.yulore.medhub.vo.event.AFSStopPlaybackEvent;
@@ -23,6 +24,8 @@ import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -59,9 +62,7 @@ public class AfsActor {
         this.uuid = ctx.uuid();
         this.sessionId = ctx.sessionId();
         this.welcome = ctx.welcome();
-        // TODO: assume answer timestamp as record start timestamp, maybe using real rst?
-        this._recordStartInMs.set(ctx.answerInMss() / 1000L);
-
+        this._answerInMs = ctx.answerInMss() / 1000L;
         this._idleTimeout = ctx.idleTimeout();
         this.runOn = ctx.runOn();
         this.reply2Rms = ctx.reply2Rms();
@@ -172,21 +173,26 @@ public class AfsActor {
             }
 
             if (isAiSpeaking()) {
-                // last playback still playing
-                final var memo = memoFor(_currentPlaybackId.get());
-                final var resp =_scriptApi.report_content(
-                        sessionId,
-                        memo.contentId,
-                        memo.playbackIdx,
-                        "AI",
-                        _recordStartInMs.get(),
-                        memo.beginInMs,
-                        System.currentTimeMillis(), // stop now
-                        currentSpeakingDuration());
-                log.info("[{}] close(): ai report_content ({})'s response: {}", sessionId, memo.contentId, resp);
+                if (_recordStartInMs.get() > 0) {
+                    // last playback still playing
+                    final var memo = memoFor(_currentPlaybackId.get());
+                    final var resp = _scriptApi.report_content(
+                            sessionId,
+                            memo.contentId,
+                            memo.playbackIdx,
+                            "AI",
+                            _recordStartInMs.get(),
+                            memo.beginInMs,
+                            System.currentTimeMillis(), // stop now
+                            currentSpeakingDuration());
+                    log.info("[{}] close(): ai report_content ({})'s response: {}", sessionId, memo.contentId, resp);
+                } else {
+                    log.warn("[{}] close(): _recordStartInMs is {}, skip_last_report_content for AI ", sessionId, _recordStartInMs.get());
+                }
             }
 
             _id2memo.clear();
+            _pendingReports.clear();
         }
     }
 
@@ -287,19 +293,39 @@ public class AfsActor {
         }
         // call _scriptApi.report_content for AI
         {
-            final var memo = memoFor(vo.playback_id);
-            final var resp =_scriptApi.report_content(
-                    sessionId,
-                    memo.contentId,
-                    memo.playbackIdx,
-                    "AI",
-                    _recordStartInMs.get(),
-                    vo.startInMss / 1000L,
-                    vo.eventInMss / 1000L,
-                    vo.playbackMs);
-            log.info("[{}] ai report_content ({})'s response: {}", sessionId, memo.contentId, resp);
-            // TODO, when close(), check and report last playback
+            final var playback_id = vo.playback_id;
+            final var start_speak_timestamp = vo.startInMss / 1000L;
+            final var stop_speak_timestamp = vo.eventInMss / 1000L;
+            final var playback_ms = vo.playbackMs;
+            final Runnable doReport = ()-> {
+                final var memo = memoFor(playback_id);
+                final var resp = _scriptApi.report_content(
+                        sessionId,
+                        memo.contentId,
+                        memo.playbackIdx,
+                        "AI",
+                        _recordStartInMs.get(),
+                        start_speak_timestamp,
+                        stop_speak_timestamp,
+                        playback_ms);
+                log.info("[{}] ai report_content ({})'s response: {}", sessionId, memo.contentId, resp);
+            };
+            if (_recordStartInMs.get() > 0) {
+                doReport.run();
+            } else {
+                log.info("add report to pendings");
+                _pendingReports.add(doReport);
+            }
         }
+    }
+
+    public void recordStarted(final AFSRecordStarted vo) {
+        _recordStartInMs.set(vo.startInMss / 1000L);
+        for (var doReport : _pendingReports) {
+            doReport.run();
+        }
+        _pendingReports.clear();
+        log.info("[{}] record diff from answer: {} ms", sessionId, _recordStartInMs.get() - _answerInMs);
     }
 
     private void doHangup() {
@@ -421,22 +447,34 @@ public class AfsActor {
 
         {
             // report USER speak timing
-            // final long start_speak_timestamp = _asrStartedInMs.get() + payload.getBegin_time();
-            final long start_speak_timestamp = _currentSentenceBeginInMs.get();
-            // final long stop_speak_timestamp = _asrStartedInMs.get() + payload.getTime();
-            final long stop_speak_timestamp = sentenceEndInMs;
+            final var content_id = userContentId;
+            final var content_index = payload.getIndex();
+            final long start_speak_timestamp = _asrStartedInMs.get() + payload.getBegin_time();
+            //final long start_speak_timestamp = _currentSentenceBeginInMs.get();
+            final long stop_speak_timestamp = _asrStartedInMs.get() + payload.getTime();
             final long user_speak_duration = stop_speak_timestamp - start_speak_timestamp;
+            // final long user_speak_duration = sentenceEndInMs - start_speak_timestamp;
+            log.info("[{}] USER report_content({}) diff, (sentence_begin-start) = {} ms,  (sentence_end-stop) = {} ms",
+                    sessionId, content_index, _currentSentenceBeginInMs.get() - start_speak_timestamp, sentenceEndInMs - stop_speak_timestamp);
 
-            final ApiResponse<Void> resp = _scriptApi.report_content(
-                    sessionId,
-                    userContentId,
-                    payload.getIndex(),
-                    "USER",
-                    _recordStartInMs.get(),
-                    start_speak_timestamp,
-                    stop_speak_timestamp,
-                    user_speak_duration);
-            log.info("[{}] user report_content ({})'s response: {}", sessionId, userContentId, resp);
+            final Runnable doReport = ()-> {
+                final ApiResponse<Void> resp = _scriptApi.report_content(
+                        sessionId,
+                        content_id,
+                        content_index,
+                        "USER",
+                        _recordStartInMs.get(),
+                        start_speak_timestamp,
+                        stop_speak_timestamp,
+                        user_speak_duration);
+                log.info("[{}] user report_content ({})'s response: {}", sessionId, content_id, resp);
+            };
+            if (_recordStartInMs.get() > 0) {
+                doReport.run();
+            } else {
+                log.info("add report to pendings");
+                _pendingReports.add(doReport);
+            }
         }
         {
             // report ASR event timing
@@ -511,6 +549,8 @@ public class AfsActor {
     private final AtomicLong _idleStartInMs = new AtomicLong(System.currentTimeMillis());
     private final AtomicBoolean _isUserSpeak = new AtomicBoolean(false);
     private final AtomicLong _asrStartedInMs = new AtomicLong(0);
+    private final long _answerInMs;
     private final AtomicLong _recordStartInMs = new AtomicLong(-1);
+    private final List<Runnable> _pendingReports = new ArrayList<>();
     private final AtomicLong _currentSentenceBeginInMs = new AtomicLong(-1);
 }
