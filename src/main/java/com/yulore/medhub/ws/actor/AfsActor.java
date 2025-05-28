@@ -261,6 +261,7 @@ public class AfsActor {
         // TODO: playbackMemo.sampleWhenCreate.stop(playback_timer);
 
         playbackMemo.setBeginInMs(playbackStartedInMs);
+        playbackMemo.setEventInMs(vo.eventInMss / 1000L);
 
         final String currentPlaybackId = _currentPlaybackId.get();
         if (currentPlaybackId != null) {
@@ -308,7 +309,8 @@ public class AfsActor {
                         start_speak_timestamp,
                         stop_speak_timestamp,
                         playback_ms);
-                log.info("[{}] ai report_content ({})'s response: {}", sessionId, memo.contentId, resp);
+                log.info("[{}] ai report_content ({}): rst:{} / start:{} / playback start event: {} / begin: {} / stop: {}", sessionId, memo.playbackIdx,
+                        _recordStartInMs.get(), start_speak_timestamp, memo.eventInMs, memo.beginInMs, stop_speak_timestamp);
             };
             if (_recordStartInMs.get() > 0) {
                 doReport.run();
@@ -467,7 +469,8 @@ public class AfsActor {
                         start_speak_timestamp,
                         stop_speak_timestamp,
                         user_speak_duration);
-                log.info("[{}] user report_content ({})'s response: {}", sessionId, content_id, resp);
+                log.info("[{}] user report_content ({}): rst:{} / start:{} / stop: {}", sessionId, content_index,
+                        _recordStartInMs.get(), start_speak_timestamp, stop_speak_timestamp);
             };
             if (_recordStartInMs.get() > 0) {
                 doReport.run();
@@ -535,6 +538,7 @@ public class AfsActor {
         public final boolean hangup;
         public final Timer.Sample sampleWhenCreate;
         public long beginInMs;
+        public long eventInMs;
     }
 
     private final AtomicInteger _playbackIdx = new AtomicInteger(0);
