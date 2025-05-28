@@ -251,15 +251,15 @@ public class AfsActor {
     }
 
     public void playbackStarted(final AFSPlaybackStarted vo) {
+        final long playbackStartedInMs = System.currentTimeMillis();
         log.info("afs_io({}) => playbackStarted: playback_id:{}/started delay: {} ms/full cost: {} ms",
                 localIdx, vo.playback_id,
                 (vo.eventInMss - vo.startInMss) / 1000L,
-                System.currentTimeMillis() - vo.startInMss / 1000L);
+                playbackStartedInMs - vo.startInMss / 1000L);
 
         final PlaybackMemo playbackMemo = memoFor(vo.playback_id);
         // TODO: playbackMemo.sampleWhenCreate.stop(playback_timer);
 
-        final long playbackStartedInMs = System.currentTimeMillis();
         playbackMemo.setBeginInMs(playbackStartedInMs);
 
         final String currentPlaybackId = _currentPlaybackId.get();
