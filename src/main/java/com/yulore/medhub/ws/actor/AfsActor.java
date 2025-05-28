@@ -309,7 +309,7 @@ public class AfsActor {
                         start_speak_timestamp,
                         stop_speak_timestamp,
                         playback_ms);
-                log.info("[{}] ai report_content ({}): rst:{} / start:{} / playback start event: {} / begin: {} / stop: {}", sessionId, memo.playbackIdx,
+                log.info("[{}] ai_report_content ({}): rst:{} / mh_start:{} / fs_start: {} / mh_begin: {} / fs_stop: {}", sessionId, memo.playbackIdx,
                         _recordStartInMs.get(), start_speak_timestamp, memo.eventInMs, memo.beginInMs, stop_speak_timestamp);
             };
             if (_recordStartInMs.get() > 0) {
@@ -469,7 +469,7 @@ public class AfsActor {
                         start_speak_timestamp,
                         stop_speak_timestamp,
                         user_speak_duration);
-                log.info("[{}] user report_content ({}): rst:{} / start:{} / stop: {}", sessionId, content_index,
+                log.info("[{}] user_report_content ({}): rst:{} / start:{} / stop: {}", sessionId, content_index,
                         _recordStartInMs.get(), start_speak_timestamp, stop_speak_timestamp);
             };
             if (_recordStartInMs.get() > 0) {
