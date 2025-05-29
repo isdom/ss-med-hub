@@ -469,8 +469,8 @@ public class AfsActor {
                         start_speak_timestamp,
                         stop_speak_timestamp,
                         user_speak_duration);
-                log.info("[{}] user_report_content ({}): rst:{} / start:{} / stop: {}", sessionId, content_index,
-                        _recordStartInMs.get(), start_speak_timestamp, stop_speak_timestamp);
+                log.info("[{}] user_report_content ({}): rst:{} / asr_start:{} / mh_start: {} / asr_stop: {} / mh_stop: {}", sessionId, content_index,
+                        _recordStartInMs.get(), start_speak_timestamp, _currentSentenceBeginInMs.get(), stop_speak_timestamp, sentenceEndInMs);
             };
             if (_recordStartInMs.get() > 0) {
                 doReport.run();
