@@ -315,7 +315,7 @@ public class AfsActor {
     private Consumer<ReportContext> buildAIReport(final String playback_id, final int playback_ms) {
         return ctx -> {
             final var memo = memoFor(playback_id);
-            final var org_diff = memo.eventInMs - ctx.rms_rst();
+            final var org_diff = Math.max(memo.eventInMs - ctx.rms_rst(), 0);
             final var scaled_start = ctx.rms_rst() + (long) (org_diff * ctx.scale_factor());
 
             final var resp = _scriptApi.report_content(
