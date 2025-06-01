@@ -267,9 +267,9 @@ public class AfsActor {
         if (currentPlaybackId != null) {
             if (currentPlaybackId.equals(vo.playback_id)) {
                 _currentPlaybackDuration.set(()->System.currentTimeMillis() - playbackStartedInMs);
-                log.info("[{}] playbackStarted => current playbackid: {} Matched", sessionId, vo.playback_id);
+                log.info("[{}] playbackStarted => current playbackId: {} Matched", sessionId, vo.playback_id);
             } else {
-                log.info("[{}] playbackStarted => current playbackid: {} mismatch started playbackid: {}, ignore",
+                log.info("[{}] playbackStarted => current playbackId: {} mismatch started playbackId: {}, ignore",
                         sessionId, currentPlaybackId, vo.playback_id);
             }
         } else {
