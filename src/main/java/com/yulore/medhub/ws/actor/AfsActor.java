@@ -348,8 +348,8 @@ public class AfsActor {
 
         final long now = System.currentTimeMillis();
         final String file = reply2Rms.apply(replyVO,
-                () -> String.format("vars_playback_id=%s,content_id=%s,vars_start_timestamp=%d,playback_idx=%d",
-                        newPlaybackId, ai_content_id, now * 1000L, _playbackIdx.get()+1));
+                () -> String.format("vars_playback_id=%s,content_id=%s,vars_start_timestamp=%d,playback_idx=%d,local_idx=%d",
+                        newPlaybackId, ai_content_id, now * 1000L, _playbackIdx.get()+1, localIdx));
 
         if (file != null) {
             final String prevPlaybackId = _currentPlaybackId.getAndSet(null);
