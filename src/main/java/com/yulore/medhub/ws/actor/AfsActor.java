@@ -337,6 +337,8 @@ public class AfsActor {
                 .build());
     }
 
+    static final String RMS_VARS = "fs_uuid=%s,session_id=%s,vars_playback_id=%s,content_id=%s," +
+                                    "vars_start_timestamp=%d,playback_idx=%d,local_idx=%d";
     private boolean doPlayback(final AIReplyVO replyVO) {
         if (replyVO.getVoiceMode() == null || replyVO.getAi_content_id() == null) {
             return false;
@@ -348,8 +350,15 @@ public class AfsActor {
 
         final long now = System.currentTimeMillis();
         final String file = reply2Rms.apply(replyVO,
-                () -> String.format("vars_playback_id=%s,content_id=%s,vars_start_timestamp=%d,playback_idx=%d,local_idx=%d",
-                        newPlaybackId, ai_content_id, now * 1000L, _playbackIdx.get()+1, localIdx));
+                () -> String.format(RMS_VARS,
+                        uuid,
+                        sessionId,
+                        newPlaybackId,
+                        ai_content_id,
+                        now * 1000L,
+                        _playbackIdx.get() + 1,
+                        localIdx)
+        );
 
         if (file != null) {
             final String prevPlaybackId = _currentPlaybackId.getAndSet(null);
