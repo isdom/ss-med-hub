@@ -117,7 +117,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
             actorCount.decrementAndGet();
             final var actor = removeActor(vo.localIdx);
             if (actor != null) {
-                actor.close();
+                actor.close(vo);
             }
             log.info("AfsIO: removeLocal {}", vo.localIdx);
         }
@@ -298,7 +298,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                     final var actor = ref.get();
                     if (actor != null) {
                         //orderedExecutor.submit(actor.localIdx(), actor::close);
-                        actor.close();
+                        actor.close(null);
                     }
                 }
                 actorCount.set(0);

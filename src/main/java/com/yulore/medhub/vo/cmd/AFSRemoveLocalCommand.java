@@ -14,4 +14,6 @@ public class AFSRemoveLocalCommand {
 
     public int localIdx;
     public long hangupInMss;
+    public long recordStopInMss;
+    public int recordDurationInMs;
 }

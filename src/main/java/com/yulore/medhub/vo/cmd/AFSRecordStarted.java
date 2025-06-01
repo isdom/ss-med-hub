@@ -14,5 +14,7 @@ public class AFSRecordStarted {
     public static final TypeReference<WSCommandVO<AFSRecordStarted>> TYPE = new TypeReference<>() {};
 
     public int localIdx;
-    public long startInMss;
+    public long recordStartInMss;
+    public long fbwInMss;
+    public int fbwBytes;
 }

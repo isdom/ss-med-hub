@@ -10,6 +10,7 @@ import com.yulore.medhub.vo.*;
 import com.yulore.medhub.vo.cmd.AFSPlaybackStarted;
 import com.yulore.medhub.vo.cmd.AFSPlaybackStopped;
 import com.yulore.medhub.vo.cmd.AFSRecordStarted;
+import com.yulore.medhub.vo.cmd.AFSRemoveLocalCommand;
 import com.yulore.medhub.vo.event.AFSHangupEvent;
 import com.yulore.medhub.vo.event.AFSStartPlaybackEvent;
 import com.yulore.medhub.vo.event.AFSStopPlaybackEvent;
@@ -165,7 +166,7 @@ public class AfsActor {
         }
     }
 
-    public void close() {
+    public void close(final AFSRemoveLocalCommand removeLocalVO) {
         if (isClosed.compareAndSet(false, true)) {
             final ASROperator operator = opRef.getAndSet(null);
             if (null != operator) {
@@ -173,26 +174,41 @@ public class AfsActor {
             }
 
             if (isAiSpeaking()) {
-                if (_recordStartInMs.get() > 0) {
-                    // last playback still playing
-                    final var memo = memoFor(_currentPlaybackId.get());
-                    final var resp = _scriptApi.report_content(
-                            sessionId,
-                            memo.contentId,
-                            memo.playbackIdx,
-                            "AI",
-                            _recordStartInMs.get(),
-                            memo.beginInMs,
-                            System.currentTimeMillis(), // stop now
-                            currentSpeakingDuration());
-                    log.info("[{}] close(): ai report_content ({})'s response: {}", sessionId, memo.contentId, resp);
-                } else {
-                    log.warn("[{}] close(): _recordStartInMs is {}, skip_last_report_content for AI ", sessionId, _recordStartInMs.get());
-                }
+                _pendingReports.add(buildAIReport(_currentPlaybackId.get(), currentSpeakingDuration()));
             }
 
+            if (removeLocalVO != null) {
+                final long event_rst = _recordStartedVO.recordStartInMss / 1000L;
+                final long rms_rst = _recordStartedVO.fbwInMss / 1000L - (_recordStartedVO.fbwBytes / 640 * 20);
+                final long rsp_rst_diff = removeLocalVO.recordStopInMss / 1000L - rms_rst;
+                final long record_duration = removeLocalVO.recordDurationInMs;
+                final float scale = (float) record_duration / (float) rsp_rst_diff;
+
+                log.info("[{}] batch report_content: (rms_rst-event_rst): {} ms, (rsp - rms_rst): {} ms, record duration: {} ms, scale_factor: {}",
+                        sessionId, rms_rst - event_rst, rsp_rst_diff, record_duration, scale);
+
+                final var ctx = new ReportContext() {
+                    public long event_rst() {
+                        return event_rst;
+                    }
+
+                    public long rms_rst() {
+                        return rms_rst;
+                    }
+
+                    public float scale_factor() {
+                        return scale;
+                    }
+                };
+                for (final var doReport : _pendingReports) {
+                    doReport.accept(ctx);
+                }
+            } else {
+                log.warn("[{}] AfsActor.close(...) without removeLocalVO, skip batch report_content", sessionId);
+            }
             _id2memo.clear();
             _pendingReports.clear();
+            _recordStartedVO = null;
         }
     }
 
@@ -292,42 +308,38 @@ public class AfsActor {
         } else {
             log.info("[{}] stopped playback_id:{} is !NOT! current playback_id:{}, ignored", sessionId, vo.playback_id, _currentPlaybackId.get());
         }
-        // call _scriptApi.report_content for AI
-        {
-            final var playback_id = vo.playback_id;
-            final var start_speak_timestamp = vo.startInMss / 1000L;
-            final var stop_speak_timestamp = vo.eventInMss / 1000L;
-            final var playback_ms = vo.playbackMs;
-            final Runnable doReport = ()-> {
-                final var memo = memoFor(playback_id);
-                final var resp = _scriptApi.report_content(
-                        sessionId,
-                        memo.contentId,
-                        memo.playbackIdx,
-                        "AI",
-                        _recordStartInMs.get(),
-                        start_speak_timestamp,
-                        stop_speak_timestamp,
-                        playback_ms);
-                log.info("[{}] ai_report_content ({}) => rst:{} / mh_start:{} / fs_start: {} / x-start: {} / fs_stop: {}", sessionId, memo.playbackIdx,
-                        _recordStartInMs.get(), start_speak_timestamp, memo.eventInMs, stop_speak_timestamp - playback_ms, stop_speak_timestamp);
-            };
-            if (_recordStartInMs.get() > 0) {
-                doReport.run();
-            } else {
-                log.info("add report to pendings");
-                _pendingReports.add(doReport);
-            }
-        }
+        // build _scriptApi.report_content for AI
+        _pendingReports.add(buildAIReport(vo.playback_id, vo.playbackMs));
+    }
+
+    private Consumer<ReportContext> buildAIReport(final String playback_id, final int playback_ms) {
+        return ctx -> {
+            final var memo = memoFor(playback_id);
+            final var org_diff = memo.eventInMs - ctx.rms_rst();
+            final var scaled_start = ctx.rms_rst() + (long) (org_diff * ctx.scale_factor());
+
+            final var resp = _scriptApi.report_content(
+                    sessionId,
+                    memo.contentId,
+                    memo.playbackIdx,
+                    "AI",
+                    ctx.rms_rst(),
+                    scaled_start,
+                    scaled_start + playback_ms,
+                    playback_ms);
+            log.info("[{}] ai_report_content ({}) => org_diff:{} / scaled_diff: {} / playback_ms: {}",
+                    sessionId,
+                    memo.playbackIdx,
+                    org_diff,
+                    scaled_start - ctx.rms_rst(),
+                    playback_ms);
+        };
     }
 
     public void recordStarted(final AFSRecordStarted vo) {
-        _recordStartInMs.set(vo.startInMss / 1000L);
-        for (var doReport : _pendingReports) {
-            doReport.run();
-        }
-        _pendingReports.clear();
-        log.info("[{}] record diff from answer: {} ms", sessionId, _recordStartInMs.get() - _answerInMs);
+        _recordStartedVO = vo;
+        //_recordStartInMs.set(vo.recordStartInMss / 1000L);
+        //log.info("[{}] record diff from answer: {} ms", sessionId, _recordStartInMs.get() - _answerInMs);
     }
 
     private void doHangup() {
@@ -457,7 +469,7 @@ public class AfsActor {
         }
 
         {
-            // report USER speak timing
+            // build USER speak timing report
             final var content_id = userContentId;
             final var content_index = payload.getIndex();
             final long start_speak_timestamp = _asrStartedInMs.get() + payload.getBegin_time();
@@ -468,25 +480,24 @@ public class AfsActor {
             log.info("[{}] USER report_content({}) diff, (sentence_begin-start) = {} ms,  (sentence_end-stop) = {} ms",
                     sessionId, content_index, _currentSentenceBeginInMs.get() - start_speak_timestamp, sentenceEndInMs - stop_speak_timestamp);
 
-            final Runnable doReport = ()-> {
+            final Consumer<ReportContext> doReport = ctx-> {
                 final ApiResponse<Void> resp = _scriptApi.report_content(
                         sessionId,
                         content_id,
                         content_index,
                         "USER",
-                        _recordStartInMs.get(),
+                        ctx.event_rst(),
                         start_speak_timestamp,
                         stop_speak_timestamp,
                         user_speak_duration);
-                log.info("[{}] user_report_content ({}): rst:{} / asr_start:{} / mh_start: {} / asr_stop: {} / mh_stop: {}", sessionId, content_index,
-                        _recordStartInMs.get(), start_speak_timestamp, _currentSentenceBeginInMs.get(), stop_speak_timestamp, sentenceEndInMs);
+                log.info("[{}] user_report_content ({}): rst:{} / asr_start:{} / asr_stop: {}",
+                        sessionId,
+                        content_index,
+                        ctx.event_rst(),
+                        start_speak_timestamp,
+                        stop_speak_timestamp);
             };
-            if (_recordStartInMs.get() > 0) {
-                doReport.run();
-            } else {
-                log.info("add report to pendings");
-                _pendingReports.add(doReport);
-            }
+            _pendingReports.add(doReport);
         }
         {
             // report ASR event timing
@@ -550,6 +561,13 @@ public class AfsActor {
         public long eventInMs;
     }
 
+    interface ReportContext {
+        long event_rst();
+        long rms_rst();
+        float scale_factor();
+    }
+
+    private AFSRecordStarted _recordStartedVO;
     private final AtomicInteger _playbackIdx = new AtomicInteger(0);
     private final ConcurrentMap<String, PlaybackMemo> _id2memo = new ConcurrentHashMap<>();
 
@@ -563,7 +581,7 @@ public class AfsActor {
     private final AtomicBoolean _isUserSpeak = new AtomicBoolean(false);
     private final AtomicLong _asrStartedInMs = new AtomicLong(0);
     private final long _answerInMs;
-    private final AtomicLong _recordStartInMs = new AtomicLong(-1);
-    private final List<Runnable> _pendingReports = new ArrayList<>();
+    //private final AtomicLong _recordStartInMs = new AtomicLong(-1);
+    private final List<Consumer<ReportContext>> _pendingReports = new ArrayList<>();
     private final AtomicLong _currentSentenceBeginInMs = new AtomicLong(-1);
 }
