@@ -468,10 +468,10 @@ public class AfsActor {
             log.warn("[{}] whenASRSentenceEnd: ai_reply error, detail: {}", sessionId, ExceptionUtil.exception2detail(ex));
         }
 
+        final var content_id = userContentId;
+        final var content_index = payload.getIndex();
         {
             // build USER speak timing report
-            final var content_id = userContentId;
-            final var content_index = payload.getIndex();
             final long start_speak_timestamp = _asrStartedInMs.get() + payload.getBegin_time();
             //final long start_speak_timestamp = _currentSentenceBeginInMs.get();
             final long stop_speak_timestamp = _asrStartedInMs.get() + payload.getTime();
@@ -507,13 +507,16 @@ public class AfsActor {
             // sentence_end_event_time in Milliseconds
             final long end_event_time = sentenceEndInMs - _asrStartedInMs.get();
 
-            final ApiResponse<Void> resp = _scriptApi.report_asrtime(
-                    sessionId,
-                    userContentId,
-                    payload.getIndex(),
-                    begin_event_time,
-                    end_event_time);
-            log.info("[{}]: user report_asrtime ({})'s response: {}", sessionId, userContentId, resp);
+            final Consumer<ReportContext> doReport = ctx-> {
+                final ApiResponse<Void> resp = _scriptApi.report_asrtime(
+                        sessionId,
+                        content_id,
+                        content_index,
+                        begin_event_time,
+                        end_event_time);
+                log.info("[{}] user_report_asrtime ({})'s response: {}", sessionId, content_id, resp);
+            };
+            _pendingReports.add(doReport);
         }
     }
 
