@@ -65,7 +65,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
             }
         }
 
-        private void saveActor(final int localIdx, final AfsActor actor) {
+        private void addActor(final int localIdx, final AfsActor actor) {
                 idx2agent[localIdx - 1].set(actor);
         }
 
@@ -106,20 +106,22 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                     return (name,obj)-> WSEventVO.sendEvent(ws, name, obj);
                 }
             });
+            addActor(vo.localIdx, actor);
             actorCount.incrementAndGet();
-            saveActor(vo.localIdx, actor);
             actor.startTranscription();
         }
 
         void removeLocal(final AFSRemoveLocalCommand vo, final Timer timer) {
             timer.record(System.currentTimeMillis() - vo.hangupInMss / 1000L, TimeUnit.MILLISECONDS);
 
-            actorCount.decrementAndGet();
             final var actor = removeActor(vo.localIdx);
             if (actor != null) {
+                actorCount.decrementAndGet();
                 ltxExecutor.execute(()->actor.close(vo));
+                log.info("AfsIO: removeLocal {}", vo.localIdx);
+            } else {
+                log.warn("AfsIO: removeLocal {} without_addLocal", vo.localIdx);
             }
-            log.info("AfsIO: removeLocal {}", vo.localIdx);
         }
 
         void playbackStarted(final AFSPlaybackStarted vo, final Timer reaction_timer, final Timer delay_timer) {
