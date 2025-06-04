@@ -44,10 +44,10 @@ import java.util.function.*;
 @Component("afs_io")
 @ConditionalOnProperty(prefix = "feature", name = "afs_io", havingValue = "enabled")
 public class AfsIOBuilder implements WsHandlerBuilder {
-
     @PostConstruct
     private void init() {
         gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", MetricCustomized.builder().tags(List.of("actor", "afs_io")).build());
+        ltxExecutor = executorProvider.apply("ltx");
     }
 
     abstract class AfsIO implements WsHandler {
@@ -117,7 +117,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
             actorCount.decrementAndGet();
             final var actor = removeActor(vo.localIdx);
             if (actor != null) {
-                actor.close(vo);
+                ltxExecutor.execute(()->actor.close(vo));
             }
             log.info("AfsIO: removeLocal {}", vo.localIdx);
         }
@@ -404,6 +404,9 @@ public class AfsIOBuilder implements WsHandlerBuilder {
 
     private final MediaExecutor mediaExecutor = new MediaExecutor();
 
+    private Executor ltxExecutor;
+
+    private final Function<String, Executor> executorProvider;
     private final ObjectProvider<AfsActor> afsProvider;
     private final ObjectProvider<HandlerUrlBuilder> urlProvider;
     private final OrderedExecutor orderedExecutor;
