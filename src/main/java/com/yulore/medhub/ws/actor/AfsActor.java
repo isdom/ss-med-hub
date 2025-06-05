@@ -182,7 +182,7 @@ public class AfsActor {
                     _pendingReports.add(buildAIReport(_currentPlaybackId.get(), currentSpeakingDuration()));
                 }
 
-                if (removeLocalVO != null) {
+                if (removeLocalVO != null && _recordStartedVO != null) {
                     final long event_rst = _recordStartedVO.recordStartInMss / 1000L;
                     final long rms_rst = _recordStartedVO.fbwInMss / 1000L - (_recordStartedVO.fbwBytes / 640 * 20);
                     final long rsp_rst_diff = removeLocalVO.recordStopInMss / 1000L - rms_rst;
@@ -209,7 +209,8 @@ public class AfsActor {
                         doReport.accept(ctx);
                     }
                 } else {
-                    log.warn("[{}] AfsActor.close(...) without removeLocalVO, skip batch report_content", sessionId);
+                    log.warn("[{}] AfsActor.close(...) without removeLocalVO({}) or _recordStartedVO({}), skip batch report_content",
+                            sessionId, removeLocalVO, _recordStartedVO);
                 }
                 _id2memo.clear();
                 _pendingReports.clear();
