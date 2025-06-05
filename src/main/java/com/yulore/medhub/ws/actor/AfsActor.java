@@ -239,7 +239,6 @@ public class AfsActor {
                         if (doPlayback(response.getData())) {
                         } else if (response.getData().getHangup() == 1) {
                             doHangup();
-                            // _sendEvent.accept("FSHangup", new PayloadFSHangup(_uuid, _sessionId));
                             log.info("[{}] checkIdle: hangup ({}) for ai_reply ({})", sessionId, sessionId, response.getData());
                         }
                     } else {
