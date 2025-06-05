@@ -74,6 +74,10 @@ public class AfsActor {
         return this.localIdx;
     }
 
+    public String sessionId() {
+        return this.sessionId;
+    }
+
     private final int localIdx;
     private final String uuid;
     private final String sessionId;
@@ -167,48 +171,53 @@ public class AfsActor {
     }
 
     public void close(final AFSRemoveLocalCommand removeLocalVO) {
-        if (isClosed.compareAndSet(false, true)) {
-            final ASROperator operator = opRef.getAndSet(null);
-            if (null != operator) {
-                operator.close();
-            }
-
-            if (isAiSpeaking()) {
-                _pendingReports.add(buildAIReport(_currentPlaybackId.get(), currentSpeakingDuration()));
-            }
-
-            if (removeLocalVO != null) {
-                final long event_rst = _recordStartedVO.recordStartInMss / 1000L;
-                final long rms_rst = _recordStartedVO.fbwInMss / 1000L - (_recordStartedVO.fbwBytes / 640 * 20);
-                final long rsp_rst_diff = removeLocalVO.recordStopInMss / 1000L - rms_rst;
-                final long record_duration = removeLocalVO.recordDurationInMs;
-                final float scale = (float) record_duration / (float) rsp_rst_diff;
-
-                log.info("[{}] batch report_content: (rms_rst-event_rst): {} ms, (rsp - rms_rst): {} ms, record duration: {} ms, scale_factor: {}",
-                        sessionId, rms_rst - event_rst, rsp_rst_diff, record_duration, scale);
-
-                final var ctx = new ReportContext() {
-                    public long event_rst() {
-                        return event_rst;
-                    }
-
-                    public long rms_rst() {
-                        return rms_rst;
-                    }
-
-                    public float scale_factor() {
-                        return scale;
-                    }
-                };
-                for (final var doReport : _pendingReports) {
-                    doReport.accept(ctx);
+        try {
+            if (isClosed.compareAndSet(false, true)) {
+                final ASROperator operator = opRef.getAndSet(null);
+                if (null != operator) {
+                    operator.close();
                 }
-            } else {
-                log.warn("[{}] AfsActor.close(...) without removeLocalVO, skip batch report_content", sessionId);
+
+                if (isAiSpeaking()) {
+                    _pendingReports.add(buildAIReport(_currentPlaybackId.get(), currentSpeakingDuration()));
+                }
+
+                if (removeLocalVO != null) {
+                    final long event_rst = _recordStartedVO.recordStartInMss / 1000L;
+                    final long rms_rst = _recordStartedVO.fbwInMss / 1000L - (_recordStartedVO.fbwBytes / 640 * 20);
+                    final long rsp_rst_diff = removeLocalVO.recordStopInMss / 1000L - rms_rst;
+                    final long record_duration = removeLocalVO.recordDurationInMs;
+                    final float scale = (float) record_duration / (float) rsp_rst_diff;
+
+                    log.info("[{}] batch report_content: (rms_rst-event_rst): {} ms, (rsp - rms_rst): {} ms, record duration: {} ms, scale_factor: {}",
+                            sessionId, rms_rst - event_rst, rsp_rst_diff, record_duration, scale);
+
+                    final var ctx = new ReportContext() {
+                        public long event_rst() {
+                            return event_rst;
+                        }
+
+                        public long rms_rst() {
+                            return rms_rst;
+                        }
+
+                        public float scale_factor() {
+                            return scale;
+                        }
+                    };
+                    for (final var doReport : _pendingReports) {
+                        doReport.accept(ctx);
+                    }
+                } else {
+                    log.warn("[{}] AfsActor.close(...) without removeLocalVO, skip batch report_content", sessionId);
+                }
+                _id2memo.clear();
+                _pendingReports.clear();
+                _recordStartedVO = null;
             }
-            _id2memo.clear();
-            _pendingReports.clear();
-            _recordStartedVO = null;
+            log.info("[{}] AfsActor.close ended", sessionId);
+        } catch (Exception ex) {
+            log.warn("[{}] AfsActor.close with exception", sessionId, ex);
         }
     }
 
