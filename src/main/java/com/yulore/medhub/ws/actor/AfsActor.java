@@ -54,7 +54,7 @@ public class AfsActor {
         long answerInMss();
         int idleTimeout();
         Consumer<Runnable> runOn();
-        BiFunction<AIReplyVO, Supplier<String>, String> reply2Rms();
+        BiFunction<AIReplyVO, Supplier<String>, String> reply2rms();
         BiConsumer<String, Object> sendEvent();
     }
 
@@ -66,7 +66,7 @@ public class AfsActor {
         this._answerInMs = ctx.answerInMss() / 1000L;
         this._idleTimeout = ctx.idleTimeout();
         this.runOn = ctx.runOn();
-        this.reply2Rms = ctx.reply2Rms();
+        this.reply2rms = ctx.reply2rms();
         this.sendEvent = ctx.sendEvent();
     }
 
@@ -83,7 +83,7 @@ public class AfsActor {
     private final String sessionId;
     private final String welcome;
     private final Consumer<Runnable> runOn;
-    private final BiFunction<AIReplyVO, Supplier<String>, String> reply2Rms;
+    private final BiFunction<AIReplyVO, Supplier<String>, String> reply2rms;
     private final BiConsumer<String, Object> sendEvent;
 
     @Autowired
@@ -370,7 +370,7 @@ public class AfsActor {
         log.info("[{}] doPlayback: {}", sessionId, replyVO);
 
         final long now = System.currentTimeMillis();
-        final String file = reply2Rms.apply(replyVO,
+        final String file = reply2rms.apply(replyVO,
                 () -> String.format(RMS_VARS,
                         uuid,
                         sessionId,

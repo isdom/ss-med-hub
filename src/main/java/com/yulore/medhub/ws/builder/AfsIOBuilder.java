@@ -99,8 +99,8 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                 public Consumer<Runnable> runOn() {
                     return runnable -> orderedExecutor.submit(vo.localIdx, runnable);
                 }
-                public BiFunction<AIReplyVO, Supplier<String>, String> reply2Rms() {
-                    return (reply, vars) -> reply2rms(vo.uuid, reply, vars);
+                public BiFunction<AIReplyVO, Supplier<String>, String> reply2rms() {
+                    return (reply, vars) -> AfsIOBuilder.this.reply2rms(vo.uuid, reply, vars);
                 }
                 public BiConsumer<String, Object> sendEvent() {
                     return (name,obj)-> WSEventVO.sendEvent(ws, name, obj);
@@ -363,6 +363,12 @@ public class AfsIOBuilder implements WsHandlerBuilder {
 
     private String tryExtractCVOS(final AIReplyVO vo) {
         try {
+            for (var cp : vo.getCps()) {
+                if ("oss".equals(cp.type)) {
+                    // when type is oss, remove text field's content
+                    cp.text = null;
+                }
+            }
             return new ObjectMapper().writeValueAsString(vo.getCps());
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
