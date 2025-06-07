@@ -33,8 +33,8 @@ public class BaseStreamBuilder {
     Consumer<StreamSession.EventContext> buildSendEvent(final WebSocket webSocket, final int delayInMs) {
         final Consumer<StreamSession.EventContext> performSendEvent = (ctx) -> {
             WSEventVO.sendEvent(webSocket, ctx.name, ctx.payload);
-            log.debug("sendEvent: {} send => {}, {}, cost {} ms",
-                    ctx.session, ctx.name, ctx.payload, System.currentTimeMillis() - ctx.start);
+            log.info("[{}] sendEvent => {}, {}, cost {} ms",
+                    ctx.session.sessionId(), ctx.name, ctx.payload, System.currentTimeMillis() - ctx.start);
         };
         return delayInMs == 0 ? performSendEvent : (ctx) -> {
             schedulerProvider.getObject().schedule(() -> performSendEvent.accept(ctx), delayInMs, TimeUnit.MILLISECONDS);
@@ -45,8 +45,8 @@ public class BaseStreamBuilder {
         Consumer<StreamSession.DataContext> performSendData = (ctx) -> {
             final int size = ctx.data.remaining();
             webSocket.send(ctx.data);
-            log.debug("sendData: {} send => {} bytes, cost {} ms",
-                    ctx.session, size, System.currentTimeMillis() - ctx.start);
+            log.info("[{}] sendData => {} bytes, cost {} ms",
+                    ctx.session.sessionId(), size, System.currentTimeMillis() - ctx.start);
         };
         return delayInMs == 0 ? performSendData : (ctx) -> {
             schedulerProvider.getObject().schedule(() -> performSendData.accept(ctx), delayInMs, TimeUnit.MILLISECONDS);
