@@ -218,7 +218,7 @@ public class AfsActor {
             }
             log.info("[{}] AfsActor.close ended", sessionId);
         } catch (Exception ex) {
-            log.warn("[{}] AfsActor.close with exception", sessionId, ex);
+            log.warn("[{}] AfsActor.close with exception: {}", sessionId, ExceptionUtil.exception2detail(ex));
         }
     }
 

@@ -117,7 +117,8 @@ public class AfsIOBuilder implements WsHandlerBuilder {
             final var actor = removeActor(vo.localIdx);
             if (actor != null) {
                 actorCount.decrementAndGet();
-                ltxExecutor.execute(()->actor.close(vo));
+                // ltxExecutor.execute(()->actor.close(vo));
+                actor.close(vo);
                 log.info("AfsIO: removeLocal {}/{}", vo.localIdx, actor.sessionId());
             } else {
                 log.warn("AfsIO: removeLocal {} without_addLocal", vo.localIdx);
