@@ -12,4 +12,9 @@ public class AFSStartPlaybackEvent {
     final String playback_id;
     final String content_id;
     final String file;
+
+    // for local cache only-if rms:// can be cached
+    public String local_key;
+    // {....}%s
+    public String local_vars;
 }

@@ -1,9 +1,11 @@
 package com.yulore.medhub.ws.builder;
 
+import com.alibaba.nacos.common.utils.MD5Utils;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.medhub.api.AIReplyVO;
+import com.yulore.medhub.api.CompositeVO;
 import com.yulore.medhub.vo.WSCommandVO;
 import com.yulore.medhub.vo.WSEventVO;
 import com.yulore.medhub.vo.cmd.*;
@@ -99,7 +101,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                 public Consumer<Runnable> runOn() {
                     return runnable -> orderedExecutor.submit(vo.localIdx, runnable);
                 }
-                public BiFunction<AIReplyVO, Supplier<String>, String> reply2rms() {
+                public AfsActor.Reply2Rms reply2rms() {
                     return (reply, vars) -> AfsIOBuilder.this.reply2rms(vo.uuid, reply, vars);
                 }
                 public BiConsumer<String, Object> sendEvent() {
@@ -330,7 +332,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
     @Value("${rms.wav_prefix}")
     private String _rms_wav_prefix;
 
-    private String reply2rms(final String uuid, final AIReplyVO vo, final Supplier<String> vars) {
+    private String generate_file(final String uuid, final AIReplyVO vo, final Supplier<String> vars) {
         if ("cp".equals(vo.getVoiceMode())) {
             return _rms_cp_prefix.replace("{cpvars}", tryExtractCVOS(vo))
                     .replace("{uuid}", uuid)
@@ -360,6 +362,46 @@ public class AfsIOBuilder implements WsHandlerBuilder {
         }
 
         return null;
+    }
+
+    private String generate_local_key(final AIReplyVO vo) {
+        if ("tts".equals(vo.getVoiceMode())) {
+            return null;
+        }
+
+        if ("wav".equals(vo.getVoiceMode())) {
+            return MD5Utils.md5Hex(vo.getAi_speech_file(), "UTF-8") + ".wav";
+        }
+
+        if ("cp".equals(vo.getVoiceMode())) {
+            return cps2local_key(vo.getCps());
+        }
+
+        return null;
+    }
+
+    private String cps2local_key(final CompositeVO[] cps) {
+        for (final var vo : cps) {
+            if (!"oss".equals(vo.type)) {
+                log.info("cps element {} is not oss type, can't be local cached", vo);
+                return null;
+            }
+        }
+        try {
+            return MD5Utils.md5Hex(new ObjectMapper().writeValueAsString(cps), "UTF-8") + ".wav";
+        } catch (JsonProcessingException e) {
+            return null;
+        }
+    }
+
+    private AfsActor.RmsArg reply2rms(final String uuid, final AIReplyVO vo, final Supplier<String> vars) {
+        final var arg = new AfsActor.RmsArg();
+        arg.file = generate_file(uuid, vo, vars);
+        arg.local_key = generate_local_key(vo);
+        if (null != arg.local_key) {
+            arg.local_vars = vars.get();
+        }
+        return arg;
     }
 
     private String tryExtractCVOS(final AIReplyVO vo) {

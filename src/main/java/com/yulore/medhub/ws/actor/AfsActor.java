@@ -46,6 +46,14 @@ import static org.springframework.beans.factory.config.ConfigurableBeanFactory.S
 @Component
 @Scope(SCOPE_PROTOTYPE)
 public class AfsActor {
+    @ToString
+    public static class RmsArg {
+        public String file;
+        public String local_key;
+        public String local_vars;
+    }
+    public interface Reply2Rms extends BiFunction<AIReplyVO, Supplier<String>, RmsArg> {}
+
     public interface Context {
         int localIdx();
         String uuid();
@@ -54,7 +62,7 @@ public class AfsActor {
         long answerInMss();
         int idleTimeout();
         Consumer<Runnable> runOn();
-        BiFunction<AIReplyVO, Supplier<String>, String> reply2rms();
+        Reply2Rms reply2rms();
         BiConsumer<String, Object> sendEvent();
     }
 
@@ -83,7 +91,7 @@ public class AfsActor {
     private final String sessionId;
     private final String welcome;
     private final Consumer<Runnable> runOn;
-    private final BiFunction<AIReplyVO, Supplier<String>, String> reply2rms;
+    private final Reply2Rms reply2rms;
     private final BiConsumer<String, Object> sendEvent;
 
     @Autowired
@@ -370,7 +378,7 @@ public class AfsActor {
         log.info("[{}] doPlayback: {}", sessionId, replyVO);
 
         final long now = System.currentTimeMillis();
-        final String file = reply2rms.apply(replyVO,
+        final RmsArg arg = reply2rms.apply(replyVO,
                 () -> String.format(RMS_VARS,
                         uuid,
                         sessionId,
@@ -381,7 +389,7 @@ public class AfsActor {
                         localIdx)
         );
 
-        if (file != null) {
+        if (arg.file != null) {
             final String prevPlaybackId = _currentPlaybackId.getAndSet(null);
             if (prevPlaybackId != null) {
                 sendEvent.accept("StopPlayback",
@@ -404,10 +412,12 @@ public class AfsActor {
                             .localIdx(localIdx)
                             .playback_id(newPlaybackId)
                             .content_id(ai_content_id)
-                            .file(file)
+                            .file(arg.file)
+                            .local_key(arg.local_key)
+                            .local_vars(arg.local_vars)
                             .build()
             );
-            log.info("[{}] doPlayback [{}] as {}", sessionId, file, newPlaybackId);
+            log.info("[{}] doPlayback [{}] as {}", sessionId, arg, newPlaybackId);
             return true;
         } else {
             return false;
