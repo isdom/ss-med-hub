@@ -24,7 +24,7 @@ public class StreamCacheService {
 
     private final Function<String, Executor> executorProvider;
     private Executor executor;
-    private final ConcurrentMap<String, LoadAndCahceTask> _key2task = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, LoadAndCacheTask> _key2task = new ConcurrentHashMap<>();
 
     @PostConstruct
     public void init() {
@@ -42,15 +42,15 @@ public class StreamCacheService {
             public void buildStream(final Consumer<byte[]> onPart, final Consumer<Boolean> onCompleted) {
                 final String key = sourceTask.key();
                 log.info("asCache: try get Stream for {}", key);
-                final LoadAndCahceTask task = _key2task.get(key);
+                final LoadAndCacheTask task = _key2task.get(key);
                 if (task != null) {
                     task.onCached(onPart, onCompleted);
                     log.info("asCache: {} hit_cache_direct", key);
                     return;
                 }
                 // not load before, try to load
-                final LoadAndCahceTask myTask = new LoadAndCahceTask(sourceTask);
-                final LoadAndCahceTask prevTask = _key2task.putIfAbsent(key, myTask);
+                final LoadAndCacheTask myTask = new LoadAndCacheTask(sourceTask);
+                final LoadAndCacheTask prevTask = _key2task.putIfAbsent(key, myTask);
                 if (prevTask != null) {
                     // another has start task already
                     prevTask.onCached(onPart, onCompleted);
@@ -65,14 +65,14 @@ public class StreamCacheService {
         };
     }
 
-    static class LoadAndCahceTask {
+    static class LoadAndCacheTask {
         private final Lock _lock = new ReentrantLock();
         private final List<byte[]> _bytesList = new ArrayList<>();
         final private AtomicBoolean _completed = new AtomicBoolean(false);
         private final List<Pair<Consumer<byte[]>, Consumer<Boolean>>> _consumers = new ArrayList<>();
         private final BuildStreamTask _sourceTask;
 
-        public LoadAndCahceTask(final BuildStreamTask sourceTask) {
+        public LoadAndCacheTask(final BuildStreamTask sourceTask) {
             _sourceTask = sourceTask;
         }
 
