@@ -420,7 +420,7 @@ public class AfsActor {
             if (arg.local_key == null) {
                 log.info("[{}] doPlayback [{}] as {}", sessionId, arg.file, newPlaybackId);
             } else {
-                log.info("[{}] doPlayback [{}] with_local_key:{}/vars:{} as {}", sessionId, arg.file, arg.local_key, arg.local_vars, newPlaybackId);
+                log.info("[{}] doPlayback [{}] with_local_key:{} and vars:{} as {}", sessionId, arg.file, arg.local_key, arg.local_vars, newPlaybackId);
             }
             return true;
         } else {
