@@ -394,14 +394,14 @@ public class AfsIOBuilder implements WsHandlerBuilder {
         }
     }
 
-    private AfsActor.RmsArg reply2rms(final String uuid, final AIReplyVO vo, final Supplier<String> vars) {
-        final var arg = new AfsActor.RmsArg();
-        arg.file = generate_file(uuid, vo, vars);
-        arg.local_key = generate_local_key(vo);
-        if (null != arg.local_key) {
-            arg.local_vars = vars.get();
+    private AfsActor.RmsSource reply2rms(final String uuid, final AIReplyVO vo, final Supplier<String> vars) {
+        final var src = new AfsActor.RmsSource();
+        src.file = generate_file(uuid, vo, vars);
+        src.local_key = generate_local_key(vo);
+        if (null != src.local_key) {
+            src.local_vars = vars.get();
         }
-        return arg;
+        return src;
     }
 
     private String tryExtractCVOS(final AIReplyVO vo) {

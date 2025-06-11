@@ -47,12 +47,12 @@ import static org.springframework.beans.factory.config.ConfigurableBeanFactory.S
 @Scope(SCOPE_PROTOTYPE)
 public class AfsActor {
     @ToString
-    public static class RmsArg {
+    public static class RmsSource {
         public String file;
         public String local_key;
         public String local_vars;
     }
-    public interface Reply2Rms extends BiFunction<AIReplyVO, Supplier<String>, RmsArg> {}
+    public interface Reply2Rms extends BiFunction<AIReplyVO, Supplier<String>, RmsSource> {}
 
     public interface Context {
         int localIdx();
@@ -378,7 +378,7 @@ public class AfsActor {
         log.info("[{}] doPlayback: {}", sessionId, replyVO);
 
         final long now = System.currentTimeMillis();
-        final RmsArg arg = reply2rms.apply(replyVO,
+        final var src = reply2rms.apply(replyVO,
                 () -> String.format(RMS_VARS,
                         uuid,
                         sessionId,
@@ -389,7 +389,7 @@ public class AfsActor {
                         localIdx)
         );
 
-        if (arg.file != null) {
+        if (src.file != null) {
             final String prevPlaybackId = _currentPlaybackId.getAndSet(null);
             if (prevPlaybackId != null) {
                 sendEvent.accept("StopPlayback",
@@ -412,15 +412,15 @@ public class AfsActor {
                             .localIdx(localIdx)
                             .playback_id(newPlaybackId)
                             .content_id(ai_content_id)
-                            .file(arg.file)
-                            .local_key(arg.local_key)
-                            .local_vars(arg.local_vars)
+                            .file(src.file)
+                            .local_key(src.local_key)
+                            .local_vars(src.local_vars)
                             .build()
             );
-            if (arg.local_key == null) {
-                log.info("[{}] doPlayback [{}] as {}", sessionId, arg.file, newPlaybackId);
+            if (src.local_key == null) {
+                log.info("[{}] doPlayback [{}] as {}", sessionId, src.file, newPlaybackId);
             } else {
-                log.info("[{}] doPlayback [{}] with_local_key:{} and vars:{} as {}", sessionId, arg.file, arg.local_key, arg.local_vars, newPlaybackId);
+                log.info("[{}] doPlayback [{}] with_local_key:{} and vars:{} as {}", sessionId, src.file, src.local_key, src.local_vars, newPlaybackId);
             }
             return true;
         } else {
