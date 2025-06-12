@@ -49,7 +49,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
     @PostConstruct
     private void init() {
         gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", MetricCustomized.builder().tags(List.of("actor", "afs_io")).build());
-        ltxExecutor = executorProvider.apply("ltx");
+        // ltxExecutor = executorProvider.apply("ltx");
     }
 
     abstract class AfsIO implements WsHandler {
@@ -455,7 +455,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
 
     private final MediaExecutor mediaExecutor = new MediaExecutor();
 
-    private Executor ltxExecutor;
+    // private Executor ltxExecutor;
 
     private final Function<String, Executor> executorProvider;
     private final ObjectProvider<AfsActor> afsProvider;
