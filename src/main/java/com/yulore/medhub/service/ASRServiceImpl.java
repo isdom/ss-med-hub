@@ -603,13 +603,13 @@ class ASRServiceImpl implements ASRService {
         return new ASROperator() {
             @Override
             public boolean transmit(final byte[] data) {
-                try {
+                //try {
                     transcriber.send(data);
                     return true;
-                } catch (Exception ex) {
-                    log.warn("ASR transmit failed", ex);
-                    return false;
-                }
+                //} catch (Exception ex) {
+                //    log.warn("ASR transmit failed", ex);
+                //    return false;
+                //}
             }
 
             @Override

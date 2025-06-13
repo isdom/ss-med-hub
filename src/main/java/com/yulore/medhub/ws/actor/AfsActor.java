@@ -156,7 +156,11 @@ public class AfsActor {
         if (!isClosed.get()) {
             final var operator = opRef.get();
             if (operator != null) {
-                operator.transmit(frame);
+                try {
+                    operator.transmit(frame);
+                } catch (Exception ex) {
+                    log.warn("[{}] asr_transmit_failed: {}", sessionId, ExceptionUtil.exception2detail(ex));
+                }
                 final long now = System.currentTimeMillis();
                 transmitDelayPer50 += now - fsReadFrameInMss / 1000L;
                 handleCostPer50 += now - recvdInMs;
