@@ -100,7 +100,7 @@ public class AfsActor {
     @Resource
     private ScriptApi _scriptApi;
 
-    private final AtomicReference<ASROperator> opRef = new AtomicReference<>(null);
+    private final AtomicReference<ASROperator> asrRef = new AtomicReference<>(null);
     private final AtomicBoolean isClosed = new AtomicBoolean(false);
 
     public void startTranscription() {
@@ -135,10 +135,10 @@ public class AfsActor {
             if (ex != null) {
                 log.warn("startTranscription failed", ex);
             } else {
-                opRef.set(operator);
+                asrRef.set(operator);
                 if (isClosed.get()) {
                     // means close() method has been called
-                    final var op = opRef.getAndSet(null);
+                    final var op = asrRef.getAndSet(null);
                     if (op != null) { // means when close() called, operator !NOT! set yet
                         op.close();
                     }
@@ -154,7 +154,7 @@ public class AfsActor {
     private long transmitDelayPer50 = 0, handleCostPer50 = 0;
     public void transmit(final byte[] frame, final long fsReadFrameInMss, final long recvdInMs, final Timer td_timer, final Timer hc_timer) {
         if (!isClosed.get()) {
-            final var operator = opRef.get();
+            final var operator = asrRef.get();
             if (operator != null) {
                 try {
                     operator.transmit(frame);
@@ -185,7 +185,7 @@ public class AfsActor {
     public void close(final AFSRemoveLocalCommand removeLocalVO) {
         try {
             if (isClosed.compareAndSet(false, true)) {
-                final ASROperator operator = opRef.getAndSet(null);
+                final ASROperator operator = asrRef.getAndSet(null);
                 if (null != operator) {
                     operator.close();
                 }
