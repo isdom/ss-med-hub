@@ -7,6 +7,7 @@ import com.yulore.medhub.api.ScriptApi;
 import com.yulore.medhub.service.ASRService;
 import com.yulore.medhub.service.BSTService;
 import com.yulore.metric.DisposableGauge;
+import com.yulore.util.ExceptionUtil;
 import com.yulore.util.OrderedExecutor;
 import com.yulore.medhub.task.PlayStreamPCMTask2;
 import com.yulore.medhub.task.SampleInfo;
@@ -22,6 +23,7 @@ import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
+import org.java_websocket.exceptions.WebsocketNotConnectedException;
 import org.java_websocket.handshake.ClientHandshake;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
@@ -99,8 +101,11 @@ public class PoActorBuilder implements WsHandlerBuilder {
                 (event, payload) -> {
                     try {
                         WSEventVO.sendEvent(webSocket, event, payload);
+                    } catch (WebsocketNotConnectedException ex) {
+                        log.info("[{}]: PoActor sendback {}/{} with WebsocketNotConnectedException", actor.sessionId(), event, payload);
                     } catch (Exception ex) {
-                        log.warn("[{}]: PoActor sendback {}/{} failed, detail: {}", actor.sessionId(), event, payload, ex.toString());
+                        log.warn("[{}]: PoActor sendback {}/{} failed, detail: {}", actor.sessionId(), event, payload,
+                                ExceptionUtil.exception2detail(ex));
                     }
                 });
         return actor;
