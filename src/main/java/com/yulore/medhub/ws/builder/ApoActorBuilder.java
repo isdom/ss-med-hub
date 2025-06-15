@@ -2,9 +2,6 @@ package com.yulore.medhub.ws.builder;
 
 import com.aliyun.oss.OSS;
 import com.yulore.bst.BuildStreamTask;
-import com.yulore.medhub.api.CallApi;
-import com.yulore.medhub.api.ScriptApi;
-import com.yulore.medhub.service.ASRService;
 import com.yulore.medhub.service.BSTService;
 import com.yulore.medhub.task.PlayStreamPCMTask2;
 import com.yulore.medhub.task.SampleInfo;
@@ -31,7 +28,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
-import javax.annotation.Resource;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.List;
@@ -39,6 +35,8 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -86,7 +84,7 @@ public class ApoActorBuilder implements WsHandlerBuilder {
         }
     }
 
-    private ApoActor attachActor(final String prefix, final WebSocket webSocket, final String path, final int varsBegin, final String role) {
+    private WsHandler attachActor(final String prefix, final WebSocket webSocket, final String path, final int varsBegin, final String role) {
         final String sessionId = varsBegin > 0 ? VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "sessionId", '&') : null;
         // init PlaybackSession attach with webSocket
         log.info("ws path match: {}, role: {}, using ws as ApoActor's playback ws: [{}]", prefix, role, sessionId);
@@ -95,8 +93,40 @@ public class ApoActorBuilder implements WsHandlerBuilder {
             log.info("can't find callSession by sessionId: {}, ignore", sessionId);
             return null;
         }
+
         _wscount.incrementAndGet();
-        webSocket.setAttachment(actor);
+        final Executor wsmsg = executorProvider.apply("wsmsg");
+        final var wsh = new WsHandler() {
+            @Override
+            public void onAttached(WebSocket webSocket) {}
+
+            @Override
+            public void onClose(WebSocket webSocket) {
+                webSocket.setAttachment(null);
+                _wscount.decrementAndGet();
+            }
+
+            @Override
+            public void onMessage(WebSocket webSocket, String message, Timer.Sample sample) {
+                wsmsg.execute(()-> {
+                    try {
+                        cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, actor, webSocket, sample);
+                    } catch (Exception ex) {
+                        log.error("handleCommand {}: {}, an error occurred: {}",
+                                webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
+                    }
+                });
+            }
+
+            @Override
+            public void onWebsocketError(final Exception ex) {
+                log.warn("[{}]: [{}]-[{}]: exception_detail: (callStack)\n{}\n{}", actor.clientIp(), actor.sessionId(), actor.uuid(),
+                        ExceptionUtil.dumpCallStack(ex, null, 0),
+                        ExceptionUtil.exception2detail(ex));
+            }
+        };
+        webSocket.setAttachment(wsh);
+
         actor.attachPlaybackWs(
                 playbackContext ->
                         playbackOn(playbackContext,
@@ -112,10 +142,10 @@ public class ApoActorBuilder implements WsHandlerBuilder {
                                 ExceptionUtil.exception2detail(ex));
                     }
                 });
-        return actor;
+        return wsh;
     }
 
-    private ApoActor buildActor(final String prefix, final WebSocket webSocket, final ClientHandshake handshake, final String path, final int varsBegin, final String role) {
+    private WsHandler buildActor(final String prefix, final WebSocket webSocket, final ClientHandshake handshake, final String path, final int varsBegin, final String role) {
         _wscount.incrementAndGet();
 
         // means ws with role: call
@@ -124,23 +154,46 @@ public class ApoActorBuilder implements WsHandlerBuilder {
         final String tid = VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "tid", '&');
         final String clientIp = handshake.getFieldValue("X-Forwarded-For");
         final Executor wsmsg = executorProvider.apply("wsmsg");
-        final var actor = new ApoActor(
-                clientIp,
-                uuid,
-                tid,
-                _callApi,
-                _scriptApi,
-                _session -> {
+        final var actor = apoProvider.getObject(new ApoActor.Context() {
+            public String clientIp() {
+                return clientIp;
+            }
+            public String uuid() {
+                return uuid;
+            }
+            public String tid() {
+                return tid;
+            }
+            public long answerInMss() {
+                return 0;
+            }
+            public int idleTimeout() {
+                return 0;
+            }
+            public String bucket() {
+                return _oss_bucket;
+            }
+            public String wavPath() {
+                return _oss_path;
+            }
+            public Consumer<Runnable> runOn() {
+                return null;
+            }
+            public Consumer<ApoActor> doHangup() {
+                return actor_ -> {
                     try {
-                        WSEventVO.sendEvent(webSocket, "CallEnded", new PayloadCallEnded(_session.sessionId()));
-                        log.info("[{}]: sendback CallEnded event", _session.sessionId());
+                        WSEventVO.sendEvent(webSocket, "CallEnded", new PayloadCallEnded(actor_.sessionId()));
+                        log.info("[{}]: sendback CallEnded event", actor_.sessionId());
                     } catch (Exception ex) {
-                        log.warn("[{}]: sendback CallEnded event failed, detail: {}", _session.sessionId(), ex.toString());
+                        log.warn("[{}]: sendback CallEnded event failed, detail: {}", actor_.sessionId(), ex.toString());
                     }
-                },
-                _oss_bucket,
-                _oss_path,
-                ctx -> {
+                };
+            }
+            public BiConsumer<String, Object> sendEvent() {
+                return null;
+            }
+            public Consumer<ApoActor.RecordContext> saveRecord() {
+                return ctx -> {
                     final long startUploadInMs = System.currentTimeMillis();
                     final Timer.Sample oss_sample = Timer.start();
                     executor.execute(() -> {
@@ -149,58 +202,65 @@ public class ApoActorBuilder implements WsHandlerBuilder {
                         log.info("[{}]: upload record to oss => bucket:{}/object:{}, cost {} ms",
                                 ctx.sessionId(), ctx.bucketName(), ctx.objectName(), System.currentTimeMillis() - startUploadInMs);
                     });
-                },
-                _sessionId -> WSEventVO.sendEvent(webSocket, "CallStarted", new PayloadCallStarted(_sessionId))) {
+                };
+            }
+            public Consumer<String> callStarted() {
+                return sessionId_ -> WSEventVO.sendEvent(webSocket, "CallStarted", new PayloadCallStarted(sessionId_));
+            }
+        });
+
+        final var wsh = new WsHandler() {
+            @Override
+            public void onAttached(WebSocket webSocket) {}
+
+            @Override
+            public void onClose(WebSocket webSocket) {
+                webSocket.setAttachment(null);
+                executor.execute(()-> {
+                    try {
+                        actor.close();
+                    } catch (Exception ex) {
+                        log.warn("[{}] ApoActor.close() with exception: {}", actor.sessionId(), ExceptionUtil.exception2detail(ex));
+                    } finally {
+                        _wscount.decrementAndGet();
+                    }
+                });
+            }
 
             @Override
             public void onMessage(final WebSocket webSocket, final String message, final Timer.Sample sample) {
                 wsmsg.execute(()-> {
-                            try {
-                                cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, this, webSocket, sample);
-                            } catch (Exception ex) {
-                                log.error("handleCommand {}: {}, an error occurred: {}",
-                                        webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
-                            }
-                        });
+                    try {
+                        cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, actor, webSocket, sample);
+                    } catch (Exception ex) {
+                        log.error("handleCommand {}: {}, an error occurred: {}",
+                                webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
+                    }
+                });
             }
-
-            long totalDelayInMs = 0;
 
             @Override
             public void onMessage(final WebSocket webSocket, final ByteBuffer buffer, final long timestampInMs) {
-                orderedExecutor.submit(actorIdx(), ()->transmit(buffer)
-                        /*
-                        ()-> {
-                    if (transmit(bytes)) {
-                        totalDelayInMs += System.currentTimeMillis() - timestampInMs;
-                        // transmit success
-                        if ((transmitCount() % 50) == 0) {
-                            transmit_timer.record(totalDelayInMs, TimeUnit.MILLISECONDS);
-                            totalDelayInMs = 0;
-                            log.info("[{}]: transmit 50 times.", sessionId());
-                        }
-                    }
-                }*/
-                );
+                orderedExecutor.submit(actor.actorIdx(), ()->actor.transmit(buffer));
             }
 
             @Override
-            public void onClose(final WebSocket webSocket) {
-                executor.execute(()-> {
-                    _wscount.decrementAndGet();
-                    super.onClose(webSocket);
-                });
+            public void onWebsocketError(final Exception ex) {
+                log.warn("[{}]: [{}]-[{}]: exception_detail: (callStack)\n{}\n{}", actor.clientIp(), actor.sessionId(), actor.uuid(),
+                        ExceptionUtil.dumpCallStack(ex, null, 0),
+                        ExceptionUtil.exception2detail(ex));
             }
         };
-        webSocket.setAttachment(actor);
-        actor.onAttached(webSocket);
+
+        webSocket.setAttachment(wsh);
+        // wsh.onAttached(webSocket);
 
         // actor.scheduleCheckIdle(schedulerProvider.getObject(), _check_idle_interval_ms, actor::checkIdle);
         schedulerProvider.getObject().scheduleWithFixedDelay(actor::checkIdle, _check_idle_interval_ms, _check_idle_interval_ms, TimeUnit.MILLISECONDS);
         schedulerProvider.getObject().schedule(actor::notifyMockAnswer, _answer_timeout_ms, TimeUnit.MILLISECONDS);
 
         log.info("ws path match: {}, using ws as ApoActor with role: {}", prefix, role);
-        return actor;
+        return wsh;
     }
 
     private Runnable playbackOn(final ApoActor.PlaybackContext playbackContext, final ApoActor actor, final WebSocket webSocket) {
@@ -242,12 +302,6 @@ public class ApoActorBuilder implements WsHandlerBuilder {
         return task::stop;
     }
 
-    @Resource
-    private CallApi _callApi;
-
-    @Resource
-    private ScriptApi _scriptApi;
-
     @Value("${call.answer_timeout_ms}")
     private long _answer_timeout_ms;
 
@@ -260,11 +314,12 @@ public class ApoActorBuilder implements WsHandlerBuilder {
     @Value("${oss.path}")
     private String _oss_path;
 
+    private final ObjectProvider<ApoActor> apoProvider;
+
     private final ObjectProvider<OSS> ossProvider;
     private final BSTService bstService;
     private final ObjectProvider<ScheduledExecutorService> schedulerProvider;
     private final Function<String, Executor> executorProvider;
-    private final ASRService asrService;
     private final OrderedExecutor orderedExecutor;
 
     private final ObjectProvider<Timer> timerProvider;

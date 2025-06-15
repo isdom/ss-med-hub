@@ -14,7 +14,6 @@ import com.yulore.medhub.vo.PayloadSentenceBegin;
 import com.yulore.medhub.vo.PayloadSentenceEnd;
 import com.yulore.medhub.vo.PayloadTranscriptionResultChanged;
 import com.yulore.medhub.vo.cmd.*;
-import com.yulore.medhub.ws.WsHandler;
 import com.yulore.util.ByteArrayListInputStream;
 import com.yulore.util.ExceptionUtil;
 import com.yulore.util.VarsUtil;
@@ -25,9 +24,11 @@ import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
-import org.java_websocket.WebSocket;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Scope;
+import org.springframework.stereotype.Component;
 
+import javax.annotation.Resource;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -50,48 +51,22 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-/**
- * Phone Operator Actor
- */
-@ToString
-@Slf4j
-public abstract class ApoActor implements WsHandler {
-    private static final AtomicInteger currentCounter = new AtomicInteger(0);
+import static org.springframework.beans.factory.config.ConfigurableBeanFactory.SCOPE_PROTOTYPE;
 
-    private WebSocket _ws;
+/**
+ * Advanced Phone Operator Actor
+ */
+@Slf4j
+@ToString
+@Component
+@Scope(SCOPE_PROTOTYPE)
+public final class ApoActor {
+    private static final AtomicInteger currentCounter = new AtomicInteger(0);
 
     private final int _actorIdx;
 
     public int actorIdx() {
         return _actorIdx;
-    }
-
-    @Override
-    public void onAttached(final WebSocket webSocket) {
-        _ws = webSocket;
-    }
-
-    @Override
-    public void onClose(final WebSocket webSocket) {
-        if (_ws == webSocket) {
-            //lock();
-            try {
-                // detatch
-                webSocket.setAttachment(null);
-
-                //stopAndCloseTranscriber();
-                close();
-            } finally {
-                //unlock();
-            }
-        }
-    }
-
-    @Override
-    public void onWebsocketError(final Exception ex) {
-        log.warn("[{}]: [{}]-[{}]: exception_detail: (callStack)\n{}\n{}", _clientIp, _sessionId, _uuid,
-                ExceptionUtil.dumpCallStack(ex, null, 0),
-                ExceptionUtil.exception2detail(ex));
     }
 
     public record RecordContext(String sessionId, String bucketName, String objectName, InputStream content) {
@@ -109,6 +84,14 @@ public abstract class ApoActor implements WsHandler {
         return _sessionId;
     }
 
+    public String clientIp() {
+        return _clientIp;
+    }
+
+    public String uuid() {
+        return _uuid;
+    }
+
     @Autowired
     private ASRService _asrService;
 
@@ -116,28 +99,33 @@ public abstract class ApoActor implements WsHandler {
 
     private /*final*/ Consumer<Runnable> runOn;
 
-    public ApoActor(final String clientIp,
-                    final String uuid,
-                    final String tid,
-                    final CallApi callApi,
-                    final ScriptApi scriptApi,
-                    final Consumer<ApoActor> doHangup,
-                    final String bucket,
-                    final String wavPath,
-                    final Consumer<RecordContext> saveRecord,
-                    final Consumer<String> callStarted) {
+    public interface Context {
+        String clientIp();
+        String uuid();
+        String tid();
+        long answerInMss();
+        int idleTimeout();
+        String bucket();
+        String wavPath();
+        Consumer<Runnable> runOn();
+        Consumer<ApoActor> doHangup();
+        //AfsActor.Reply2Rms reply2rms();
+        BiConsumer<String, Object> sendEvent();
+        Consumer<RecordContext> saveRecord();
+        Consumer<String> callStarted();
+    }
+
+    public ApoActor(final Context ctx) {
         _actorIdx = currentCounter.incrementAndGet();
         _sessionBeginInMs = System.currentTimeMillis();
 
-        _clientIp = clientIp;
-        _uuid = uuid;
-        _tid = tid;
-        _scriptApi = scriptApi;
-        _callApi = callApi;
-        _doHangup = doHangup;
-        _bucket = bucket;
-        _wavPath = wavPath;
-        _doSaveRecord = saveRecord;
+        _clientIp = ctx.clientIp();
+        _uuid = ctx.uuid();
+        _tid = ctx.tid();
+        _doHangup = ctx.doHangup();
+        _bucket = ctx.bucket();
+        _wavPath = ctx.wavPath();
+        _doSaveRecord = ctx.saveRecord();
         if (Strings.isNullOrEmpty(_uuid) || Strings.isNullOrEmpty(_tid)) {
             log.warn("[{}]: ApoActor_ctor error for uuid:{}/tid:{}, abort apply_session.", _clientIp, _sessionId, _uuid);
             return;
@@ -150,7 +138,7 @@ public abstract class ApoActor implements WsHandler {
             _sessionId = response.getData().getSessionId();
             log.info("[{}]: [{}]-[{}]: apply_session => response: {}", _clientIp, _sessionId, _uuid, response);
             _callSessions.put(_sessionId, this);
-            callStarted.accept(_sessionId);
+            ctx.callStarted().accept(_sessionId);
         } catch (Exception ex) {
             log.warn("[{}]: [{}]-[{}]: failed for callApi.apply_session, detail: {}", _clientIp, _sessionId, _uuid,
                     ExceptionUtil.exception2detail(ex));
@@ -242,6 +230,12 @@ public abstract class ApoActor implements WsHandler {
     public void startTranscription() {
         _asrService.startTranscription(new ASRConsumer() {
             @Override
+            public void onSpeechTranscriberCreated(SpeechTranscriber speechTranscriber) {
+                speechTranscriber.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
+                speechTranscriber.addCustomedParam("speech_noise_threshold", 0.9);
+            }
+
+            @Override
             public void onSentenceBegin(PayloadSentenceBegin payload) {
                 runOn.accept(()-> {
                     log.info("apo_io => onSentenceBegin: {}", payload);
@@ -285,15 +279,6 @@ public abstract class ApoActor implements WsHandler {
             }
         });
     }
-
-    /*
-    public SpeechTranscriber onSpeechTranscriberCreated(final SpeechTranscriber speechTranscriber) {
-        speechTranscriber.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
-        speechTranscriber.addCustomedParam("speech_noise_threshold", 0.9);
-
-        return super.onSpeechTranscriberCreated(speechTranscriber);
-    }
-    */
 
     private boolean isAiSpeaking() {
         return _currentPlaybackId.get() != null;
@@ -1030,8 +1015,13 @@ public abstract class ApoActor implements WsHandler {
     private final String _clientIp;
     private final String _uuid;
     private final String _tid;
-    private final CallApi _callApi;
-    private final ScriptApi _scriptApi;
+
+    @Resource
+    private CallApi _callApi;
+
+    @Resource
+    private ScriptApi _scriptApi;
+
     private final Consumer<ApoActor> _doHangup;
     private final String _bucket;
     private final String _wavPath;

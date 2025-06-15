@@ -579,6 +579,8 @@ class ASRServiceImpl implements ASRService {
                         completableFuture.complete(createASROperator(agent, transcriberRef.get(), isConnected));
                     }));
 
+            // call onSpeechTranscriberCreated for consumer has chance to change params for transcriber instance
+            consumer.onSpeechTranscriberCreated(transcriber);
             transcriberRef.set(transcriber);
 
             /*
