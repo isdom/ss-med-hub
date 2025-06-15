@@ -1,7 +1,10 @@
 package com.yulore.medhub.ws.builder;
 
+import com.alibaba.fastjson.JSON;
 import com.aliyun.oss.OSS;
+import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.bst.BuildStreamTask;
+import com.yulore.medhub.api.AIReplyVO;
 import com.yulore.medhub.service.BSTService;
 import com.yulore.medhub.task.PlayStreamPCMTask2;
 import com.yulore.medhub.task.SampleInfo;
@@ -17,6 +20,7 @@ import com.yulore.util.ExceptionUtil;
 import com.yulore.util.OrderedExecutor;
 import com.yulore.util.VarsUtil;
 import io.micrometer.core.instrument.Timer;
+import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
@@ -31,11 +35,8 @@ import javax.annotation.PostConstruct;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.List;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -65,8 +66,6 @@ public class ApoActorBuilder implements WsHandlerBuilder {
                 .build());
         oss_timer = timerProvider.getObject("oss.upload.duration", MetricCustomized.builder().tags(List.of("actor", "apo")).build());
         gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", MetricCustomized.builder().tags(List.of("actor", "apo")).build());
-
-        executor = executorProvider.apply("ltx");
     }
 
     // wss://domain/path?uuid=XX&tid=XXX&role=call
@@ -95,7 +94,6 @@ public class ApoActorBuilder implements WsHandlerBuilder {
         }
 
         _wscount.incrementAndGet();
-        final Executor wsmsg = executorProvider.apply("wsmsg");
         final var wsh = new WsHandler() {
             @Override
             public void onAttached(WebSocket webSocket) {}
@@ -107,8 +105,8 @@ public class ApoActorBuilder implements WsHandlerBuilder {
             }
 
             @Override
-            public void onMessage(WebSocket webSocket, String message, Timer.Sample sample) {
-                wsmsg.execute(()-> {
+            public void onMessage(final WebSocket webSocket, final String message, final Timer.Sample sample) {
+                orderedExecutor.submit(actor.actorIdx(), ()-> {
                     try {
                         cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, actor, webSocket, sample);
                     } catch (Exception ex) {
@@ -128,10 +126,7 @@ public class ApoActorBuilder implements WsHandlerBuilder {
         webSocket.setAttachment(wsh);
 
         actor.attachPlaybackWs(
-                playbackContext ->
-                        playbackOn(playbackContext,
-                                actor,
-                                webSocket),
+                (id, vo) -> reply2playback(id, vo, actor, webSocket),
                 (event, payload) -> {
                     try {
                         WSEventVO.sendEvent(webSocket, event, payload);
@@ -145,7 +140,12 @@ public class ApoActorBuilder implements WsHandlerBuilder {
         return wsh;
     }
 
-    private WsHandler buildActor(final String prefix, final WebSocket webSocket, final ClientHandshake handshake, final String path, final int varsBegin, final String role) {
+    private WsHandler buildActor(final String prefix,
+                                 final WebSocket webSocket,
+                                 final ClientHandshake handshake,
+                                 final String path,
+                                 final int varsBegin,
+                                 final String role) {
         _wscount.incrementAndGet();
 
         // means ws with role: call
@@ -153,7 +153,8 @@ public class ApoActorBuilder implements WsHandlerBuilder {
         final String uuid = VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "uuid", '&');
         final String tid = VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "tid", '&');
         final String clientIp = handshake.getFieldValue("X-Forwarded-For");
-        final Executor wsmsg = executorProvider.apply("wsmsg");
+        final var executor = executorProvider.apply("ltx");
+
         final var actor = apoProvider.getObject(new ApoActor.Context() {
             public String clientIp() {
                 return clientIp;
@@ -170,14 +171,8 @@ public class ApoActorBuilder implements WsHandlerBuilder {
             public int idleTimeout() {
                 return 0;
             }
-            public String bucket() {
-                return _oss_bucket;
-            }
-            public String wavPath() {
-                return _oss_path;
-            }
-            public Consumer<Runnable> runOn() {
-                return null;
+            public Consumer<Runnable> runOn(int idx) {
+                return runnable -> orderedExecutor.submit(idx, runnable);
             }
             public Consumer<ApoActor> doHangup() {
                 return actor_ -> {
@@ -188,9 +183,6 @@ public class ApoActorBuilder implements WsHandlerBuilder {
                         log.warn("[{}]: sendback CallEnded event failed, detail: {}", actor_.sessionId(), ex.toString());
                     }
                 };
-            }
-            public BiConsumer<String, Object> sendEvent() {
-                return null;
             }
             public Consumer<ApoActor.RecordContext> saveRecord() {
                 return ctx -> {
@@ -216,7 +208,7 @@ public class ApoActorBuilder implements WsHandlerBuilder {
             @Override
             public void onClose(WebSocket webSocket) {
                 webSocket.setAttachment(null);
-                executor.execute(()-> {
+                orderedExecutor.submit(actor.actorIdx(), ()-> {
                     try {
                         actor.close();
                     } catch (Exception ex) {
@@ -229,7 +221,7 @@ public class ApoActorBuilder implements WsHandlerBuilder {
 
             @Override
             public void onMessage(final WebSocket webSocket, final String message, final Timer.Sample sample) {
-                wsmsg.execute(()-> {
+                orderedExecutor.submit(actor.actorIdx(), ()-> {
                     try {
                         cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, actor, webSocket, sample);
                     } catch (Exception ex) {
@@ -241,7 +233,7 @@ public class ApoActorBuilder implements WsHandlerBuilder {
 
             @Override
             public void onMessage(final WebSocket webSocket, final ByteBuffer buffer, final long timestampInMs) {
-                orderedExecutor.submit(actor.actorIdx(), ()->actor.transmit(buffer));
+                mediaExecutor.submit(actor.actorIdx(), ()->actor.transmit(buffer));
             }
 
             @Override
@@ -263,7 +255,33 @@ public class ApoActorBuilder implements WsHandlerBuilder {
         return wsh;
     }
 
-    private Runnable playbackOn(final ApoActor.PlaybackContext playbackContext, final ApoActor actor, final WebSocket webSocket) {
+    record PlaybackContext(String playbackId, String path, String contentId) {
+    }
+
+    private Supplier<Runnable> reply2playback(final String playbackId, final AIReplyVO replyVO, final ApoActor actor, WebSocket webSocket) {
+        final String aiContentId = replyVO.getAi_content_id() != null ? Long.toString(replyVO.getAi_content_id()) : null;
+        if ("cp".equals(replyVO.getVoiceMode())) {
+            return ()->playbackOn(new PlaybackContext(
+                    playbackId,
+                    String.format("type=cp,%s", JSON.toJSONString(replyVO.getCps())),
+                    aiContentId), actor, webSocket);
+        } else if ("wav".equals(replyVO.getVoiceMode())) {
+            return ()->playbackOn(new PlaybackContext(
+                    playbackId,
+                    String.format("{cache=true,bucket=%s}%s%s", _oss_bucket, _oss_path, replyVO.getAi_speech_file()),
+                    aiContentId), actor, webSocket);
+        } else if ("tts".equals(replyVO.getVoiceMode())) {
+            return ()->playbackOn(new PlaybackContext(
+                    playbackId,
+                    String.format("{type=tts,text=%s}tts.wav",
+                            StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(replyVO.getReply_content())),
+                    aiContentId), actor, webSocket);
+        } else {
+            return null;
+        }
+    }
+
+    private Runnable playbackOn(final PlaybackContext playbackContext, final ApoActor actor, final WebSocket webSocket) {
         // interval = 20 ms
         int interval = 20;
         log.info("[{}]: playbackOn: {} => sample rate: {}/interval: {}/channels: {} as {}",
@@ -274,21 +292,21 @@ public class ApoActorBuilder implements WsHandlerBuilder {
                 playbackContext.path(),
                 schedulerProvider.getObject(),
                 new SampleInfo(16000, interval, 16, 1),
-                (timestamp) -> {
+                timestamp -> {
                     WSEventVO.sendEvent(webSocket, "PCMBegin",
                             new PayloadPCMEvent(playbackContext.playbackId(), playbackContext.contentId()));
                     actor.notifyPlaybackSendStart(playbackContext.playbackId(), timestamp);
                 },
-                (timestamp) -> {
+                timestamp -> {
                     actor.notifyPlaybackSendStop(playbackContext.playbackId(), timestamp);
                     WSEventVO.sendEvent(webSocket, "PCMEnd",
                             new PayloadPCMEvent(playbackContext.playbackId(), playbackContext.contentId()));
                 },
-                (bytes) -> {
+                bytes -> {
                     webSocket.send(bytes);
                     actor.notifyPlaybackSendData(bytes);
                 },
-                (_task) -> {
+                _task -> {
                     log.info("[{}]: PlayStreamPCMTask2 {} send data stopped with completed: {}",
                             actor.sessionId(), _task, _task.isCompleted());
                 }
@@ -327,7 +345,6 @@ public class ApoActorBuilder implements WsHandlerBuilder {
 
     private final AtomicInteger _wscount = new AtomicInteger(0);
 
-    private Executor executor;
     private Timer playback_timer;
     private Timer oss_timer;
     private Timer transmit_timer;
@@ -344,4 +361,41 @@ public class ApoActorBuilder implements WsHandlerBuilder {
             .register(VOUserAnswer.TYPE,"UserAnswer",
                       ctx->ctx.actor().notifyUserAnswer(ctx.payload()))
             ;
+
+    final static class MediaExecutor implements OrderedExecutor {
+        // 使用连接ID的哈希绑定固定线程
+        private static final int POOL_SIZE = Runtime.getRuntime().availableProcessors() * 2;
+
+        private final ExecutorService[] workers = new ExecutorService[POOL_SIZE];
+
+        MediaExecutor() {
+            for (int i = 0; i < POOL_SIZE; i++) {
+                final ThreadPoolExecutor executor = new ThreadPoolExecutor(1, 1,
+                        0L, TimeUnit.MILLISECONDS,
+                        new LinkedBlockingQueue<>(),
+                        new DefaultThreadFactory("Handle-Media-" + i));
+                workers[i] = executor;
+                log.info("create Handle-Media-{}", i);
+            }
+        }
+
+        public void release() {
+            for (int i = 0; i < POOL_SIZE; i++) {
+                workers[i].shutdownNow();
+            }
+        }
+
+        @Override
+        public void submit(final int idx, final Runnable task) {
+            final int order = idx % POOL_SIZE;
+            workers[order].submit(task);
+        }
+
+        @Override
+        public int idx2order(final int idx) {
+            return idx % POOL_SIZE;
+        }
+    }
+
+    private final MediaExecutor mediaExecutor = new MediaExecutor();
 }

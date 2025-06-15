@@ -1,10 +1,8 @@
 package com.yulore.medhub.ws.actor;
 
-import com.alibaba.fastjson.JSON;
 import com.alibaba.nls.client.protocol.SampleRateEnum;
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriber;
 import com.google.common.base.Strings;
-import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.medhub.api.*;
 import com.yulore.medhub.service.ASRConsumer;
 import com.yulore.medhub.service.ASROperator;
@@ -46,10 +44,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.Supplier;
+import java.util.function.*;
 
 import static org.springframework.beans.factory.config.ConfigurableBeanFactory.SCOPE_PROTOTYPE;
 
@@ -70,9 +65,6 @@ public final class ApoActor {
     }
 
     public record RecordContext(String sessionId, String bucketName, String objectName, InputStream content) {
-    }
-
-    public record PlaybackContext(String playbackId, String path, String contentId) {
     }
 
     public final Lock _lock = new ReentrantLock();
@@ -97,7 +89,11 @@ public final class ApoActor {
 
     private final AtomicReference<ASROperator> asrRef = new AtomicReference<>(null);
 
-    private /*final*/ Consumer<Runnable> runOn;
+    private final Consumer<Runnable> _runOn;
+
+    public interface Reply2Playback extends BiFunction<String, AIReplyVO, Supplier<Runnable>> {}
+
+    private Reply2Playback _reply2playback;
 
     public interface Context {
         String clientIp();
@@ -105,12 +101,8 @@ public final class ApoActor {
         String tid();
         long answerInMss();
         int idleTimeout();
-        String bucket();
-        String wavPath();
-        Consumer<Runnable> runOn();
+        Consumer<Runnable> runOn(int idx);
         Consumer<ApoActor> doHangup();
-        //AfsActor.Reply2Rms reply2rms();
-        BiConsumer<String, Object> sendEvent();
         Consumer<RecordContext> saveRecord();
         Consumer<String> callStarted();
     }
@@ -122,9 +114,8 @@ public final class ApoActor {
         _clientIp = ctx.clientIp();
         _uuid = ctx.uuid();
         _tid = ctx.tid();
+        _runOn = ctx.runOn(actorIdx());
         _doHangup = ctx.doHangup();
-        _bucket = ctx.bucket();
-        _wavPath = ctx.wavPath();
         _doSaveRecord = ctx.saveRecord();
         if (Strings.isNullOrEmpty(_uuid) || Strings.isNullOrEmpty(_tid)) {
             log.warn("[{}]: ApoActor_ctor error for uuid:{}/tid:{}, abort apply_session.", _clientIp, _sessionId, _uuid);
@@ -207,8 +198,8 @@ public final class ApoActor {
         }
     }
 
-    public void attachPlaybackWs(final Function<PlaybackContext, Runnable> playbackOn, final BiConsumer<String, Object> sendEvent) {
-        _playbackOn = playbackOn;
+    public void attachPlaybackWs(final Reply2Playback reply2playback, final BiConsumer<String, Object> sendEvent) {
+        _reply2playback = reply2playback;
         _sendEvent = sendEvent;
         tryPlayWelcome();
     }
@@ -216,7 +207,7 @@ public final class ApoActor {
     private void tryPlayWelcome() {
         try {
             _lock.lock();
-            if (_playbackOn != null && _welcome.get() != null) {
+            if (_reply2playback != null && _welcome.get() != null) {
                 final AIReplyVO welcome = _welcome.getAndSet(null);
                 if (null != welcome) {
                     doPlayback(welcome);
@@ -237,7 +228,7 @@ public final class ApoActor {
 
             @Override
             public void onSentenceBegin(PayloadSentenceBegin payload) {
-                runOn.accept(()-> {
+                _runOn.accept(()-> {
                     log.info("apo_io => onSentenceBegin: {}", payload);
                     whenASRSentenceBegin(payload);
                 });
@@ -251,7 +242,7 @@ public final class ApoActor {
             @Override
             public void onSentenceEnd(final PayloadSentenceEnd payload) {
                 final long sentenceEndInMs = System.currentTimeMillis();
-                runOn.accept(()->{
+                _runOn.accept(()->{
                     log.info("apo_io => onSentenceEnd: {}", payload);
                     whenASRSentenceEnd(payload, sentenceEndInMs);
                 });
@@ -288,7 +279,7 @@ public final class ApoActor {
         final long idleTime = System.currentTimeMillis() - _idleStartInMs.get();
         boolean isAiSpeaking = isAiSpeaking();
         if ( _isUserAnswered.get()  // user answered
-            && _playbackOn != null  // playback ws has connected
+            && _reply2playback != null  // playback ws has connected
             && !_isUserSpeak.get()  // user not speak
             && !isAiSpeaking        // AI not speak
             && _aiSetting != null
@@ -508,14 +499,14 @@ public final class ApoActor {
         // final long sentenceEndInMs = System.currentTimeMillis();
         _isUserSpeak.set(false);
         _idleStartInMs.set(sentenceEndInMs);
-        if (_sessionId != null && _playbackOn != null && _aiSetting != null) {
+        if (_sessionId != null && _reply2playback != null && _aiSetting != null) {
             // playback ws has connected && _aiSetting is valid
             final String userContentId = interactWithScriptEngine(payload);
             reportUserContent(payload, userContentId);
             reportAsrTime(payload, sentenceEndInMs, userContentId);
         } else {
             log.warn("[{}]: [{}]-[{}]: notifySentenceEnd but sessionId is null or playback not ready or aiSetting not ready => _playbackOn: {}/aiSetting: {}",
-                    _clientIp, _sessionId, _uuid, _playbackOn, _aiSetting);
+                    _clientIp, _sessionId, _uuid, _reply2playback, _aiSetting);
         }
     }
 
@@ -828,7 +819,7 @@ public final class ApoActor {
                 if (!_isUserAnswered.get()) {
                     log.warn("[{}]: [{}]-[{}]: close_without_user_answer, total duration {} s", _clientIp, _sessionId, _uuid, (System.currentTimeMillis() - _sessionBeginInMs) / 1000.0f);
                 }
-                if (_playbackOn == null) {
+                if (_reply2playback == null) {
                     log.warn("[{}]: [{}]-[{}]: close_without_playback_ws, total duration {} s", _clientIp, _sessionId, _uuid, (System.currentTimeMillis() - _sessionBeginInMs) / 1000.0f);
                 }
             }
@@ -960,7 +951,7 @@ public final class ApoActor {
     private boolean doPlayback(final AIReplyVO replyVO) {
         final String newPlaybackId = UUID.randomUUID().toString();
         log.info("[{}]: [{}]-[{}]: doPlayback: {}", _clientIp, _sessionId, _uuid, replyVO);
-        final Supplier<Runnable> playback = reply2playback(newPlaybackId, replyVO);
+        final Supplier<Runnable> playback = _reply2playback.apply(newPlaybackId, replyVO);
         if (playback == null) {
             log.info("[{}]: [{}]-[{}]: doPlayback: unknown reply: {}, ignore", _clientIp, _sessionId, _uuid, replyVO);
             return false;
@@ -978,29 +969,6 @@ public final class ApoActor {
                     replyVO.getHangup() == 1);
             _currentStopPlayback.set(playback.get());
             return true;
-        }
-    }
-
-    private Supplier<Runnable> reply2playback(final String playbackId, final AIReplyVO replyVO) {
-        final String aiContentId = replyVO.getAi_content_id() != null ? Long.toString(replyVO.getAi_content_id()) : null;
-        if ("cp".equals(replyVO.getVoiceMode())) {
-            return ()->_playbackOn.apply(new PlaybackContext(
-                    playbackId,
-                    String.format("type=cp,%s", JSON.toJSONString(replyVO.getCps())),
-                    aiContentId));
-        } else if ("wav".equals(replyVO.getVoiceMode())) {
-            return ()->_playbackOn.apply(new PlaybackContext(
-                    playbackId,
-                    String.format("{cache=true,bucket=%s}%s%s", _bucket, _wavPath, replyVO.getAi_speech_file()),
-                    aiContentId));
-        } else if ("tts".equals(replyVO.getVoiceMode())) {
-            return ()->_playbackOn.apply(new PlaybackContext(
-                    playbackId,
-                    String.format("{type=tts,text=%s}tts.wav",
-                            StringUnicodeEncoderDecoder.encodeStringToUnicodeSequence(replyVO.getReply_content())),
-                    aiContentId));
-        } else {
-            return null;
         }
     }
 
@@ -1023,12 +991,11 @@ public final class ApoActor {
     private ScriptApi _scriptApi;
 
     private final Consumer<ApoActor> _doHangup;
-    private final String _bucket;
-    private final String _wavPath;
+    //private final String _bucket;
+    //private final String _wavPath;
     private final AtomicReference<AIReplyVO> _welcome = new AtomicReference<>(null);
     private AiSettingVO _aiSetting;
 
-    private Function<PlaybackContext, Runnable> _playbackOn;
     private final AtomicReference<Runnable> _currentStopPlayback = new AtomicReference<>(null);
     private final AtomicReference<String> _currentPlaybackId = new AtomicReference<>(null);
     private final AtomicBoolean _currentPlaybackPaused = new AtomicBoolean(false);
