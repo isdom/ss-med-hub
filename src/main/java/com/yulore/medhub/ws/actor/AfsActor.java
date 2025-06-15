@@ -45,7 +45,7 @@ import static org.springframework.beans.factory.config.ConfigurableBeanFactory.S
 @Slf4j
 @Component
 @Scope(SCOPE_PROTOTYPE)
-public class AfsActor {
+public final class AfsActor {
     @ToString
     public static class RmsSource {
         public String file;
