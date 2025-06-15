@@ -83,11 +83,13 @@ public class ApoActorBuilder implements WsHandlerBuilder {
         }
     }
 
+    private static final ConcurrentMap<String, ApoActor> _callSessions = new ConcurrentHashMap<>();
+
     private WsHandler attachActor(final String prefix, final WebSocket webSocket, final String path, final int varsBegin, final String role) {
         final String sessionId = varsBegin > 0 ? VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "sessionId", '&') : null;
         // init PlaybackSession attach with webSocket
         log.info("ws path match: {}, role: {}, using ws as ApoActor's playback ws: [{}]", prefix, role, sessionId);
-        final var actor = ApoActor.findBy(sessionId);
+        final var actor = _callSessions.get(sessionId);
         if (actor == null) {
             log.info("can't find callSession by sessionId: {}, ignore", sessionId);
             return null;
@@ -193,8 +195,11 @@ public class ApoActorBuilder implements WsHandlerBuilder {
                     });
                 };
             }
-            public Consumer<String> callStarted() {
-                return sessionId_ -> WSEventVO.sendEvent(webSocket, "CallStarted", new PayloadCallStarted(sessionId_));
+            public Consumer<ApoActor> callStarted() {
+                return actor_ -> {
+                    _callSessions.put(actor_.sessionId(), actor_);
+                    WSEventVO.sendEvent(webSocket, "CallStarted", new PayloadCallStarted(actor_.sessionId()));
+                };
             }
         });
 
@@ -207,6 +212,9 @@ public class ApoActorBuilder implements WsHandlerBuilder {
                 webSocket.setAttachment(null);
                 orderedExecutor.submit(actor.actorIdx(), ()-> {
                     try {
+                        if (actor.sessionId() != null) {
+                            _callSessions.remove(actor.sessionId());
+                        }
                         actor.close();
                     } catch (Exception ex) {
                         log.warn("[{}] ApoActor.close() with exception: {}", actor.sessionId(), ExceptionUtil.exception2detail(ex));

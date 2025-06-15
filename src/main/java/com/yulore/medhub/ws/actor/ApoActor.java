@@ -100,7 +100,7 @@ public final class ApoActor {
         Consumer<Runnable> runOn(int idx);
         Consumer<ApoActor> doHangup();
         Consumer<RecordContext> saveRecord();
-        Consumer<String> callStarted();
+        Consumer<ApoActor> callStarted();
     }
 
     public ApoActor(final Context ctx) {
@@ -124,8 +124,7 @@ public final class ApoActor {
                             .build());
             _sessionId = response.getData().getSessionId();
             log.info("[{}]: [{}]-[{}]: apply_session => response: {}", _clientIp, _sessionId, _uuid, response);
-            _callSessions.put(_sessionId, this);
-            ctx.callStarted().accept(_sessionId);
+            ctx.callStarted().accept(this);
         } catch (Exception ex) {
             log.warn("[{}]: [{}]-[{}]: failed for callApi.apply_session, detail: {}", _clientIp, _sessionId, _uuid,
                     ExceptionUtil.exception2detail(ex));
@@ -797,7 +796,6 @@ public final class ApoActor {
                 //_recordStartedVO = null;
 
                 if (_sessionId != null) {
-                    _callSessions.remove(_sessionId);
                     final String currentPlaybackId = _currentPlaybackId.getAndSet(null);
                     if (null != currentPlaybackId) {
                         // stop current playback when call close()
@@ -967,10 +965,6 @@ public final class ApoActor {
         }
     }
 
-    static public ApoActor findBy(final String sessionId) {
-        return _callSessions.get(sessionId);
-    }
-
     private BiConsumer<String, Object> _sendEvent;
 
     private final AtomicBoolean _isUserAnswered = new AtomicBoolean(false);
@@ -986,8 +980,6 @@ public final class ApoActor {
     private ScriptApi _scriptApi;
 
     private final Consumer<ApoActor> _doHangup;
-    //private final String _bucket;
-    //private final String _wavPath;
     private final AtomicReference<AIReplyVO> _welcome = new AtomicReference<>(null);
     private AiSettingVO _aiSetting;
 
@@ -999,8 +991,6 @@ public final class ApoActor {
     private final AtomicLong _idleStartInMs = new AtomicLong(System.currentTimeMillis());
     private final AtomicBoolean _isUserSpeak = new AtomicBoolean(false);
     private final AtomicLong _currentSentenceBeginInMs = new AtomicLong(-1);
-
-    private static final ConcurrentMap<String, ApoActor> _callSessions = new ConcurrentHashMap<>();
 
     private final List<byte[]> _usBufs = new ArrayList<>();
 
