@@ -168,9 +168,6 @@ public class ApoActorBuilder implements WsHandlerBuilder {
             public long answerInMss() {
                 return 0;
             }
-            public int idleTimeout() {
-                return 0;
-            }
             public Consumer<Runnable> runOn(int idx) {
                 return runnable -> orderedExecutor.submit(idx, runnable);
             }
@@ -247,7 +244,6 @@ public class ApoActorBuilder implements WsHandlerBuilder {
         webSocket.setAttachment(wsh);
         // wsh.onAttached(webSocket);
 
-        // actor.scheduleCheckIdle(schedulerProvider.getObject(), _check_idle_interval_ms, actor::checkIdle);
         schedulerProvider.getObject().scheduleWithFixedDelay(actor::checkIdle, _check_idle_interval_ms, _check_idle_interval_ms, TimeUnit.MILLISECONDS);
         schedulerProvider.getObject().schedule(actor::notifyMockAnswer, _answer_timeout_ms, TimeUnit.MILLISECONDS);
 

@@ -42,8 +42,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.*;
 
 import static org.springframework.beans.factory.config.ConfigurableBeanFactory.SCOPE_PROTOTYPE;
@@ -67,7 +65,6 @@ public final class ApoActor {
     public record RecordContext(String sessionId, String bucketName, String objectName, InputStream content) {
     }
 
-    public final Lock _lock = new ReentrantLock();
     private final AtomicBoolean isClosed = new AtomicBoolean(false);
 
     private String _sessionId;
@@ -100,7 +97,6 @@ public final class ApoActor {
         String uuid();
         String tid();
         long answerInMss();
-        int idleTimeout();
         Consumer<Runnable> runOn(int idx);
         Consumer<ApoActor> doHangup();
         Consumer<RecordContext> saveRecord();
@@ -137,27 +133,29 @@ public final class ApoActor {
     }
 
     public void notifyMockAnswer() {
-        if (_isUserAnswered.get()) {
-            log.info("[{}]: [{}]-[{}]: notifyUserAnswer has called already, ignore notifyMockAnswer!", _clientIp, _sessionId, _uuid);
-            return;
-        }
-        if (Strings.isNullOrEmpty(_uuid) || Strings.isNullOrEmpty(_tid)) {
-            log.warn("[{}]/[{}]: doMockAnswer error for uuid:{}/tid:{}, abort mock_answer.", _clientIp, _sessionId, _uuid, _tid);
-            return;
-        }
-        try {
-            final ApiResponse<UserAnswerVO> response = _callApi.mock_answer(CallApi.MockAnswerRequest.builder()
-                    .sessionId(_sessionId)
-                    .uuid(_uuid)
-                    .tid(_tid)
-                    .answerTime(System.currentTimeMillis())
-                    .build());
-            log.info("[{}]: [{}]-[{}]: mockAnswer: tid:{} => response: {}", _clientIp, _sessionId, _uuid, _tid, response);
+        _runOn.accept(()-> {
+            if (_isUserAnswered.get()) {
+                log.info("[{}]: [{}]-[{}]: notifyUserAnswer has called already, ignore notifyMockAnswer!", _clientIp, _sessionId, _uuid);
+                return;
+            }
+            if (Strings.isNullOrEmpty(_uuid) || Strings.isNullOrEmpty(_tid)) {
+                log.warn("[{}]/[{}]: doMockAnswer error for uuid:{}/tid:{}, abort mock_answer.", _clientIp, _sessionId, _uuid, _tid);
+                return;
+            }
+            try {
+                final ApiResponse<UserAnswerVO> response = _callApi.mock_answer(CallApi.MockAnswerRequest.builder()
+                        .sessionId(_sessionId)
+                        .uuid(_uuid)
+                        .tid(_tid)
+                        .answerTime(System.currentTimeMillis())
+                        .build());
+                log.info("[{}]: [{}]-[{}]: mockAnswer: tid:{} => response: {}", _clientIp, _sessionId, _uuid, _tid, response);
 
-            saveAndPlayWelcome(response);
-        } catch (Exception ex) {
-            log.warn("[{}]: [{}]-[{}]: failed for callApi.mock_answer, detail: {}", _clientIp, _sessionId, _uuid, ex.toString());
-        }
+                saveAndPlayWelcome(response);
+            } catch (Exception ex) {
+                log.warn("[{}]: [{}]-[{}]: failed for callApi.mock_answer, detail: {}", _clientIp, _sessionId, _uuid, ex.toString());
+            }
+        });
     }
 
     public void notifyUserAnswer(final VOUserAnswer vo) {
@@ -205,16 +203,11 @@ public final class ApoActor {
     }
 
     private void tryPlayWelcome() {
-        try {
-            _lock.lock();
-            if (_reply2playback != null && _welcome.get() != null) {
-                final AIReplyVO welcome = _welcome.getAndSet(null);
-                if (null != welcome) {
-                    doPlayback(welcome);
-                }
+        if (_reply2playback != null && _welcome.get() != null && asrRef.get() != null) {
+            final AIReplyVO welcome = _welcome.getAndSet(null);
+            if (null != welcome) {
+                doPlayback(welcome);
             }
-        } finally {
-            _lock.unlock();
         }
     }
 
@@ -252,7 +245,7 @@ public final class ApoActor {
             public void onTranscriberFail() {
                 log.warn("apo_io => onTranscriberFail");
             }
-        }).whenComplete((operator, ex) -> {
+        }).whenComplete((operator, ex) -> _runOn.accept(()->{
             if (ex != null) {
                 log.warn("startTranscription failed", ex);
             } else {
@@ -268,7 +261,7 @@ public final class ApoActor {
                     tryPlayWelcome();
                 }
             }
-        });
+        }));
     }
 
     private boolean isAiSpeaking() {
@@ -276,40 +269,41 @@ public final class ApoActor {
     }
 
     public void checkIdle() {
-        final long idleTime = System.currentTimeMillis() - _idleStartInMs.get();
-        boolean isAiSpeaking = isAiSpeaking();
-        if ( _isUserAnswered.get()  // user answered
-            && _reply2playback != null  // playback ws has connected
-            && !_isUserSpeak.get()  // user not speak
-            && !isAiSpeaking        // AI not speak
-            && _aiSetting != null
+        _runOn.accept(()-> {
+            final long idleTime = System.currentTimeMillis() - _idleStartInMs.get();
+            boolean isAiSpeaking = isAiSpeaking();
+            if (_isUserAnswered.get()  // user answered
+                    && _reply2playback != null  // playback ws has connected
+                    && !_isUserSpeak.get()  // user not speak
+                    && !isAiSpeaking        // AI not speak
+                    && _aiSetting != null
             ) {
-            if (idleTime > _aiSetting.getIdle_timeout()) {
-                log.info("[{}]: [{}]-[{}]: checkIdle: idle duration: {} ms >=: [{}] ms", _clientIp, _sessionId, _uuid, idleTime, _aiSetting.getIdle_timeout());
-                try {
-                    final ApiResponse<AIReplyVO> response =
-                            _scriptApi.ai_reply(_sessionId, null, idleTime, 0, null, 0);
-                    if (response.getData() != null) {
-                        if (response.getData().getAi_content_id() != null && doPlayback(response.getData())) {
-                            return;
-                        } else {
-                            log.info("[{}]: [{}]-[{}]: checkIdle: ai_reply {}, !NOT! doPlayback", _clientIp, _sessionId, _uuid, response);
-                            if (response.getData().getHangup() == 1) {
-                                // hangup call
-                                _doHangup.accept(this);
+                if (idleTime > _aiSetting.getIdle_timeout()) {
+                    log.info("[{}]: [{}]-[{}]: checkIdle: idle duration: {} ms >=: [{}] ms", _clientIp, _sessionId, _uuid, idleTime, _aiSetting.getIdle_timeout());
+                    try {
+                        final ApiResponse<AIReplyVO> response =
+                                _scriptApi.ai_reply(_sessionId, null, idleTime, 0, null, 0);
+                        if (response.getData() != null) {
+                            if (response.getData().getAi_content_id() != null && doPlayback(response.getData())) {
+                                return;
+                            } else {
+                                log.info("[{}]: [{}]-[{}]: checkIdle: ai_reply {}, !NOT! doPlayback", _clientIp, _sessionId, _uuid, response);
+                                if (response.getData().getHangup() == 1) {
+                                    // hangup call
+                                    _doHangup.accept(this);
+                                }
                             }
+                        } else {
+                            log.info("[{}]: [{}]-[{}]: checkIdle: ai_reply {}, do nothing", _clientIp, _sessionId, _uuid, response);
                         }
-                    } else {
-                        log.info("[{}]: [{}]-[{}]: checkIdle: ai_reply {}, do nothing", _clientIp, _sessionId, _uuid, response);
+                    } catch (Exception ex) {
+                        log.warn("[{}]: [{}]-[{}]: checkIdle: ai_reply error, detail: {}", _clientIp, _sessionId, _uuid,
+                                ExceptionUtil.exception2detail(ex));
                     }
-                } catch (Exception ex) {
-                    log.warn("[{}]: [{}]-[{}]: checkIdle: ai_reply error, detail: {}", _clientIp, _sessionId, _uuid,
-                            ExceptionUtil.exception2detail(ex));
                 }
             }
-        }
-        log.info("[{}]: [{}]-[{}]: checkIdle: is_speaking: {}/is_playing: {}/idle duration: {} ms",
-                _clientIp, _sessionId, _uuid, _isUserSpeak.get(), isAiSpeaking, idleTime);
+            log.info("[{}]: [{}]-[{}]: checkIdle: is_speaking: {}/is_playing: {}/idle duration: {} ms",
+                    _clientIp, _sessionId, _uuid, _isUserSpeak.get(), isAiSpeaking, idleTime);
         /*
         if (!_isUserSpeak.get() && isAiSpeaking() && _currentPlaybackPaused.get() && idleTime >= 2000) {
             // user not speaking & ai speaking and paused and user not speak more than 2s
@@ -319,6 +313,7 @@ public final class ApoActor {
             }
         }
         */
+        });
     }
 
     public void transmit(final ByteBuffer buf) {
