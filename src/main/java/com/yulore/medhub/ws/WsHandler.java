@@ -10,6 +10,6 @@ public interface WsHandler {
     void onClose(WebSocket webSocket);
     void onMessage(final WebSocket webSocket, final String message, final Timer.Sample sample);
 
-    default void onMessage(final WebSocket webSocket, final ByteBuffer bytes, final long timestampInMs) {}
+    default void onMessage(final WebSocket webSocket, final ByteBuffer buffer, final long timestampInMs) {}
     default void onWebsocketError(Exception ex) {}
 }
