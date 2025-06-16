@@ -244,11 +244,11 @@ public final class ApoActor {
             public void onTranscriberFail() {
                 log.warn("apo_io => onTranscriberFail");
             }
-        }).whenComplete((operator, ex) -> _runOn.accept(()->{
+        }).whenComplete((asrOperator, ex) -> _runOn.accept(()->{
             if (ex != null) {
                 log.warn("startTranscription failed", ex);
             } else {
-                asrRef.set(operator);
+                asrRef.set(asrOperator);
                 if (isClosed.get()) {
                     // means close() method has been called
                     final var asr = asrRef.getAndSet(null);
