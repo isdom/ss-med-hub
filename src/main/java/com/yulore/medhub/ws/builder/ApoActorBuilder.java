@@ -83,13 +83,17 @@ public class ApoActorBuilder implements WsHandlerBuilder {
         }
     }
 
-    private static final ConcurrentMap<String, ApoActor> _callSessions = new ConcurrentHashMap<>();
+    private static final ConcurrentMap<String, ApoActor> _actors = new ConcurrentHashMap<>();
 
-    private WsHandler attachActor(final String prefix, final WebSocket webSocket, final String path, final int varsBegin, final String role) {
+    private WsHandler attachActor(final String prefix,
+                                  final WebSocket webSocket,
+                                  final String path,
+                                  final int varsBegin,
+                                  final String role) {
         final String sessionId = varsBegin > 0 ? VarsUtil.extractValueWithSplitter(path.substring(varsBegin + 1), "sessionId", '&') : null;
         // init PlaybackSession attach with webSocket
         log.info("ws path match: {}, role: {}, using ws as ApoActor's playback ws: [{}]", prefix, role, sessionId);
-        final var actor = _callSessions.get(sessionId);
+        final var actor = _actors.get(sessionId);
         if (actor == null) {
             log.info("can't find callSession by sessionId: {}, ignore", sessionId);
             return null;
@@ -197,7 +201,7 @@ public class ApoActorBuilder implements WsHandlerBuilder {
             }
             public Consumer<ApoActor> callStarted() {
                 return actor_ -> {
-                    _callSessions.put(actor_.sessionId(), actor_);
+                    _actors.put(actor_.sessionId(), actor_);
                     WSEventVO.sendEvent(webSocket, "CallStarted", new PayloadCallStarted(actor_.sessionId()));
                 };
             }
@@ -213,7 +217,7 @@ public class ApoActorBuilder implements WsHandlerBuilder {
                 orderedExecutor.submit(actor.actorIdx(), ()-> {
                     try {
                         if (actor.sessionId() != null) {
-                            _callSessions.remove(actor.sessionId());
+                            _actors.remove(actor.sessionId());
                         }
                         actor.close();
                     } catch (Exception ex) {
