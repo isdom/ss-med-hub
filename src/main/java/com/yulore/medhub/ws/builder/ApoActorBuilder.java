@@ -54,7 +54,7 @@ public class ApoActorBuilder implements WsHandlerBuilder {
                     //.handle((timer, ex)->ctx.sample().stop(timer))
                 ctx.actor().startTranscription()
             ).register(WSCommandVO.WSCMD_VOID,"StopTranscription",
-                ctx-> log.info("[{}] ApoActor: handle StopTranscription cmd",
+                ctx-> log.info("[{}] ApoActorBuilder: handle StopTranscription cmd",
                         ctx.actor().sessionId())
             );
 
