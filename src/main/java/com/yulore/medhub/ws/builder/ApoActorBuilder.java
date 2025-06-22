@@ -54,8 +54,8 @@ public class ApoActorBuilder implements WsHandlerBuilder {
                     //.handle((timer, ex)->ctx.sample().stop(timer))
                 ctx.actor().startTranscription()
             ).register(WSCommandVO.WSCMD_VOID,"StopTranscription",
-                ctx-> log.info("[{}] ApoActorBuilder: handle StopTranscription cmd",
-                        ctx.actor().sessionId())
+                ctx-> log.info("[{}]: [{}]-[{}] => ApoActorBuilder: handle StopTranscription cmd",
+                        ctx.actor().clientIp(), ctx.actor().sessionId(), ctx.actor().uuid())
             );
 
         playback_timer = timerProvider.getObject("mh.playback.delay", MetricCustomized.builder().tags(List.of("actor", "apo")).build());
