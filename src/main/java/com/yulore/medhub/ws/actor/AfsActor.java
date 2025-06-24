@@ -2,6 +2,7 @@ package com.yulore.medhub.ws.actor;
 
 import com.yulore.medhub.api.AIReplyVO;
 import com.yulore.medhub.api.ApiResponse;
+import com.yulore.medhub.api.EslApi;
 import com.yulore.medhub.api.ScriptApi;
 import com.yulore.medhub.service.ASRConsumer;
 import com.yulore.medhub.service.ASROperator;
@@ -21,12 +22,14 @@ import lombok.Data;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -100,10 +103,17 @@ public final class AfsActor {
     @Resource
     private ScriptApi _scriptApi;
 
+    @Value("#{${esl.api.headers}}")
+    private Map<String,String> _esl_headers;
+
+    @Autowired(required = false)
+    private EslApi _eslApi;
+
     private final AtomicReference<ASROperator> asrRef = new AtomicReference<>(null);
     private final AtomicBoolean isClosed = new AtomicBoolean(false);
 
     public void startTranscription() {
+        log.info("[{}] startTranscription with ScriptApi({})/EslApi({})", sessionId, _scriptApi, _eslApi);
         _asrService.startTranscription(new ASRConsumer() {
             @Override
             public void onSentenceBegin(PayloadSentenceBegin payload) {
@@ -544,6 +554,12 @@ public final class AfsActor {
                 log.info("[{}] user_report_asrtime ({})'s response: {}", sessionId, content_id, resp);
             };
             _pendingReports.add(doReport);
+        }
+
+        if (_eslApi != null) {
+            final var startInMs = System.currentTimeMillis();
+            final var resp = _eslApi.search_text(_esl_headers, payload.getResult());
+            log.info("[{}]: {} => ESL Response: {}, cost {} ms", sessionId, payload.getResult(), resp, System.currentTimeMillis() - startInMs);
         }
     }
 
