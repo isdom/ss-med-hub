@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <configuration>
     <contextName>med-hub</contextName>
+    <!-- 从 Spring Environment 中读取 Nacos 配置的属性 -->
+    <springProperty name="CPB_GROUP" source="sls.group" defaultValue="DEFAULT_GROUP"/>
+    <springProperty name="CPB_DATAID" source="sls.dataid"/>
+    <springProperty name="SLS_ENDPOINT" source="sls.endpoint"/>
+    <springProperty name="SLS_PROJECT" source="sls.project"/>
+    <springProperty name="SLS_LOGSTORE" source="sls.logstore"/>
+    <springProperty name="SLS_TOPIC" source="sls.topic"/>
+
     <!-- variable name="HOSTNAME" value="${HOSTNAME}" /-->
     <variable file="logback_vars.properties" />
     <property name="pattern" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg %n"/>

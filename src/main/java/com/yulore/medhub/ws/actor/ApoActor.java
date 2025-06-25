@@ -968,10 +968,10 @@ public final class ApoActor {
     private final String _uuid;
     private final String _tid;
 
-    @Resource
+    @Autowired
     private CallApi _callApi;
 
-    @Resource
+    @Autowired
     private ScriptApi _scriptApi;
 
     private final Consumer<ApoActor> _doHangup;

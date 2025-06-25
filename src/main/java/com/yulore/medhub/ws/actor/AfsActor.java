@@ -100,7 +100,7 @@ public final class AfsActor {
     @Autowired
     private ASRService _asrService;
 
-    @Resource
+    @Autowired
     private ScriptApi _scriptApi;
 
     @Value("#{${esl.api.headers}}")

@@ -1,6 +1,7 @@
 package com.yulore.medhub.api;
 
 import feign.Request;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.context.annotation.Bean;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -10,11 +11,12 @@ import org.springframework.web.bind.annotation.RequestParam;
 import java.util.concurrent.TimeUnit;
 
 @FeignClient(
-        value = "${SCRIPT_PROVIDER:unknown-script}",
+        value = "${script.srv}",
         configuration = ScriptApi.ScriptApiConfig.class
 )
+@ConditionalOnProperty(prefix = "script", name = "srv")
 public interface ScriptApi {
-    @RequestMapping(value = "${script.api.ai_reply:unknown_ai_api}", method = RequestMethod.GET)
+    @RequestMapping(value = "${script.api.ai_reply}", method = RequestMethod.GET)
     ApiResponse<AIReplyVO> ai_reply(
             @RequestParam("ccs_call_id")            String sessionId,
             @RequestParam("user_speech_text")       String userSpeechText,
@@ -24,7 +26,7 @@ public interface ScriptApi {
             @RequestParam("speaking_duration_ms")   int speaking_duration_ms
             );
 
-    @RequestMapping(value = "${script.api.content_report:unknown_report_content}", method = RequestMethod.GET)
+    @RequestMapping(value = "${script.api.content_report}", method = RequestMethod.GET)
     ApiResponse<Void> report_content(
             @RequestParam("ccs_call_id")            String sessionId,
             @RequestParam("content_id")             String content_id,
@@ -36,7 +38,7 @@ public interface ScriptApi {
             @RequestParam("speak_duration")         long speak_duration
             );
 
-    @RequestMapping(value = "${script.api.asr_report:unknown_report_asrtime}", method = RequestMethod.GET)
+    @RequestMapping(value = "${script.api.asr_report}", method = RequestMethod.GET)
     ApiResponse<Void> report_asrtime(
             @RequestParam("ccs_call_id")            String sessionId,
             @RequestParam("content_id")             String content_id,

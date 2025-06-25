@@ -3,12 +3,14 @@ package com.yulore.medhub.api;
 import lombok.Builder;
 import lombok.Data;
 import lombok.ToString;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 
-@FeignClient(value = "${CALL_PROVIDER:unknown-call}")
+@FeignClient(value = "${call.srv}")
+@ConditionalOnProperty(prefix = "call", name = "srv")
 public interface CallApi {
     @Builder
     @Data
@@ -18,7 +20,7 @@ public interface CallApi {
         private String uuid;
     }
 
-    @RequestMapping(value = "${call.api.apply_session:unknown_apply_session}", method = RequestMethod.POST)
+    @RequestMapping(value = "${call.api.apply_session}", method = RequestMethod.POST)
     ApiResponse<ApplySessionVO> apply_session(@RequestBody ApplySessionRequest request);
 
     @Builder
@@ -30,7 +32,7 @@ public interface CallApi {
         private String tid;
         private long answerTime;
     }
-    @RequestMapping(value = "${call.api.mock_answer:unknown_mock_answer}", method = RequestMethod.POST)
+    @RequestMapping(value = "${call.api.mock_answer}", method = RequestMethod.POST)
     ApiResponse<UserAnswerVO> mock_answer(@RequestBody MockAnswerRequest request);
 
     @Builder
@@ -45,6 +47,6 @@ public interface CallApi {
         private String aesMobile;
         private long answerTime;
     }
-    @RequestMapping(value = "${call.api.user_answer:unknown_user_answer}", method = RequestMethod.POST)
+    @RequestMapping(value = "${call.api.user_answer}", method = RequestMethod.POST)
     ApiResponse<UserAnswerVO> user_answer(@RequestBody UserAnswerRequest request);
 }
