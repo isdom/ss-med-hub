@@ -258,10 +258,9 @@ public class ApoActorBuilder implements WsHandlerBuilder {
         webSocket.setAttachment(wsh);
         // wsh.onAttached(webSocket);
 
-        schedulerProvider.getObject().scheduleWithFixedDelay(actor::checkIdle, _check_idle_interval_ms, _check_idle_interval_ms, TimeUnit.MILLISECONDS);
         schedulerProvider.getObject().schedule(actor::notifyMockAnswer, _answer_timeout_ms, TimeUnit.MILLISECONDS);
 
-        actor.startTranscription();
+        actor.start(schedulerProvider.getObject().scheduleWithFixedDelay(actor::checkIdle, _check_idle_interval_ms, _check_idle_interval_ms, TimeUnit.MILLISECONDS));
 
         log.info("ws path match: {}, using ws as ApoActor with role: {}", prefix, role);
         return wsh;

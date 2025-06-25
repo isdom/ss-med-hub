@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -57,6 +58,9 @@ public final class ApoActor {
     private static final AtomicInteger currentCounter = new AtomicInteger(0);
 
     private final int _actorIdx;
+
+    private final Consumer<ApoActor> _callStarted;
+    private ScheduledFuture<?> _checkFuture;
 
     public int actorIdx() {
         return _actorIdx;
@@ -113,18 +117,25 @@ public final class ApoActor {
         _runOn = ctx.runOn(actorIdx());
         _doHangup = ctx.doHangup();
         _doSaveRecord = ctx.saveRecord();
+        _callStarted = ctx.callStarted();
         if (Strings.isNullOrEmpty(_uuid) || Strings.isNullOrEmpty(_tid)) {
             log.warn("[{}]: ApoActor_ctor error for uuid:{}/tid:{}, abort apply_session.", _clientIp, _sessionId, _uuid);
             return;
         }
+    }
+
+    public void start(final ScheduledFuture<?> checkFuture) {
+        log.info("[{}]: [{}]-[{}] ApoActor start with CallApi({})/ScriptApi({})", _clientIp, _sessionId, _uuid, _callApi, _scriptApi);
+        _checkFuture = checkFuture;
         try {
             final ApiResponse<ApplySessionVO> response = _callApi.apply_session(CallApi.ApplySessionRequest.builder()
-                            .uuid(_uuid)
-                            .tid(_tid)
-                            .build());
+                    .uuid(_uuid)
+                    .tid(_tid)
+                    .build());
             _sessionId = response.getData().getSessionId();
             log.info("[{}]: [{}]-[{}]: apply_session => response: {}", _clientIp, _sessionId, _uuid, response);
-            ctx.callStarted().accept(this);
+            _callStarted.accept(this);
+            startTranscription();
         } catch (Exception ex) {
             log.warn("[{}]: [{}]-[{}]: failed for callApi.apply_session, detail: {}", _clientIp, _sessionId, _uuid,
                     ExceptionUtil.exception2detail(ex));
@@ -133,26 +144,28 @@ public final class ApoActor {
 
     public void notifyMockAnswer() {
         _runOn.accept(()-> {
-            if (_isUserAnswered.get()) {
-                log.info("[{}]: [{}]-[{}]: notifyUserAnswer has called already, ignore notifyMockAnswer!", _clientIp, _sessionId, _uuid);
-                return;
-            }
-            if (Strings.isNullOrEmpty(_uuid) || Strings.isNullOrEmpty(_tid)) {
-                log.warn("[{}]/[{}]: doMockAnswer error for uuid:{}/tid:{}, abort mock_answer.", _clientIp, _sessionId, _uuid, _tid);
-                return;
-            }
-            try {
-                final ApiResponse<UserAnswerVO> response = _callApi.mock_answer(CallApi.MockAnswerRequest.builder()
-                        .sessionId(_sessionId)
-                        .uuid(_uuid)
-                        .tid(_tid)
-                        .answerTime(System.currentTimeMillis())
-                        .build());
-                log.info("[{}]: [{}]-[{}]: mockAnswer: tid:{} => response: {}", _clientIp, _sessionId, _uuid, _tid, response);
+            if (!isClosed.get()) {
+                if (_isUserAnswered.get()) {
+                    log.info("[{}]: [{}]-[{}]: notifyUserAnswer has called already, ignore notifyMockAnswer!", _clientIp, _sessionId, _uuid);
+                    return;
+                }
+                if (Strings.isNullOrEmpty(_uuid) || Strings.isNullOrEmpty(_tid)) {
+                    log.warn("[{}]/[{}]: doMockAnswer error for uuid:{}/tid:{}, abort mock_answer.", _clientIp, _sessionId, _uuid, _tid);
+                    return;
+                }
+                try {
+                    final ApiResponse<UserAnswerVO> response = _callApi.mock_answer(CallApi.MockAnswerRequest.builder()
+                            .sessionId(_sessionId)
+                            .uuid(_uuid)
+                            .tid(_tid)
+                            .answerTime(System.currentTimeMillis())
+                            .build());
+                    log.info("[{}]: [{}]-[{}]: mockAnswer: tid:{} => response: {}", _clientIp, _sessionId, _uuid, _tid, response);
 
-                saveAndPlayWelcome(response);
-            } catch (Exception ex) {
-                log.warn("[{}]: [{}]-[{}]: failed for callApi.mock_answer, detail: {}", _clientIp, _sessionId, _uuid, ex.toString());
+                    saveAndPlayWelcome(response);
+                } catch (Exception ex) {
+                    log.warn("[{}]: [{}]-[{}]: failed for callApi.mock_answer, detail: {}", _clientIp, _sessionId, _uuid, ex.toString());
+                }
             }
         });
     }
@@ -210,8 +223,7 @@ public final class ApoActor {
         }
     }
 
-    public void startTranscription() {
-        log.info("[{}]: [{}]-[{}] startTranscription with ScriptApi({})", _clientIp, _sessionId, _uuid, _scriptApi);
+    private void startTranscription() {
         _asrService.startTranscription(new ASRConsumer() {
             @Override
             public void onSpeechTranscriberCreated(SpeechTranscriber speechTranscriber) {
@@ -469,7 +481,7 @@ public final class ApoActor {
     */
 
     private void whenASRSentenceEnd(final PayloadSentenceEnd payload, final long sentenceEndInMs) {
-        log.info("[{}]: [{}]-[{}]: notifySentenceEnd: {}", _clientIp, _sessionId, _uuid, payload);
+        log.info("[{}]: [{}]-[{}]: whenASRSentenceEnd: {}", _clientIp, _sessionId, _uuid, payload);
 
         // final long sentenceEndInMs = System.currentTimeMillis();
         _isUserSpeak.set(false);
@@ -480,7 +492,7 @@ public final class ApoActor {
             reportUserContent(payload, userContentId);
             reportAsrTime(payload, sentenceEndInMs, userContentId);
         } else {
-            log.warn("[{}]: [{}]-[{}]: whenASRSentenceEnd but sessionId is null or playback not ready or aiSetting not ready => reply2playback: {}/aiSetting: {}",
+            log.warn("[{}]: [{}]-[{}]: whenASRSentenceEnd but sessionId is null or playback not ready or aiSetting not ready => (reply2playback: {}), (aiSetting: {})",
                     _clientIp, _sessionId, _uuid, _reply2playback, _aiSetting);
         }
     }
@@ -729,6 +741,10 @@ public final class ApoActor {
     public void close() {
         try {
             if (isClosed.compareAndSet(false, true)) {
+                if (null != _checkFuture) {
+                    _checkFuture.cancel(false);
+                }
+
                 final ASROperator asr = asrRef.getAndSet(null);
                 if (null != asr) {
                     asr.close();
