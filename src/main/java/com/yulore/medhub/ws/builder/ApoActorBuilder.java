@@ -52,9 +52,12 @@ public class ApoActorBuilder implements WsHandlerBuilder {
             ctx->
                     //asrService.startTranscription(ctx.actor(), ctx.payload(), ctx.ws())
                     //.handle((timer, ex)->ctx.sample().stop(timer))
-                ctx.actor().startTranscription()
+                // ctx.actor().startTranscription()
+                log.info("[{}]: [{}]-[{}] => ApoActorBuilder: handle StartTranscription cmd",
+                        ctx.actor().clientIp(), ctx.actor().sessionId(), ctx.actor().uuid())
             ).register(WSCommandVO.WSCMD_VOID,"StopTranscription",
-                ctx-> log.info("[{}]: [{}]-[{}] => ApoActorBuilder: handle StopTranscription cmd",
+                ctx->
+                log.info("[{}]: [{}]-[{}] => ApoActorBuilder: handle StopTranscription cmd",
                         ctx.actor().clientIp(), ctx.actor().sessionId(), ctx.actor().uuid())
             );
 
@@ -115,7 +118,7 @@ public class ApoActorBuilder implements WsHandlerBuilder {
                     try {
                         cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, actor, webSocket, sample);
                     } catch (Exception ex) {
-                        log.error("handleCommand {}: {}, an error occurred: {}",
+                        log.error("playback handleCommand {}: {}, an error occurred: {}",
                                 webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
                     }
                 });
@@ -233,7 +236,7 @@ public class ApoActorBuilder implements WsHandlerBuilder {
                     try {
                         cmds.handleCommand(WSCommandVO.parse(message, WSCommandVO.WSCMD_VOID), message, actor, webSocket, sample);
                     } catch (Exception ex) {
-                        log.error("handleCommand {}: {}, an error occurred: {}",
+                        log.error("call handleCommand {}: {}, an error occurred: {}",
                                 webSocket.getRemoteSocketAddress(), message, ExceptionUtil.exception2detail(ex));
                     }
                 });
@@ -257,6 +260,8 @@ public class ApoActorBuilder implements WsHandlerBuilder {
 
         schedulerProvider.getObject().scheduleWithFixedDelay(actor::checkIdle, _check_idle_interval_ms, _check_idle_interval_ms, TimeUnit.MILLISECONDS);
         schedulerProvider.getObject().schedule(actor::notifyMockAnswer, _answer_timeout_ms, TimeUnit.MILLISECONDS);
+
+        actor.startTranscription();
 
         log.info("ws path match: {}, using ws as ApoActor with role: {}", prefix, role);
         return wsh;

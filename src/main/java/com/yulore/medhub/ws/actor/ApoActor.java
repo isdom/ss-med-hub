@@ -211,6 +211,7 @@ public final class ApoActor {
     }
 
     public void startTranscription() {
+        log.info("[{}]: [{}]-[{}] startTranscription with ScriptApi({})", _clientIp, _sessionId, _uuid, _scriptApi);
         _asrService.startTranscription(new ASRConsumer() {
             @Override
             public void onSpeechTranscriberCreated(SpeechTranscriber speechTranscriber) {
@@ -272,11 +273,11 @@ public final class ApoActor {
             final long idleTime = System.currentTimeMillis() - _idleStartInMs.get();
             boolean isAiSpeaking = isAiSpeaking();
             if (_isUserAnswered.get()  // user answered
-                    && _reply2playback != null  // playback ws has connected
-                    && !_isUserSpeak.get()  // user not speak
-                    && !isAiSpeaking        // AI not speak
-                    && _aiSetting != null
-            ) {
+                && _reply2playback != null  // playback ws has connected
+                && !_isUserSpeak.get()  // user not speak
+                && !isAiSpeaking        // AI not speak
+                && _aiSetting != null
+                ) {
                 if (idleTime > _aiSetting.getIdle_timeout()) {
                     log.info("[{}]: [{}]-[{}]: checkIdle: idle duration: {} ms >=: [{}] ms", _clientIp, _sessionId, _uuid, idleTime, _aiSetting.getIdle_timeout());
                     try {
@@ -354,26 +355,6 @@ public final class ApoActor {
                  */
             }
         }
-
-        /*
-        try {
-            final boolean result = super.transmit(bytes);
-
-            if (result) {
-                final byte[] srcBytes = new byte[bytes.remaining()];
-                bytes.get(srcBytes, 0, srcBytes.length);
-                if (_asrStartInMs.compareAndSet(0, 1)) {
-                    _asrStartInMs.set(System.currentTimeMillis());
-                }
-                _usBufs.add(srcBytes);
-            }
-
-            return result;
-        } catch (Exception ex) {
-            log.warn("[{}]: [{}]-[{}]: transmit_asr_failed", _clientIp, _sessionId, _uuid, ex);
-            return false;
-        }
-        */
     }
 
     private String currentAiContentId() {
@@ -499,7 +480,7 @@ public final class ApoActor {
             reportUserContent(payload, userContentId);
             reportAsrTime(payload, sentenceEndInMs, userContentId);
         } else {
-            log.warn("[{}]: [{}]-[{}]: notifySentenceEnd but sessionId is null or playback not ready or aiSetting not ready => _playbackOn: {}/aiSetting: {}",
+            log.warn("[{}]: [{}]-[{}]: whenASRSentenceEnd but sessionId is null or playback not ready or aiSetting not ready => reply2playback: {}/aiSetting: {}",
                     _clientIp, _sessionId, _uuid, _reply2playback, _aiSetting);
         }
     }
@@ -745,9 +726,7 @@ public final class ApoActor {
         }
     }
 
-    // @Override
     public void close() {
-        // super.close();
         try {
             if (isClosed.compareAndSet(false, true)) {
                 final ASROperator asr = asrRef.getAndSet(null);
