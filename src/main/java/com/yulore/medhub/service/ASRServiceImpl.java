@@ -160,8 +160,6 @@ class ASRServiceImpl implements ASRService {
             }
         }
         log.info("txasr agent init, count:{}", _txasrAgents.size());
-
-        // schedulerProvider.getObject().scheduleAtFixedRate(this::checkAndUpdateASRToken, 0, 10, TimeUnit.MINUTES);
     }
 
     public CompletionStage<ASRAgent> selectASRAgentAsync() {
@@ -190,8 +188,7 @@ class ASRServiceImpl implements ASRService {
                 });
     }
 
-    //    schedulerProvider.getObject().scheduleAtFixedRate(this::checkAndUpdateASRToken, 0, 10, TimeUnit.MINUTES);
-    @Scheduled(initialDelay = 0, fixedRate = 10, timeUnit = TimeUnit.MINUTES)  // 每1秒推送一次
+    @Scheduled(initialDelay = 0, fixedDelay = 10, timeUnit = TimeUnit.MINUTES)  // 每 10 分钟检查一次 Token
     private void checkAndUpdateASRToken() {
         for (final ASRAgent agent : _asrAgents) {
             agent.checkAndUpdateAccessToken();
@@ -550,7 +547,7 @@ class ASRServiceImpl implements ASRService {
 
     @Override
     public CompletionStage<ASROperator> startTranscription(final ASRConsumer consumer) {
-        return startWithAliasr(consumer);
+        return using_txasr ? startWithTxasr(consumer) : startWithAliasr(consumer);
     }
 
     private CompletionStage<ASROperator> startWithAliasr(final ASRConsumer consumer /*, final VOStartTranscription vo*/) {
@@ -598,7 +595,6 @@ class ASRServiceImpl implements ASRService {
         return completableFuture;
     }
 
-    @NotNull
     private ASROperator createASROperator(final ASRAgent agent, final SpeechTranscriber transcriber, final AtomicBoolean isConnected) {
         // TODO: collect all asr-operator for close them all when application shutdown
         final AtomicBoolean isClosed = new AtomicBoolean(false);
@@ -714,6 +710,168 @@ class ASRServiceImpl implements ASRService {
             }
         };
     }
+
+    private CompletionStage<ASROperator> startWithTxasr(final ASRConsumer consumer /*, final VOStartTranscription vo*/) {
+        final long startConnectingInMs = System.currentTimeMillis();
+        return selectTxASRAgentAsync().thenCompose( agent -> agent2operator(consumer, agent, startConnectingInMs));
+    }
+
+    private CompletableFuture<ASROperator> agent2operator(final ASRConsumer consumer, final TxASRAgent agent, final long startConnectingInMs) {
+        final CompletableFuture<ASROperator> completableFuture = new CompletableFuture<>();
+
+        try {
+            final AtomicBoolean isConnected = new AtomicBoolean(false);
+            final AtomicReference<SpeechRecognizer> recognizerRef = new AtomicReference<>(null);
+            final var recognizer = buildSpeechRecognizer(
+                    agent, buildRecognizerListener(consumer, response -> {
+                        log.info("onRecognitionStart sessionId=,voice_id:{},{},cost={} ms",
+                                response.getVoiceId(),
+                                JSON.toJSONString(response),
+                                System.currentTimeMillis() - startConnectingInMs);
+                        if (isConnected.compareAndSet(false, true)) {
+                            agent.incConnected();
+                        }
+                        completableFuture.complete(createASROperator(agent, recognizerRef.get(), isConnected));
+                    }));
+
+            // call onSpeechRecognizerCreated for consumer has chance to change params for recognizer instance
+            consumer.onSpeechRecognizerCreated(recognizer);
+            recognizerRef.set(recognizer);
+
+            /*
+            if (vo.speech_noise_threshold != null) {
+                // ref: https://help.aliyun.com/zh/isi/developer-reference/websocket#sectiondiv-rz2-i36-2gv
+                transcriber.addCustomedParam("speech_noise_threshold", Float.parseFloat(vo.speech_noise_threshold));
+            }
+            */
+
+            recognizer.start();
+        } catch (Exception ex) {
+            log.error("startWithTxasr failed", ex);
+            completableFuture.completeExceptionally(ex);
+        }
+        return completableFuture;
+    }
+
+    private ASROperator createASROperator(final TxASRAgent agent, final SpeechRecognizer recognizer, final AtomicBoolean isConnected) {
+        // TODO: collect all asr-operator for close them all when application shutdown
+        final AtomicBoolean isClosed = new AtomicBoolean(false);
+        return new ASROperator() {
+            @Override
+            public boolean transmit(final byte[] data) {
+                //try {
+                recognizer.write(data);
+                return true;
+                //} catch (Exception ex) {
+                //    log.warn("ASR transmit failed", ex);
+                //    return false;
+                //}
+            }
+
+            @Override
+            public void close() {
+                if (isClosed.compareAndSet(false, true)) {
+                    try {
+                        try {
+                            //通知服务端语音数据发送完毕，等待服务端处理完成。
+                            long now = System.currentTimeMillis();
+                            log.info("recognizer wait for complete");
+                            recognizer.stop();
+                            log.info("recognizer stop() latency : {} ms", System.currentTimeMillis() - now);
+                        } catch (final Exception ex2) {
+                            log.warn("recognizer.stop() failed", ex2);
+                        }
+
+                        recognizer.close();
+
+                        if (isConnected.get()) {
+                            // 对于已经标记了 TranscriptionStarted 的会话, 将其使用的 ASR Account 已连接通道减少一
+                            agent.decConnected();
+                        }
+                    } finally {
+                        agent.decConnectionAsync().whenComplete((current, ex2) -> {
+                            log.info("release asr({}): {}/{}", agent.getName(), current, agent.getLimit());
+                        });
+                    }
+                } else {
+                    log.warn("asrOperator:{} has already closed", this);
+                }
+            }
+        };
+    }
+
+    private SpeechRecognizer buildSpeechRecognizer(final TxASRAgent agent, final SpeechRecognizerListener listener) throws Exception {
+        //创建实例、建立连接。
+        return agent.buildSpeechRecognizer(listener, request -> {
+            // https://cloud.tencent.com/document/product/1093/48982
+        });
+    }
+
+    private SpeechRecognizerListener buildRecognizerListener(final ASRConsumer consumer,
+                                                             final Consumer<SpeechRecognizerResponse> onRecognizerStart) {
+        // https://cloud.tencent.com/document/product/1093/48982
+        return new SpeechRecognizerListener() {
+            @Override
+            public void onRecognitionStart(final SpeechRecognizerResponse response) {
+                onRecognizerStart.accept(response);
+            }
+
+            @Override
+            public void onSentenceBegin(final SpeechRecognizerResponse response) {
+                log.info("onSentenceBegin sessionId=,voice_id:{},{}",
+                        response.getVoiceId(),
+                        JSON.toJSONString(response));
+                consumer.onSentenceBegin(new PayloadSentenceBegin(response.getResult().getIndex(), response.getResult().getStartTime().intValue()));
+            }
+
+            @Override
+            public void onSentenceEnd(final SpeechRecognizerResponse response) {
+                log.info("onSentenceEnd sessionId=,voice_id:{},{}",
+                        response.getVoiceId(),
+                        JSON.toJSONString(response));
+                consumer.onSentenceEnd(
+                        new PayloadSentenceEnd(response.getResult().getIndex(),
+                                response.getResult().getEndTime().intValue(),
+                                response.getResult().getStartTime().intValue(),
+                                response.getResult().getVoiceTextStr(),
+                                0));
+            }
+
+            @Override
+            public void onRecognitionResultChange(final SpeechRecognizerResponse response) {
+                log.info("onRecognitionResultChange sessionId=,voice_id:{},{}",
+                        response.getVoiceId(),
+                        JSON.toJSONString(response));
+                consumer.onTranscriptionResultChanged(
+                        new PayloadTranscriptionResultChanged(response.getResult().getIndex(),
+                                response.getResult().getEndTime().intValue(),
+                                response.getResult().getVoiceTextStr()));
+            }
+
+            @Override
+            public void onRecognitionComplete(final SpeechRecognizerResponse response) {
+                log.info("onRecognitionComplete sessionId=,voice_id:{},{}",
+                        response.getVoiceId(),
+                        JSON.toJSONString(response));
+            }
+
+            @Override
+            public void onFail(final SpeechRecognizerResponse response) {
+                log.warn("onFail sessionId=,voice_id:{},{}",
+                        response.getVoiceId(),
+                        JSON.toJSONString(response));
+                consumer.onTranscriberFail();
+            }
+
+            @Override
+            public void onMessage(final SpeechRecognizerResponse response) {
+                log.info("onMessage: voice_id:{},{}", response.getVoiceId(), JSON.toJSONString(response));
+            }
+        };
+    }
+
+    @Value("${nls.using_txasr:false}")
+    private boolean using_txasr;
 
     @Value("${nls.url}")
     private String _nls_url;
