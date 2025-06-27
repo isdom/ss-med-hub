@@ -45,7 +45,7 @@ import java.util.function.Supplier;
 @RequiredArgsConstructor
 @Component("apo_io")
 @ConditionalOnProperty(prefix = "feature", name = "apo_io", havingValue = "enabled")
-public class ApoActorBuilder implements WsHandlerBuilder {
+public class ApoIOBuilder implements WsHandlerBuilder {
     @PostConstruct
     public void init() {
         cmds.register(VOStartTranscription.TYPE,"StartTranscription",
@@ -53,21 +53,21 @@ public class ApoActorBuilder implements WsHandlerBuilder {
                     //asrService.startTranscription(ctx.actor(), ctx.payload(), ctx.ws())
                     //.handle((timer, ex)->ctx.sample().stop(timer))
                 // ctx.actor().startTranscription()
-                log.info("[{}]: [{}]-[{}] => ApoActorBuilder: handle StartTranscription cmd",
+                log.info("[{}]: [{}]-[{}] => ApoIOBuilder: handle StartTranscription cmd",
                         ctx.actor().clientIp(), ctx.actor().sessionId(), ctx.actor().uuid())
             ).register(WSCommandVO.WSCMD_VOID,"StopTranscription",
                 ctx->
-                log.info("[{}]: [{}]-[{}] => ApoActorBuilder: handle StopTranscription cmd",
+                log.info("[{}]: [{}]-[{}] => ApoIOBuilder: handle StopTranscription cmd",
                         ctx.actor().clientIp(), ctx.actor().sessionId(), ctx.actor().uuid())
             );
 
-        playback_timer = timerProvider.getObject("mh.playback.delay", MetricCustomized.builder().tags(List.of("actor", "apo")).build());
+        playback_timer = timerProvider.getObject("mh.playback.delay", MetricCustomized.builder().tags(List.of("actor", "apo_io")).build());
         transmit_timer = timerProvider.getObject("mh.transmit.delay", MetricCustomized.builder()
-                .tags(List.of("actor", "apo"))
+                .tags(List.of("actor", "apo_io"))
                 .maximumExpected(Duration.ofMinutes(1))
                 .build());
-        oss_timer = timerProvider.getObject("oss.upload.duration", MetricCustomized.builder().tags(List.of("actor", "apo")).build());
-        gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", MetricCustomized.builder().tags(List.of("actor", "apo")).build());
+        oss_timer = timerProvider.getObject("oss.upload.duration", MetricCustomized.builder().tags(List.of("actor", "apo_io")).build());
+        gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", MetricCustomized.builder().tags(List.of("actor", "apo_io")).build());
     }
 
     // wss://domain/path?uuid=XX&tid=XXX&role=call
