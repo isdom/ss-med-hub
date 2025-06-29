@@ -39,10 +39,12 @@ public class FunasrClient {
         void stop();
     }
 
+    public interface BeforeStart extends Consumer<StartASR> {}
     public interface OnStart extends Consumer<AsrOp> {}
     public interface OnText extends Consumer<String> {}
     public interface OnStop extends Consumer<String> {}
 
+    private final BeforeStart _beforeStart;
     private final OnStart _onStart;
     private final OnText _onText;
     private final OnStop _onStop;
@@ -131,12 +133,14 @@ public class FunasrClient {
     public FunasrClient(final EventLoopGroup group,
                         final Timer connect_timer,
                         final String url,
+                        final BeforeStart beforeStart,
                         final OnStart onStart,
                         final OnText onText,
                         final OnStop onStop
         ) {
         this.uri = buildUri(url);
         this.group = group;
+        this._beforeStart = beforeStart;
         this._onStart = onStart;
         this._onText = onText;
         this._onStop = onStop;
@@ -149,7 +153,9 @@ public class FunasrClient {
             } else {
                 this.channel = channel;
                 final long cost = System.currentTimeMillis() - _startInMs;
-                connect_timer.record(cost, TimeUnit.MILLISECONDS);
+                if (null != connect_timer) {
+                    connect_timer.record(cost, TimeUnit.MILLISECONDS);
+                }
                 log.info("funasr_connect_to {} cost: {} ms", url, cost);
             }
         });
@@ -172,16 +178,21 @@ public class FunasrClient {
     private CompletionStage<Channel> connect() {
         changeUserEventHandler(new OnHandshakeComplete(() -> {
             changeTextHandler(ON_ASR_STARTED);
-            sendMessage(vo2string(StartASR.builder()
+            final var startVO = StartASR.builder()
                     //.mode("2pass")
                     .mode("online")
                     .wav_name("realtime")
                     .wav_format("pcm")
                     .audio_fs(8000)
                     .is_speaking(true)
-                    .chunk_size(new int[]{5,10,5})
+                    .chunk_size(new int[]{5, 10, 5})
                     .itn(true)
-                    .build())).whenComplete((ok, ex)-> {
+                    .build();
+
+            if (_beforeStart != null) {
+                _beforeStart.accept(startVO);
+            }
+            sendMessage(vo2string(startVO)).whenComplete((ok, ex)-> {
                         if (ex == null) {
                             _onStart.accept(new AsrOp() {
                                 @Override
