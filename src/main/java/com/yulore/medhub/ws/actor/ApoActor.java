@@ -973,6 +973,9 @@ public final class ApoActor {
     @Autowired
     private ScriptApi _scriptApi;
 
+    @Autowired(required = false)
+    private EslApi _eslApi;
+
     private final Consumer<ApoActor> _doHangup;
     private final AtomicReference<AIReplyVO> _welcome = new AtomicReference<>(null);
     private AiSettingVO _aiSetting;
