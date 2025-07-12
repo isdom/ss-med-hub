@@ -41,3 +41,4 @@ bin/
 ### Mac OS ###
 .DS_Store
 /.idea/uiDesigner.xml
+/src/test/resources/test*.properties
