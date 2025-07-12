@@ -337,9 +337,7 @@ public final class ApoActor {
                         _asrStartInMs.set(System.currentTimeMillis());
                     }
                     _usBufs.add(frame);
-
                 } catch (Exception ex) {
-                    // log.warn("[{}] asr_transmit_failed: {}", _sessionId, ExceptionUtil.exception2detail(ex));
                     log.warn("[{}]: [{}]-[{}]: transmit_asr_failed, detail: {}", _clientIp, _sessionId, _uuid,
                             ExceptionUtil.exception2detail(ex));
                 }
@@ -491,6 +489,12 @@ public final class ApoActor {
         } else {
             log.warn("[{}]: [{}]-[{}]: whenASRSentenceEnd but sessionId is null or playback not ready or aiSetting not ready => (reply2playback: {}), (aiSetting: {})",
                     _clientIp, _sessionId, _uuid, _reply2playback, _aiSetting);
+        }
+
+        if (_eslApi != null) {
+            final var startInMs = System.currentTimeMillis();
+            final var resp = _eslApi.search_text(_esl_headers, payload.getResult());
+            log.info("[{}]: [{}]-[{}]: {} => ESL Response: {}, cost {} ms", _clientIp, _sessionId, _uuid, payload.getResult(), resp, System.currentTimeMillis() - startInMs);
         }
     }
 
