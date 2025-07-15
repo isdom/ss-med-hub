@@ -43,20 +43,40 @@ public interface EslApi {
 
     @Data
     @ToString
-    class SearchResponse {
+    class ExampleSentence {
+        public String   id;
+        public float    confidence;
+        public String   intentionCode;
+        public String   intentionName;
+        public String   text;
+    }
+
+    @Data
+    @ToString
+    class Hit {
+        public float    confidence;
+        public ExampleSentence  es;
+    }
+
+    @Data
+    @ToString
+    class EslResponse<RESULT> {
         public String   code;
         public String   message;
-        public Result[] result;
+        public RESULT[] result;
         public Develop  dev;
     }
 
-    @RequestMapping(value = "${esl.api.search_text}", method = RequestMethod.GET)
-    SearchResponse search_text(@RequestHeader Map<String, String> headers, @RequestParam("text") String text);
+    //@RequestMapping(value = "${esl.api.search_text}", method = RequestMethod.GET)
+    //SearchResponse search_text(@RequestHeader Map<String, String> headers, @RequestParam("text") String text);
+
+    @RequestMapping(value = "${esl.api.search_ref}", method = RequestMethod.GET)
+    EslResponse<Hit> search_ref(@RequestHeader Map<String, String> headers, @RequestParam("text") String text);
 
     // 配置类定义
     class EslApiConfig {
         @Bean
-        public Request.Options eslOptions() {
+        public Request.Options options() {
             // connect(200ms), read(500ms), followRedirects(true)
             return new Request.Options(200, TimeUnit.MILLISECONDS,  500, TimeUnit.MILLISECONDS,true);
         }

@@ -558,7 +558,7 @@ public final class AfsActor {
 
         if (_eslApi != null) {
             final var startInMs = System.currentTimeMillis();
-            final var resp = _eslApi.search_text(_esl_headers, payload.getResult());
+            final var resp = _eslApi.search_ref(_esl_headers, payload.getResult());
             log.info("[{}]: {} => ESL Response: {}, cost {} ms", sessionId, payload.getResult(), resp, System.currentTimeMillis() - startInMs);
         }
     }

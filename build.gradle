@@ -28,6 +28,9 @@ dependencies {
 
     implementation 'com.alibaba.cloud:spring-cloud-starter-alibaba-nacos-discovery:2021.0.5.0'
     implementation 'org.springframework.cloud:spring-cloud-starter-openfeign:3.1.8'
+    // for TestDataWorksApi
+    implementation 'io.github.openfeign:feign-jackson:11.10'
+
     // implementation 'org.springframework.cloud:spring-cloud-starter-openfeign:4.2.0'
     implementation 'org.springframework.cloud:spring-cloud-starter-loadbalancer:3.1.7'
 
