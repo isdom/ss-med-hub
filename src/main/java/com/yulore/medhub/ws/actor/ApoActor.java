@@ -493,7 +493,7 @@ public final class ApoActor {
 
         if (_eslApi != null) {
             final var startInMs = System.currentTimeMillis();
-            final var resp = _eslApi.search_ref(_esl_headers, payload.getResult());
+            final var resp = _eslApi.search_ref(_esl_headers, payload.getResult(), 0.5f);
             log.info("[{}]: [{}]-[{}]: {} => ESL Response: {}, cost {} ms", _clientIp, _sessionId, _uuid, payload.getResult(), resp, System.currentTimeMillis() - startInMs);
         }
     }

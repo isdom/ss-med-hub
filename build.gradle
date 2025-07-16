@@ -44,6 +44,9 @@ dependencies {
     compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.20'
     annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.20'
 
+    testCompileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.20'
+    testAnnotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.20'
+
     implementation 'com.github.michaelgantman:MgntUtils:1.5.0.2'
     // https://mvnrepository.com/artifact/com.google.guava/guava
     implementation 'com.google.guava:guava:33.3.1-jre'

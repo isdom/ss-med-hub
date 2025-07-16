@@ -34,7 +34,7 @@ public interface EslApi {
     @ToString
     class Develop {
         public int  embeddingDuration;
-        public int  searchDuration;
+        public int  dbExecutionDuration;
         public String   vendorName;
         public String   requestId;
         public String   code;
@@ -45,7 +45,6 @@ public interface EslApi {
     @ToString
     class ExampleSentence {
         public String   id;
-        public float    confidence;
         public String   intentionCode;
         public String   intentionName;
         public String   text;
@@ -71,7 +70,7 @@ public interface EslApi {
     //SearchResponse search_text(@RequestHeader Map<String, String> headers, @RequestParam("text") String text);
 
     @RequestMapping(value = "${esl.api.search_ref}", method = RequestMethod.GET)
-    EslResponse<Hit> search_ref(@RequestHeader Map<String, String> headers, @RequestParam("text") String text);
+    EslResponse<Hit> search_ref(@RequestHeader Map<String, String> headers, @RequestParam("text") String text, @RequestParam("ct") float ct);
 
     // 配置类定义
     class EslApiConfig {

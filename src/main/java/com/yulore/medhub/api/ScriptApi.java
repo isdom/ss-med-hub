@@ -1,9 +1,13 @@
 package com.yulore.medhub.api;
 
 import feign.Request;
+import lombok.Builder;
+import lombok.Data;
+import lombok.ToString;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.context.annotation.Bean;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -47,6 +51,27 @@ public interface ScriptApi {
             @RequestParam("sentence_end_event_time") long end_event_time
     );
 
+    class ExampleSentence {
+        public float    confidence;
+        public String   id;
+        public String   intentionCode;
+        public String   intentionName;
+        public String   text;
+    }
+
+    @Builder
+    @Data
+    @ToString
+    class ESRequest {
+        String sessionId;
+        String content_id;
+        int content_index;
+        String qa_id;
+        ExampleSentence[] es;
+        int cost;
+    }
+
+    ApiResponse<Void> report_es(@RequestBody ESRequest requeast );
     // 配置类定义
     class ScriptApiConfig {
         @Bean

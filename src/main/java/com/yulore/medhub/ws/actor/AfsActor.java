@@ -33,6 +33,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -67,6 +68,7 @@ public final class AfsActor {
         Consumer<Runnable> runOn();
         Reply2Rms reply2rms();
         BiConsumer<String, Object> sendEvent();
+        Executor esl();
     }
 
     public AfsActor(final Context ctx) {
@@ -79,6 +81,7 @@ public final class AfsActor {
         this.runOn = ctx.runOn();
         this.reply2rms = ctx.reply2rms();
         this.sendEvent = ctx.sendEvent();
+        this._eslExecutor = ctx.esl();
     }
 
     public int localIdx() {
@@ -108,6 +111,8 @@ public final class AfsActor {
 
     @Autowired(required = false)
     private EslApi _eslApi;
+
+    private final Executor _eslExecutor;
 
     private final AtomicReference<ASROperator> asrRef = new AtomicReference<>(null);
     private final AtomicBoolean isClosed = new AtomicBoolean(false);
@@ -556,10 +561,12 @@ public final class AfsActor {
             _pendingReports.add(doReport);
         }
 
-        if (_eslApi != null) {
+        if (_eslApi != null && !payload.getResult().isEmpty() && payload.getResult().length() >=5) {
             final var startInMs = System.currentTimeMillis();
-            final var resp = _eslApi.search_ref(_esl_headers, payload.getResult());
-            log.info("[{}]: {} => ESL Response: {}, cost {} ms", sessionId, payload.getResult(), resp, System.currentTimeMillis() - startInMs);
+            _eslExecutor.execute(()->{
+                final var resp = _eslApi.search_ref(_esl_headers, payload.getResult(), 0.5f);
+                log.info("[{}]: {} => ESL Response: {}, cost {} ms", sessionId, payload.getResult(), resp, System.currentTimeMillis() - startInMs);
+            });
         }
     }
 

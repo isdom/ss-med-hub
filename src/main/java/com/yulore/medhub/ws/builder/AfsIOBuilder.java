@@ -50,6 +50,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
     private void init() {
         gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", MetricCustomized.builder().tags(List.of("actor", "afs_io")).build());
         // ltxExecutor = executorProvider.apply("ltx");
+        eslExecutor = executorProvider.apply("esl");
     }
 
     abstract class AfsIO implements WsHandler {
@@ -68,7 +69,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
         }
 
         private void addActor(final int localIdx, final AfsActor actor) {
-                idx2agent[localIdx - 1].set(actor);
+            idx2agent[localIdx - 1].set(actor);
         }
 
         private AfsActor removeActor(final int localIdx) {
@@ -106,6 +107,9 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                 }
                 public BiConsumer<String, Object> sendEvent() {
                     return (name,obj)-> WSEventVO.sendEvent(ws, name, obj);
+                }
+                public Executor esl() {
+                    return eslExecutor;
                 }
             });
             addActor(vo.localIdx, actor);
@@ -458,6 +462,8 @@ public class AfsIOBuilder implements WsHandlerBuilder {
     // private Executor ltxExecutor;
 
     private final Function<String, Executor> executorProvider;
+    private Executor eslExecutor;
+
     private final ObjectProvider<AfsActor> afsProvider;
     private final ObjectProvider<HandlerUrlBuilder> urlProvider;
     private final OrderedExecutor orderedExecutor;
