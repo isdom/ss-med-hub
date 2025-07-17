@@ -477,6 +477,7 @@ public final class AfsActor {
         _idleStartInMs.set(sentenceEndInMs);
 
         String userContentId = null;
+        String user_qa_id = null;
         try {
             final boolean isAiSpeaking = isAiSpeaking();
             final String userSpeechText = payload.getResult();
@@ -491,6 +492,7 @@ public final class AfsActor {
             if (response.getData() != null) {
                 if (response.getData().getUser_content_id() != null) {
                     userContentId = response.getData().getUser_content_id().toString();
+                    user_qa_id = response.getData().getQa_id();
                 }
                 if (!doPlayback(response.getData()))  {
                     if (response.getData().getHangup() == 1) {
@@ -512,6 +514,7 @@ public final class AfsActor {
 
         final var content_id = userContentId;
         final var content_index = payload.getIndex();
+        final var qa_id = user_qa_id;
         {
             // build USER speak timing report
             final long start_speak_timestamp = _asrStartedInMs.get() + payload.getBegin_time();
@@ -565,7 +568,35 @@ public final class AfsActor {
             final var startInMs = System.currentTimeMillis();
             _eslExecutor.execute(()->{
                 final var resp = _eslApi.search_ref(_esl_headers, payload.getResult(), 0.5f);
-                log.info("[{}]: {} => ESL Response: {}, cost {} ms", sessionId, payload.getResult(), resp, System.currentTimeMillis() - startInMs);
+                final long cost = System.currentTimeMillis() - startInMs;
+                log.info("[{}]: {} => ESL Response: {}, cost {} ms", sessionId, payload.getResult(), resp, cost);
+                if (resp.getResult() != null && resp.getResult().length > 0) {
+                    final var ess = new ScriptApi.ExampleSentence[resp.getResult().length];
+                    int idx = 0;
+                    for (var hit : resp.getResult()) {
+                        ess[idx] = ScriptApi.ExampleSentence.builder()
+                                .index(idx+1)
+                                .id(hit.es.id)
+                                .confidence(hit.confidence)
+                                .intentionCode(hit.es.intentionCode)
+                                .intentionName(hit.es.intentionName)
+                                .text(hit.es.text)
+                                .build();
+                        idx++;
+                    }
+                    final var req = ScriptApi.ESRequest.builder()
+                            .session_id(sessionId)
+                            .content_id(content_id)
+                            .content_index(content_index)
+                            .qa_id(qa_id)
+                            .es(ess)
+                            .embedding_cost(resp.dev.embeddingDuration)
+                            .db_cost(resp.dev.dbExecutionDuration)
+                            .total_cost((int) cost)
+                            .build();
+                    final var resp2 = _scriptApi.report_es(req);
+                    log.info("[{}]: report_es => req: {}/resp: {}", sessionId, req, resp2);
+                }
             });
         }
     }

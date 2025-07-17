@@ -51,7 +51,11 @@ public interface ScriptApi {
             @RequestParam("sentence_end_event_time") long end_event_time
     );
 
+    @Builder
+    @Data
+    @ToString
     class ExampleSentence {
+        public int      index;
         public float    confidence;
         public String   id;
         public String   intentionCode;
@@ -63,15 +67,19 @@ public interface ScriptApi {
     @Data
     @ToString
     class ESRequest {
-        String sessionId;
-        String content_id;
-        int content_index;
-        String qa_id;
-        ExampleSentence[] es;
-        int cost;
+        public String session_id;
+        public String content_id;
+        public int content_index;
+        public String qa_id;
+        public ExampleSentence[] es;
+        public int  embedding_cost;
+        public int  db_cost;
+        public int  total_cost;
     }
 
-    ApiResponse<Void> report_es(@RequestBody ESRequest requeast );
+    @RequestMapping(value = "${script.api.report_es}", method = RequestMethod.POST)
+    ApiResponse<Void> report_es(@RequestBody ESRequest request);
+
     // 配置类定义
     class ScriptApiConfig {
         @Bean
