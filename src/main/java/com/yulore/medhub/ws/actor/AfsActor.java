@@ -484,6 +484,13 @@ public final class AfsActor {
             final String aiContentId = currentAiContentId();
             final int speakingDuration = currentSpeakingDuration();
 
+            if (userSpeechText == null || userSpeechText.isEmpty()) {
+                _emptyUserSpeechCount++;
+                log.warn("[{}] whenASRSentenceEnd: skip ai_reply => [{}] speech_is_empty, total empty count: {}",
+                        sessionId, payload.getIndex(), _emptyUserSpeechCount);
+                return;
+            }
+
             log.info("[{}] whenASRSentenceEnd: before ai_reply => speech:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
                     sessionId, userSpeechText, isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
             final ApiResponse<AIReplyVO> response =
@@ -513,7 +520,7 @@ public final class AfsActor {
         }
 
         final var content_id = userContentId;
-        final var content_index = payload.getIndex();
+        final var content_index = payload.getIndex() - _emptyUserSpeechCount;
         final var qa_id = user_qa_id;
         {
             // build USER speak timing report
@@ -664,6 +671,8 @@ public final class AfsActor {
     private final AtomicLong _idleStartInMs = new AtomicLong(System.currentTimeMillis());
     private final AtomicBoolean _isUserSpeak = new AtomicBoolean(false);
     private final AtomicLong _asrStartedInMs = new AtomicLong(0);
+    private int _emptyUserSpeechCount = 0;
+
     private final long _answerInMs;
     //private final AtomicLong _recordStartInMs = new AtomicLong(-1);
     private final List<Consumer<ReportContext>> _pendingReports = new ArrayList<>();
