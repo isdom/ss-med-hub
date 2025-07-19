@@ -1,6 +1,7 @@
 package com.yulore.medhub.service;
 
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriber;
+import com.alibaba.nls.client.protocol.asr.SpeechTranscriberResponse;
 import com.tencent.asrv2.SpeechRecognizer;
 import com.yulore.medhub.vo.PayloadSentenceBegin;
 import com.yulore.medhub.vo.PayloadSentenceEnd;
@@ -13,5 +14,5 @@ public interface ASRConsumer {
     void onSentenceBegin(final PayloadSentenceBegin payload);
     void onTranscriptionResultChanged(final PayloadTranscriptionResultChanged payload);
     void onSentenceEnd(final PayloadSentenceEnd payload);
-    void onTranscriberFail();
+    void onTranscriberFail(SpeechTranscriberResponse response);
 }

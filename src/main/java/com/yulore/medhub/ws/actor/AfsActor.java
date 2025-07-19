@@ -1,5 +1,6 @@
 package com.yulore.medhub.ws.actor;
 
+import com.alibaba.nls.client.protocol.asr.SpeechTranscriberResponse;
 import com.yulore.medhub.api.AIReplyVO;
 import com.yulore.medhub.api.ApiResponse;
 import com.yulore.medhub.api.EslApi;
@@ -26,7 +27,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.Resource;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -143,8 +143,9 @@ public final class AfsActor {
             }
 
             @Override
-            public void onTranscriberFail() {
-                log.warn("afs_io => onTranscriberFail");
+            public void onTranscriberFail(final SpeechTranscriberResponse response) {
+                log.warn("[{}] afs_io => onTranscriberFail: {}", sessionId,
+                        response != null ? response.getStatusText() : "(null)");
             }
         }).whenComplete((operator, ex) -> {
             if (ex != null) {

@@ -2,6 +2,7 @@ package com.yulore.medhub.ws.actor;
 
 import com.alibaba.nls.client.protocol.SampleRateEnum;
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriber;
+import com.alibaba.nls.client.protocol.asr.SpeechTranscriberResponse;
 import com.google.common.base.Strings;
 import com.yulore.medhub.api.*;
 import com.yulore.medhub.service.ASRConsumer;
@@ -251,8 +252,9 @@ public final class ApoActor {
             }
 
             @Override
-            public void onTranscriberFail() {
-                log.warn("apo_io => onTranscriberFail");
+            public void onTranscriberFail(SpeechTranscriberResponse response) {
+                log.warn("[{}] apo_io => onTranscriberFail: {}", _sessionId,
+                        response != null ? response.getStatusText() : "(null)");
             }
         }).whenComplete((asrOperator, ex) -> _runOn.accept(()->{
             if (ex != null) {

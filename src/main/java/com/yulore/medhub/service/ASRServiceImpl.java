@@ -705,7 +705,7 @@ class ASRServiceImpl implements ASRService {
                         response.getTaskId(),
                         response.getStatus(),
                         response.getStatusText());
-                consumer.onTranscriberFail();
+                consumer.onTranscriberFail(response);
             }
         };
     }
@@ -859,7 +859,7 @@ class ASRServiceImpl implements ASRService {
                 log.warn("onFail sessionId=,voice_id:{},{}",
                         response.getVoiceId(),
                         JSON.toJSONString(response));
-                consumer.onTranscriberFail();
+                consumer.onTranscriberFail(null);
             }
 
             @Override
