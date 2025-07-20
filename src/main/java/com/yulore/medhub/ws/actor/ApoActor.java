@@ -252,9 +252,9 @@ public final class ApoActor {
             }
 
             @Override
-            public void onTranscriberFail(SpeechTranscriberResponse response) {
+            public void onTranscriberFail(Object reason) {
                 log.warn("[{}] apo_io => onTranscriberFail: {}", _sessionId,
-                        response != null ? response.getStatusText() : "(null)");
+                        reason != null ? reason.toString() : "(null)");
             }
         }).whenComplete((asrOperator, ex) -> _runOn.accept(()->{
             if (ex != null) {

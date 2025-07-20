@@ -143,9 +143,9 @@ public final class AfsActor {
             }
 
             @Override
-            public void onTranscriberFail(final SpeechTranscriberResponse response) {
+            public void onTranscriberFail(final Object reason) {
                 log.warn("[{}] afs_io => onTranscriberFail: {}", sessionId,
-                        response != null ? response.getStatusText() : "(null)");
+                        reason != null ? reason.toString() : "(null)");
             }
         }).whenComplete((operator, ex) -> {
             if (ex != null) {

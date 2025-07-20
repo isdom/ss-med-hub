@@ -17,7 +17,9 @@ import com.yulore.medhub.vo.cmd.VOStartTranscription;
 import com.yulore.medhub.ws.actor.ASRActor;
 import com.yulore.metric.MetricCustomized;
 import io.micrometer.core.instrument.Timer;
+import lombok.Builder;
 import lombok.RequiredArgsConstructor;
+import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
 import org.redisson.api.RedissonClient;
@@ -641,6 +643,14 @@ class ASRServiceImpl implements ASRService {
         };
     }
 
+    @Builder
+    @ToString
+    static public class Reason {
+        public final String taskId;
+        public final int status;
+        public final String message;
+    }
+
     private SpeechTranscriberListener buildTranscriberListener(final ASRConsumer consumer,
                                                                final Consumer<SpeechTranscriberResponse> onTranscriberStart
                                                                ) {
@@ -705,7 +715,10 @@ class ASRServiceImpl implements ASRService {
                         response.getTaskId(),
                         response.getStatus(),
                         response.getStatusText());
-                consumer.onTranscriberFail(response);
+                consumer.onTranscriberFail(Reason.builder()
+                        .taskId(response.getTaskId())
+                        .status(response.getStatus())
+                        .message(response.getStatusText()).build());
             }
         };
     }

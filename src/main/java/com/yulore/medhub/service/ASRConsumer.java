@@ -14,5 +14,5 @@ public interface ASRConsumer {
     void onSentenceBegin(final PayloadSentenceBegin payload);
     void onTranscriptionResultChanged(final PayloadTranscriptionResultChanged payload);
     void onSentenceEnd(final PayloadSentenceEnd payload);
-    void onTranscriberFail(SpeechTranscriberResponse response);
+    void onTranscriberFail(final Object reason);
 }
