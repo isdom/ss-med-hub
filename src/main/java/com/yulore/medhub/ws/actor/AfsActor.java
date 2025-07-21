@@ -492,8 +492,8 @@ public final class AfsActor {
                 return;
             }
 
-            log.info("[{}] whenASRSentenceEnd: before ai_reply => speech:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
-                    sessionId, userSpeechText, isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
+            log.info("[{}] whenASRSentenceEnd: before ai_reply => ({}) speech:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
+                    sessionId, payload.getIndex(), userSpeechText, isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
             final ApiResponse<AIReplyVO> response =
                     _scriptApi.ai_reply(sessionId, userSpeechText, null, isAiSpeaking ? 1 : 0, aiContentId, speakingDuration);
             log.info("[{}] whenASRSentenceEnd: ai_reply ({})", sessionId, response);
@@ -501,6 +501,8 @@ public final class AfsActor {
                 if (response.getData().getUser_content_id() != null) {
                     userContentId = response.getData().getUser_content_id().toString();
                     user_qa_id = response.getData().getQa_id();
+                } else {
+                    log.warn("[{}] whenASRSentenceEnd: ai_reply({}) => user_content_id_is_null", sessionId, userSpeechText);
                 }
                 if (!doPlayback(response.getData()))  {
                     if (response.getData().getHangup() == 1) {
