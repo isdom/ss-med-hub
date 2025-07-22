@@ -485,6 +485,13 @@ public final class ApoActor {
         _idleStartInMs.set(sentenceEndInMs);
         if (_sessionId != null && _reply2playback != null && _aiSetting != null) {
             // playback ws has connected && _aiSetting is valid
+            if (payload.getResult() == null || payload.getResult().isEmpty()) {
+                _emptyUserSpeechCount++;
+                log.warn("[{}] whenASRSentenceEnd: skip ai_reply => [{}] speech_is_empty, total empty count: {}",
+                        _sessionId, payload.getIndex(), _emptyUserSpeechCount);
+                return;
+            }
+
             final String userContentId = interactWithScriptEngine(payload);
             reportUserContent(payload, userContentId);
             reportAsrTime(payload, sentenceEndInMs, userContentId);
@@ -622,10 +629,12 @@ public final class ApoActor {
         final long stop_speak_timestamp = _asrStartInMs.get() + payload.getTime();
         final long user_speak_duration = stop_speak_timestamp - start_speak_timestamp;
 
+        final var content_index = payload.getIndex() - _emptyUserSpeechCount;
+
         final ApiResponse<Void> resp = _scriptApi.report_content(
                 _sessionId,
                 userContentId,
-                payload.getIndex(),
+                content_index,
                 "USER",
                 _asrStartInMs.get(),
                 start_speak_timestamp,
@@ -636,7 +645,7 @@ public final class ApoActor {
                 _sessionId,
                 _uuid,
                 userContentId,
-                payload.getIndex(),
+                content_index,
                 _asrStartInMs.get(),
                 start_speak_timestamp,
                 stop_speak_timestamp,
@@ -652,10 +661,12 @@ public final class ApoActor {
         // sentence_end_event_time in Milliseconds
         final long end_event_time = sentenceEndInMs - _asrStartInMs.get();
 
+        final var content_index = payload.getIndex() - _emptyUserSpeechCount;
+
         final ApiResponse<Void> resp = _scriptApi.report_asrtime(
                 _sessionId,
                 userContentId,
-                payload.getIndex(),
+                content_index,
                 begin_event_time,
                 end_event_time);
         log.info("[{}]: user report_asrtime({})'s resp: {}", _sessionId, userContentId, resp);
@@ -1007,6 +1018,8 @@ public final class ApoActor {
     private final List<PlaybackSegment> _dsBufs = new ArrayList<>();
 
     private final AtomicLong _asrStartInMs = new AtomicLong(0);
+    private int _emptyUserSpeechCount = 0;
+
     private final Consumer<RecordContext> _doSaveRecord;
 
     private final long _sessionBeginInMs;
