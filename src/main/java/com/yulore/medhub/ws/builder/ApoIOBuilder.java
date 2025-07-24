@@ -48,19 +48,6 @@ import java.util.function.Supplier;
 public class ApoIOBuilder implements WsHandlerBuilder {
     @PostConstruct
     public void init() {
-        cmds.register(VOStartTranscription.TYPE,"StartTranscription",
-            ctx->
-                    //asrService.startTranscription(ctx.actor(), ctx.payload(), ctx.ws())
-                    //.handle((timer, ex)->ctx.sample().stop(timer))
-                // ctx.actor().startTranscription()
-                log.info("[{}]: [{}]-[{}] => ApoIOBuilder: handle StartTranscription cmd",
-                        ctx.actor().clientIp(), ctx.actor().sessionId(), ctx.actor().uuid())
-            ).register(WSCommandVO.WSCMD_VOID,"StopTranscription",
-                ctx->
-                log.info("[{}]: [{}]-[{}] => ApoIOBuilder: handle StopTranscription cmd",
-                        ctx.actor().clientIp(), ctx.actor().sessionId(), ctx.actor().uuid())
-            );
-
         playback_timer = timerProvider.getObject("mh.playback.delay", MetricCustomized.builder().tags(List.of("actor", "apo_io")).build());
         transmit_timer = timerProvider.getObject("mh.transmit.delay", MetricCustomized.builder()
                 .tags(List.of("actor", "apo_io"))
