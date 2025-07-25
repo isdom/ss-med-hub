@@ -69,7 +69,10 @@ public interface EslApi {
     //@RequestMapping(value = "${esl.api.search_text}", method = RequestMethod.GET)
     //SearchResponse search_text(@RequestHeader Map<String, String> headers, @RequestParam("text") String text);
 
-    @RequestMapping(value = "${esl.api.search_ref}", method = RequestMethod.GET)
+    @RequestMapping(
+            //value = "/ref/search",
+            value = "${esl.api.search_ref}",
+            method = RequestMethod.GET)
     EslResponse<Hit> search_ref(@RequestHeader Map<String, String> headers, @RequestParam("text") String text, @RequestParam("ct") float ct);
 
     // 配置类定义

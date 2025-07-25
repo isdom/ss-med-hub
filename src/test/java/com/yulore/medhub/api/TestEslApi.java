@@ -40,7 +40,7 @@ public class TestEslApi {
         final var eslHeaders = Map.of("X-Key", xKey);
 
         // 4. 发送请求
-        final var response = eslApi.search_ref(eslHeaders, "test", 0.5f);
+        final var response = eslApi.search_ref(eslHeaders, "我在上班", 0.5f);
         log.info("eslApi.search_ref resp: {}", response);
     }
 }

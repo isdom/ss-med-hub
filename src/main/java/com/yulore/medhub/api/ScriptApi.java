@@ -20,9 +20,22 @@ import java.util.concurrent.TimeUnit;
 )
 @ConditionalOnProperty(prefix = "script", name = "srv")
 public interface ScriptApi {
+    @Data
+    @ToString
+    class ReplyRequest {
+        private String  ccs_call_id;
+        private Integer user_speech_idx;
+        private String  user_speech_text="";
+        private Integer is_speaking=0;
+        private Long    idle_time=0L;
+        private Integer speaking_duration_ms=-1;
+        private Long    speaking_content_id=0L;
+    }
+
     @RequestMapping(value = "${script.api.ai_reply}", method = RequestMethod.GET)
     ApiResponse<AIReplyVO> ai_reply(
             @RequestParam("ccs_call_id")            String sessionId,
+            //@RequestParam("user_speech_idx")        Integer userSpeechIdx,
             @RequestParam("user_speech_text")       String userSpeechText,
             @RequestParam("idle_time")              Long idle_time, // in ms
             @RequestParam("is_speaking")            int is_speaking,
