@@ -99,7 +99,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                 public int idleTimeout() {
                     return vo.idleTimeout;
                 }
-                public Consumer<Runnable> runOn() {
+                public Executor executor() {
                     return runnable -> orderedExecutor.submit(vo.localIdx, runnable);
                 }
                 public AfsActor.Reply2Rms reply2rms() {

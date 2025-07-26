@@ -28,8 +28,9 @@ public class ExecutorRepo implements ApplicationListener<ContextClosedEvent> {
                 new DefaultThreadFactory("scheduledExecutor"));
     }
 
+
     @Bean
-    public Function<String, Executor> buildExecutorProvider() {
+    public ExecutorStore executorStore() {
         final var builder = buildExecutorServiceProvider();
         return builder::apply;
     }

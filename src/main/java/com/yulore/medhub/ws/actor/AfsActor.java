@@ -1,6 +1,5 @@
 package com.yulore.medhub.ws.actor;
 
-import com.alibaba.nls.client.protocol.asr.SpeechTranscriberResponse;
 import com.yulore.medhub.api.AIReplyVO;
 import com.yulore.medhub.api.ApiResponse;
 import com.yulore.medhub.api.EslApi;
@@ -17,6 +16,7 @@ import com.yulore.medhub.vo.event.AFSHangupEvent;
 import com.yulore.medhub.vo.event.AFSStartPlaybackEvent;
 import com.yulore.medhub.vo.event.AFSStopPlaybackEvent;
 import com.yulore.util.ExceptionUtil;
+import com.yulore.util.ExecutorStore;
 import io.micrometer.core.instrument.Timer;
 import lombok.Builder;
 import lombok.Data;
@@ -31,18 +31,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.Executor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
-import java.util.function.Consumer;
-import java.util.function.Supplier;
+import java.util.function.*;
 
 import static org.springframework.beans.factory.config.ConfigurableBeanFactory.SCOPE_PROTOTYPE;
 
@@ -65,7 +59,7 @@ public final class AfsActor {
         String welcome();
         long answerInMss();
         int idleTimeout();
-        Consumer<Runnable> runOn();
+        Executor executor();
         Reply2Rms reply2rms();
         BiConsumer<String, Object> sendEvent();
         Executor esl();
@@ -78,7 +72,7 @@ public final class AfsActor {
         this.welcome = ctx.welcome();
         this._answerInMs = ctx.answerInMss() / 1000L;
         this._idleTimeout = ctx.idleTimeout();
-        this.runOn = ctx.runOn();
+        this.executor = ctx.executor();
         this.reply2rms = ctx.reply2rms();
         this.sendEvent = ctx.sendEvent();
         this._eslExecutor = ctx.esl();
@@ -96,9 +90,12 @@ public final class AfsActor {
     private final String uuid;
     private final String sessionId;
     private final String welcome;
-    private final Consumer<Runnable> runOn;
+    private final Executor executor;
     private final Reply2Rms reply2rms;
     private final BiConsumer<String, Object> sendEvent;
+
+    @Autowired
+    private ExecutorStore _executors;
 
     @Autowired
     private ASRService _asrService;
@@ -122,7 +119,7 @@ public final class AfsActor {
         _asrService.startTranscription(new ASRConsumer() {
             @Override
             public void onSentenceBegin(PayloadSentenceBegin payload) {
-                runOn.accept(()-> {
+                executor.execute(()-> {
                     log.info("afs_io => onSentenceBegin: {}", payload);
                     whenASRSentenceBegin(payload);
                 });
@@ -136,7 +133,7 @@ public final class AfsActor {
             @Override
             public void onSentenceEnd(final PayloadSentenceEnd payload) {
                 final long sentenceEndInMs = System.currentTimeMillis();
-                runOn.accept(()->{
+                executor.execute(()->{
                     log.info("afs_io => onSentenceEnd: {}", payload);
                     whenASRSentenceEnd(payload, sentenceEndInMs);
                 });
@@ -478,138 +475,160 @@ public final class AfsActor {
         _isUserSpeak.set(false);
         _idleStartInMs.set(sentenceEndInMs);
 
-        String userContentId = null;
-        String user_qa_id = null;
-        try {
+        final String userSpeechText = payload.getResult();
+        if (userSpeechText == null || userSpeechText.isEmpty()) {
+            _emptyUserSpeechCount++;
+            log.warn("[{}] whenASRSentenceEnd: skip ai_reply => [{}] speech_is_empty, total empty count: {}",
+                    sessionId, payload.getIndex(), _emptyUserSpeechCount);
+        } else {
+            final var content_index = payload.getIndex() - _emptyUserSpeechCount;
+            _userContentIndex.set(content_index);
+            CompletableFuture.supplyAsync(callAiReply(userSpeechText, content_index), _executors.apply("feign"))
+                    .whenCompleteAsync(onAiReply(content_index, payload, sentenceEndInMs), executor);
+        }
+    }
+
+    private Supplier<ApiResponse<AIReplyVO>> callAiReply(final String userSpeechText, final int content_index) {
+        return ()-> {
             final boolean isAiSpeaking = isAiSpeaking();
-            final String userSpeechText = payload.getResult();
             final String aiContentId = currentAiContentId();
             final int speakingDuration = currentSpeakingDuration();
+            log.info("[{}] before ai_reply => ({}) speech:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
+                    sessionId, content_index, userSpeechText, isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
+            return _scriptApi.ai_reply(sessionId, userSpeechText, null, isAiSpeaking ? 1 : 0, aiContentId, speakingDuration);
+        };
+    }
 
-            if (userSpeechText == null || userSpeechText.isEmpty()) {
-                _emptyUserSpeechCount++;
-                log.warn("[{}] whenASRSentenceEnd: skip ai_reply => [{}] speech_is_empty, total empty count: {}",
-                        sessionId, payload.getIndex(), _emptyUserSpeechCount);
+    private BiConsumer<ApiResponse<AIReplyVO>, Throwable>
+    onAiReply(final int content_index,
+              final PayloadSentenceEnd payload,
+              final long sentenceEndInMs) {
+        return (response, ex) -> {
+            if (_userContentIndex.get() != content_index) {
+                log.warn("[{}] onAiReply: handle idx:{} != current user content idx:{}, skip response: {}",
+                        sessionId, content_index, _userContentIndex.get(), response);
                 return;
             }
 
-            log.info("[{}] whenASRSentenceEnd: before ai_reply => ({}) speech:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
-                    sessionId, payload.getIndex(), userSpeechText, isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
-            final ApiResponse<AIReplyVO> response =
-                    _scriptApi.ai_reply(sessionId, userSpeechText, null, isAiSpeaking ? 1 : 0, aiContentId, speakingDuration);
-            log.info("[{}] whenASRSentenceEnd: ai_reply ({})", sessionId, response);
+            if (ex != null) {
+                log.warn("[{}] onAiReply: ai_reply error, detail: {}", sessionId, ExceptionUtil.exception2detail(ex));
+                return;
+            }
+
+            String userContentId = null;
+            String user_qa_id = null;
+            final boolean isAiSpeaking = isAiSpeaking();
+
+            log.info("[{}] onAiReply: ai_reply ({})", sessionId, response);
             if (response.getData() != null) {
                 if (response.getData().getUser_content_id() != null) {
                     userContentId = response.getData().getUser_content_id().toString();
                     user_qa_id = response.getData().getQa_id();
                 } else {
-                    log.warn("[{}] whenASRSentenceEnd: ai_reply({}) => user_content_id_is_null", sessionId, userSpeechText);
+                    log.warn("[{}] onAiReply: ai_reply({}) => user_content_id_is_null", sessionId, payload.getResult());
                 }
                 if (!doPlayback(response.getData()))  {
                     if (response.getData().getHangup() == 1) {
                         doHangup();
-                        log.info("[{}] whenASRSentenceEnd : hangup ({}) for ai_reply ({})", sessionId, sessionId, response.getData());
+                        log.info("[{}] onAiReply : hangup ({}) for ai_reply ({})", sessionId, sessionId, response.getData());
                     }
                     if (isAiSpeaking && _currentPlaybackPaused.compareAndSet(true, false) ) {
                         sendEvent.accept("FSResumePlayback", null /*new PayloadFSChangePlayback(_uuid, _currentPlaybackId.get())*/);
-                        log.info("[{}] whenASRSentenceEnd: resume_current ({}) for ai_reply ({}) without_new_ai_playback",
+                        log.info("[{}] onAiReply: resume_current ({}) for ai_reply ({}) without_new_ai_playback",
                                 sessionId, _currentPlaybackId.get(), payload.getResult());
                     }
                 }
             } else {
-                log.info("[{}] whenASRSentenceEnd: ai_reply's data is null', do_nothing", sessionId);
+                log.info("[{}] onAiReply: ai_reply's data is null', do_nothing", sessionId);
             }
-        } catch (final Exception ex) {
-            log.warn("[{}] whenASRSentenceEnd: ai_reply error, detail: {}", sessionId, ExceptionUtil.exception2detail(ex));
-        }
 
-        final var content_id = userContentId;
-        final var content_index = payload.getIndex() - _emptyUserSpeechCount;
-        final var qa_id = user_qa_id;
-        {
-            // build USER speak timing report
-            final long start_speak_timestamp = _asrStartedInMs.get() + payload.getBegin_time();
-            //final long start_speak_timestamp = _currentSentenceBeginInMs.get();
-            final long stop_speak_timestamp = _asrStartedInMs.get() + payload.getTime();
-            final long user_speak_duration = stop_speak_timestamp - start_speak_timestamp;
-            // final long user_speak_duration = sentenceEndInMs - start_speak_timestamp;
-            log.info("[{}] USER report_content({}) diff, (sentence_begin-start) = {} ms,  (sentence_end-stop) = {} ms",
-                    sessionId, content_index, _currentSentenceBeginInMs.get() - start_speak_timestamp, sentenceEndInMs - stop_speak_timestamp);
+            final var content_id = userContentId;
+            final var qa_id = user_qa_id;
+            {
+                // build USER speak timing report
+                final long start_speak_timestamp = _asrStartedInMs.get() + payload.getBegin_time();
+                //final long start_speak_timestamp = _currentSentenceBeginInMs.get();
+                final long stop_speak_timestamp = _asrStartedInMs.get() + payload.getTime();
+                final long user_speak_duration = stop_speak_timestamp - start_speak_timestamp;
+                // final long user_speak_duration = sentenceEndInMs - start_speak_timestamp;
+                log.info("[{}] USER report_content({}) diff, (sentence_begin-start) = {} ms,  (sentence_end-stop) = {} ms",
+                        sessionId, content_index, _currentSentenceBeginInMs.get() - start_speak_timestamp, sentenceEndInMs - stop_speak_timestamp);
 
-            final Consumer<ReportContext> doReport = ctx-> {
-                final ApiResponse<Void> resp = _scriptApi.report_content(
-                        sessionId,
-                        content_id,
-                        content_index,
-                        "USER",
-                        ctx.event_rst(),
-                        start_speak_timestamp,
-                        stop_speak_timestamp,
-                        user_speak_duration);
-                log.info("[{}] user_report_content ({}): rst:{} / asr_start:{} / asr_stop: {}",
-                        sessionId,
-                        content_index,
-                        ctx.event_rst(),
-                        start_speak_timestamp,
-                        stop_speak_timestamp);
-            };
-            _pendingReports.add(doReport);
-        }
-        {
-            // report ASR event timing
-            // sentence_begin_event_time in Milliseconds
-            final long begin_event_time = _currentSentenceBeginInMs.get() - _asrStartedInMs.get();
+                final Consumer<ReportContext> doReport = ctx-> {
+                    final ApiResponse<Void> resp = _scriptApi.report_content(
+                            sessionId,
+                            content_id,
+                            content_index,
+                            "USER",
+                            ctx.event_rst(),
+                            start_speak_timestamp,
+                            stop_speak_timestamp,
+                            user_speak_duration);
+                    log.info("[{}] user_report_content ({}): rst:{} / asr_start:{} / asr_stop: {}",
+                            sessionId,
+                            content_index,
+                            ctx.event_rst(),
+                            start_speak_timestamp,
+                            stop_speak_timestamp);
+                };
+                _pendingReports.add(doReport);
+            }
+            {
+                // report ASR event timing
+                // sentence_begin_event_time in Milliseconds
+                final long begin_event_time = _currentSentenceBeginInMs.get() - _asrStartedInMs.get();
 
-            // sentence_end_event_time in Milliseconds
-            final long end_event_time = sentenceEndInMs - _asrStartedInMs.get();
+                // sentence_end_event_time in Milliseconds
+                final long end_event_time = sentenceEndInMs - _asrStartedInMs.get();
 
-            final Consumer<ReportContext> doReport = ctx-> {
-                final ApiResponse<Void> resp = _scriptApi.report_asrtime(
-                        sessionId,
-                        content_id,
-                        content_index,
-                        begin_event_time,
-                        end_event_time);
-                log.info("[{}] user_report_asrtime ({})'s response: {}", sessionId, content_id, resp);
-            };
-            _pendingReports.add(doReport);
-        }
+                final Consumer<ReportContext> doReport = ctx-> {
+                    final ApiResponse<Void> resp = _scriptApi.report_asrtime(
+                            sessionId,
+                            content_id,
+                            content_index,
+                            begin_event_time,
+                            end_event_time);
+                    log.info("[{}] user_report_asrtime ({})'s response: {}", sessionId, content_id, resp);
+                };
+                _pendingReports.add(doReport);
+            }
 
-        if (_eslApi != null && !payload.getResult().isEmpty() && payload.getResult().length() >=5) {
-            final var startInMs = System.currentTimeMillis();
-            _eslExecutor.execute(()->{
-                final var resp = _eslApi.search_ref(_esl_headers, payload.getResult(), 0.5f);
-                final long cost = System.currentTimeMillis() - startInMs;
-                log.info("[{}]: {} => ESL Response: {}, cost {} ms", sessionId, payload.getResult(), resp, cost);
-                if (resp.getResult() != null && resp.getResult().length > 0) {
-                    final var ess = new ScriptApi.ExampleSentence[resp.getResult().length];
-                    int idx = 0;
-                    for (var hit : resp.getResult()) {
-                        ess[idx] = ScriptApi.ExampleSentence.builder()
-                                .index(idx+1)
-                                .id(hit.es.id)
-                                .confidence(hit.confidence)
-                                .intentionCode(hit.es.intentionCode)
-                                .intentionName(hit.es.intentionName)
-                                .text(hit.es.text)
+            if (_eslApi != null && !payload.getResult().isEmpty() && payload.getResult().length() >=5) {
+                final var startInMs = System.currentTimeMillis();
+                _eslExecutor.execute(()->{
+                    final var resp = _eslApi.search_ref(_esl_headers, payload.getResult(), 0.5f);
+                    final long cost = System.currentTimeMillis() - startInMs;
+                    log.info("[{}]: {} => ESL Response: {}, cost {} ms", sessionId, payload.getResult(), resp, cost);
+                    if (resp.getResult() != null && resp.getResult().length > 0) {
+                        final var ess = new ScriptApi.ExampleSentence[resp.getResult().length];
+                        int idx = 0;
+                        for (var hit : resp.getResult()) {
+                            ess[idx] = ScriptApi.ExampleSentence.builder()
+                                    .index(idx+1)
+                                    .id(hit.es.id)
+                                    .confidence(hit.confidence)
+                                    .intentionCode(hit.es.intentionCode)
+                                    .intentionName(hit.es.intentionName)
+                                    .text(hit.es.text)
+                                    .build();
+                            idx++;
+                        }
+                        final var req = ScriptApi.ESRequest.builder()
+                                .session_id(sessionId)
+                                .content_id(content_id)
+                                .content_index(content_index)
+                                .qa_id(qa_id)
+                                .es(ess)
+                                .embedding_cost(resp.dev.embeddingDuration)
+                                .db_cost(resp.dev.dbExecutionDuration)
+                                .total_cost((int) cost)
                                 .build();
-                        idx++;
+                        final var resp2 = _scriptApi.report_es(req);
+                        log.info("[{}]: report_es => req: {}/resp: {}", sessionId, req, resp2);
                     }
-                    final var req = ScriptApi.ESRequest.builder()
-                            .session_id(sessionId)
-                            .content_id(content_id)
-                            .content_index(content_index)
-                            .qa_id(qa_id)
-                            .es(ess)
-                            .embedding_cost(resp.dev.embeddingDuration)
-                            .db_cost(resp.dev.dbExecutionDuration)
-                            .total_cost((int) cost)
-                            .build();
-                    final var resp2 = _scriptApi.report_es(req);
-                    log.info("[{}]: report_es => req: {}/resp: {}", sessionId, req, resp2);
-                }
-            });
-        }
+                });
+            }
+        };
     }
 
     private boolean isAiSpeaking() {
@@ -676,6 +695,7 @@ public final class AfsActor {
     private final AtomicBoolean _isUserSpeak = new AtomicBoolean(false);
     private final AtomicLong _asrStartedInMs = new AtomicLong(0);
     private int _emptyUserSpeechCount = 0;
+    private final AtomicInteger _userContentIndex = new AtomicInteger(0);
 
     private final long _answerInMs;
     //private final AtomicLong _recordStartInMs = new AtomicLong(-1);
