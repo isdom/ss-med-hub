@@ -548,91 +548,106 @@ public final class AfsActor {
 
             final var content_id = userContentId;
             final var qa_id = user_qa_id;
-            {
-                // build USER speak timing report
-                final long start_speak_timestamp = _asrStartedInMs.get() + payload.getBegin_time();
-                //final long start_speak_timestamp = _currentSentenceBeginInMs.get();
-                final long stop_speak_timestamp = _asrStartedInMs.get() + payload.getTime();
-                final long user_speak_duration = stop_speak_timestamp - start_speak_timestamp;
-                // final long user_speak_duration = sentenceEndInMs - start_speak_timestamp;
-                log.info("[{}] USER report_content({}) diff, (sentence_begin-start) = {} ms,  (sentence_end-stop) = {} ms",
-                        sessionId, content_index, _currentSentenceBeginInMs.get() - start_speak_timestamp, sentenceEndInMs - stop_speak_timestamp);
-
-                final Consumer<ReportContext> doReport = ctx-> {
-                    final ApiResponse<Void> resp = _scriptApi.report_content(
-                            sessionId,
-                            content_id,
-                            content_index,
-                            "USER",
-                            ctx.event_rst(),
-                            start_speak_timestamp,
-                            stop_speak_timestamp,
-                            user_speak_duration);
-                    log.info("[{}] user_report_content ({}): rst:{} / asr_start:{} / asr_stop: {}",
-                            sessionId,
-                            content_index,
-                            ctx.event_rst(),
-                            start_speak_timestamp,
-                            stop_speak_timestamp);
-                };
-                _pendingReports.add(doReport);
-            }
-            {
-                // report ASR event timing
-                // sentence_begin_event_time in Milliseconds
-                final long begin_event_time = _currentSentenceBeginInMs.get() - _asrStartedInMs.get();
-
-                // sentence_end_event_time in Milliseconds
-                final long end_event_time = sentenceEndInMs - _asrStartedInMs.get();
-
-                final Consumer<ReportContext> doReport = ctx-> {
-                    final ApiResponse<Void> resp = _scriptApi.report_asrtime(
-                            sessionId,
-                            content_id,
-                            content_index,
-                            begin_event_time,
-                            end_event_time);
-                    log.info("[{}] user_report_asrtime ({})'s response: {}", sessionId, content_id, resp);
-                };
-                _pendingReports.add(doReport);
-            }
-
-            if (_eslApi != null && !payload.getResult().isEmpty() && payload.getResult().length() >=5) {
-                final var startInMs = System.currentTimeMillis();
-                _eslExecutor.execute(()->{
-                    final var resp = _eslApi.search_ref(_esl_headers, payload.getResult(), 0.5f);
-                    final long cost = System.currentTimeMillis() - startInMs;
-                    log.info("[{}]: {} => ESL Response: {}, cost {} ms", sessionId, payload.getResult(), resp, cost);
-                    if (resp.getResult() != null && resp.getResult().length > 0) {
-                        final var ess = new ScriptApi.ExampleSentence[resp.getResult().length];
-                        int idx = 0;
-                        for (var hit : resp.getResult()) {
-                            ess[idx] = ScriptApi.ExampleSentence.builder()
-                                    .index(idx+1)
-                                    .id(hit.es.id)
-                                    .confidence(hit.confidence)
-                                    .intentionCode(hit.es.intentionCode)
-                                    .intentionName(hit.es.intentionName)
-                                    .text(hit.es.text)
-                                    .build();
-                            idx++;
-                        }
-                        final var req = ScriptApi.ESRequest.builder()
-                                .session_id(sessionId)
-                                .content_id(content_id)
-                                .content_index(content_index)
-                                .qa_id(qa_id)
-                                .es(ess)
-                                .embedding_cost(resp.dev.embeddingDuration)
-                                .db_cost(resp.dev.dbExecutionDuration)
-                                .total_cost((int) cost)
-                                .build();
-                        final var resp2 = _scriptApi.report_es(req);
-                        log.info("[{}]: report_es => req: {}/resp: {}", sessionId, req, resp2);
-                    }
-                });
-            }
+            reportUserContent(content_index, payload, sentenceEndInMs, content_id);
+            reportAsrTime(content_index, sentenceEndInMs, content_id);
+            callEslApi(content_index, payload, content_id, qa_id);
         };
+    }
+
+    private void reportUserContent(final int content_index,
+                                   final PayloadSentenceEnd payload,
+                                   final long sentenceEndInMs,
+                                   final String content_id) {
+        // build USER speak timing report
+        final long start_speak_timestamp = _asrStartedInMs.get() + payload.getBegin_time();
+        //final long start_speak_timestamp = _currentSentenceBeginInMs.get();
+        final long stop_speak_timestamp = _asrStartedInMs.get() + payload.getTime();
+        final long user_speak_duration = stop_speak_timestamp - start_speak_timestamp;
+        // final long user_speak_duration = sentenceEndInMs - start_speak_timestamp;
+        log.info("[{}] USER report_content({}) diff, (sentence_begin-start) = {} ms,  (sentence_end-stop) = {} ms",
+                sessionId, content_index, _currentSentenceBeginInMs.get() - start_speak_timestamp, sentenceEndInMs - stop_speak_timestamp);
+
+        final Consumer<ReportContext> doReport = ctx-> {
+            final ApiResponse<Void> resp = _scriptApi.report_content(
+                    sessionId,
+                    content_id,
+                    content_index,
+                    "USER",
+                    ctx.event_rst(),
+                    start_speak_timestamp,
+                    stop_speak_timestamp,
+                    user_speak_duration);
+            log.info("[{}] user_report_content ({}): rst:{} / asr_start:{} / asr_stop: {}",
+                    sessionId,
+                    content_index,
+                    ctx.event_rst(),
+                    start_speak_timestamp,
+                    stop_speak_timestamp);
+        };
+        _pendingReports.add(doReport);
+    }
+
+    private void reportAsrTime(final int content_index,
+                               final long sentenceEndInMs,
+                               final String content_id) {
+        // report ASR event timing
+        // sentence_begin_event_time in Milliseconds
+        final long begin_event_time = _currentSentenceBeginInMs.get() - _asrStartedInMs.get();
+
+        // sentence_end_event_time in Milliseconds
+        final long end_event_time = sentenceEndInMs - _asrStartedInMs.get();
+
+        final Consumer<ReportContext> doReport = ctx-> {
+            final ApiResponse<Void> resp = _scriptApi.report_asrtime(
+                    sessionId,
+                    content_id,
+                    content_index,
+                    begin_event_time,
+                    end_event_time);
+            log.info("[{}] user_report_asrtime ({})'s response: {}", sessionId, content_id, resp);
+        };
+        _pendingReports.add(doReport);
+    }
+
+    private void callEslApi(final int content_index,
+                            final PayloadSentenceEnd payload,
+                            final String content_id,
+                            final String qa_id) {
+        if (_eslApi != null && !payload.getResult().isEmpty() && payload.getResult().length() >=5) {
+            final var startInMs = System.currentTimeMillis();
+            _eslExecutor.execute(()->{
+                final var resp = _eslApi.search_ref(_esl_headers, payload.getResult(), 0.5f);
+                final long cost = System.currentTimeMillis() - startInMs;
+                log.info("[{}]: {} => ESL Response: {}, cost {} ms", sessionId, payload.getResult(), resp, cost);
+                if (resp.getResult() != null && resp.getResult().length > 0) {
+                    final var ess = new ScriptApi.ExampleSentence[resp.getResult().length];
+                    int idx = 0;
+                    for (var hit : resp.getResult()) {
+                        ess[idx] = ScriptApi.ExampleSentence.builder()
+                                .index(idx+1)
+                                .id(hit.es.id)
+                                .confidence(hit.confidence)
+                                .intentionCode(hit.es.intentionCode)
+                                .intentionName(hit.es.intentionName)
+                                .text(hit.es.text)
+                                .build();
+                        idx++;
+                    }
+                    final var req = ScriptApi.ESRequest.builder()
+                            .session_id(sessionId)
+                            .content_id(content_id)
+                            .content_index(content_index)
+                            .qa_id(qa_id)
+                            .es(ess)
+                            .embedding_cost(resp.dev.embeddingDuration)
+                            .db_cost(resp.dev.dbExecutionDuration)
+                            .total_cost((int) cost)
+                            .build();
+                    final var resp2 = _scriptApi.report_es(req);
+                    log.info("[{}]: report_es => req: {}/resp: {}", sessionId, req, resp2);
+                }
+            });
+        }
     }
 
     private boolean isAiSpeaking() {
