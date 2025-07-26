@@ -144,7 +144,11 @@ public final class AfsActor {
                 log.warn("[{}] afs_io => onTranscriberFail: {}", sessionId,
                         reason != null ? reason.toString() : "(null)");
             }
-        }).whenComplete((operator, ex) -> {
+        }).whenCompleteAsync(onStartTranscriptionComplete(), executor);
+    }
+
+    private BiConsumer<ASROperator, Throwable> onStartTranscriptionComplete() {
+        return (operator, ex) -> {
             if (ex != null) {
                 log.warn("startTranscription failed", ex);
             } else {
@@ -160,7 +164,7 @@ public final class AfsActor {
                     playWelcome();
                 }
             }
-        });
+        };
     }
 
     private int transmitCount = 0;
