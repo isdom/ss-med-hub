@@ -546,11 +546,9 @@ public final class AfsActor {
                 log.info("[{}] onAiReply: ai_reply's data is null', do_nothing", sessionId);
             }
 
-            final var content_id = userContentId;
-            final var qa_id = user_qa_id;
-            reportUserContent(content_index, payload, sentenceEndInMs, content_id);
-            reportAsrTime(content_index, sentenceEndInMs, content_id);
-            callEslApi(content_index, payload, content_id, qa_id);
+            reportUserContent(content_index, payload, sentenceEndInMs, userContentId);
+            reportAsrTime(content_index, sentenceEndInMs, userContentId);
+            callEslApi(content_index, payload, userContentId, user_qa_id);
         };
     }
 
