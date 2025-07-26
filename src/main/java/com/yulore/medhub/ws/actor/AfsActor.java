@@ -95,7 +95,7 @@ public final class AfsActor {
     private final BiConsumer<String, Object> sendEvent;
 
     @Autowired
-    private ExecutorStore _executors;
+    private ExecutorStore executorStore;
 
     @Autowired
     private ASRService _asrService;
@@ -487,7 +487,7 @@ public final class AfsActor {
         } else {
             final var content_index = payload.getIndex() - _emptyUserSpeechCount;
             _userContentIndex.set(content_index);
-            CompletableFuture.supplyAsync(callAiReply(userSpeechText, content_index), _executors.apply("feign"))
+            CompletableFuture.supplyAsync(callAiReply(userSpeechText, content_index), executorStore.apply("feign"))
                     .whenCompleteAsync(onAiReply(content_index, payload, sentenceEndInMs), executor);
         }
     }
