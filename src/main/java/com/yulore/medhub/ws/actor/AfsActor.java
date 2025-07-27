@@ -479,20 +479,39 @@ public final class AfsActor {
         _isUserSpeak.set(false);
         _idleStartInMs.set(sentenceEndInMs);
 
-        final String userSpeechText = payload.getResult();
-        if (userSpeechText == null || userSpeechText.isEmpty()) {
+        final String speechText = payload.getResult();
+        if (speechText == null || speechText.isEmpty()) {
             _emptyUserSpeechCount++;
             log.warn("[{}] whenASRSentenceEnd: skip ai_reply => [{}] speech_is_empty, total empty count: {}",
                     sessionId, payload.getIndex(), _emptyUserSpeechCount);
         } else {
             final var content_index = payload.getIndex() - _emptyUserSpeechCount;
             _userContentIndex.set(content_index);
-            CompletableFuture.supplyAsync(callAiReply(userSpeechText, content_index), executorStore.apply("feign"))
-                    .whenCompleteAsync(onAiReply(content_index, payload, sentenceEndInMs), executor);
+            final var getReply = callAiReplyWithSpeech(speechText, content_index);
+            interactAsync(getReply)
+                    .exceptionallyCompose(handleRetryable(()->interactAsync(getReply)))
+                    .whenCompleteAsync(onAiReply(content_index, payload, sentenceEndInMs), executor)
+            ;
         }
     }
 
-    private Supplier<ApiResponse<AIReplyVO>> callAiReply(final String userSpeechText, final int content_index) {
+    private  <T> CompletionStage<T> interactAsync(final Supplier<T> getResponse) {
+        return CompletableFuture.supplyAsync(getResponse, executorStore.apply("feign"));
+    }
+
+    private <T> Function<Throwable, CompletionStage<T>> handleRetryable(final Supplier<CompletionStage<T>> buildExecution) {
+        return ex -> {
+            if ((ex instanceof CompletionException)
+                && (ex.getCause() instanceof feign.RetryableException)) {
+                log.warn("[{}] interact failed for {}, retry", sessionId, ExceptionUtil.exception2detail(ex));
+                return buildExecution.get();
+            } else {
+                return CompletableFuture.failedStage(ex);
+            }
+        };
+    }
+
+    private Supplier<ApiResponse<AIReplyVO>> callAiReplyWithSpeech(final String userSpeechText, final int content_index) {
         return ()-> {
             final boolean isAiSpeaking = isAiSpeaking();
             final String aiContentId = currentAiContentId();
@@ -508,14 +527,14 @@ public final class AfsActor {
               final PayloadSentenceEnd payload,
               final long sentenceEndInMs) {
         return (response, ex) -> {
-            if (_userContentIndex.get() != content_index) {
-                log.warn("[{}] onAiReply: handle idx:{} != current user content idx:{}, skip response: {}",
-                        sessionId, content_index, _userContentIndex.get(), response);
+            if (ex != null) {
+                log.warn("[{}] onAiReply: ai_reply error, detail: {}", sessionId, ExceptionUtil.exception2detail(ex));
                 return;
             }
 
-            if (ex != null) {
-                log.warn("[{}] onAiReply: ai_reply error, detail: {}", sessionId, ExceptionUtil.exception2detail(ex));
+            if (_userContentIndex.get() != content_index) {
+                log.warn("[{}] onAiReply: ai_reply's user_content_idx:{} != current_user_content_idx:{}, skip response: {}",
+                        sessionId, content_index, _userContentIndex.get(), response);
                 return;
             }
 
