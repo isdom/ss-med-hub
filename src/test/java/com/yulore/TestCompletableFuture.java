@@ -25,9 +25,11 @@ public class TestCompletableFuture {
                 })
         ;
 
+        /*
         CompletableFuture.<Integer>failedFuture(new RuntimeException("testFailed"))
                 .whenCompleteAsync((i, ex)-> log.info("1st => int: {} / ex: {}", i, ExceptionUtil.exception2detail(ex)), executor)
                 .whenComplete((i, ex)-> log.info("2nd => int: {} / ex: {}", i, ExceptionUtil.exception2detail(ex)))
                 .whenComplete((i, ex)-> log.info("3rd => int: {} / ex: {}", i, ExceptionUtil.exception2detail(ex)));
+         */
     }
 }

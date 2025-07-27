@@ -1,6 +1,7 @@
 package com.yulore.medhub.api;
 
 import feign.Request;
+import lombok.Builder;
 import lombok.Data;
 import lombok.ToString;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -66,12 +67,18 @@ public interface EslApi {
         public Develop  dev;
     }
 
+    static <R> EslResponse<R> emptyResponse() {
+        final var resp = new EslResponse<R>();
+        resp.result = null;
+        return resp;
+    }
+
     //@RequestMapping(value = "${esl.api.search_text}", method = RequestMethod.GET)
     //SearchResponse search_text(@RequestHeader Map<String, String> headers, @RequestParam("text") String text);
 
     @RequestMapping(
-            //value = "/ref/search",
-            value = "${esl.api.search_ref}",
+            value = "/ref/search",
+            //value = "${esl.api.search_ref}",
             method = RequestMethod.GET)
     EslResponse<Hit> search_ref(@RequestHeader Map<String, String> headers, @RequestParam("text") String text, @RequestParam("ct") float ct);
 
