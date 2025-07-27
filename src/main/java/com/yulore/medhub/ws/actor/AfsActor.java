@@ -27,10 +27,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -113,9 +110,12 @@ public final class AfsActor {
 
     private final AtomicReference<ASROperator> asrRef = new AtomicReference<>(null);
     private final AtomicBoolean isClosed = new AtomicBoolean(false);
+    private final AtomicBoolean isWelcomePlayed = new AtomicBoolean(false);
+    private int _lastIterationIdx = 0;
+    private final Map<Integer, String> _pendingIteration = new HashMap<>();
 
-    public void startTranscription() {
-        log.info("[{}] startTranscription with ScriptApi({})/EslApi({})", sessionId, _scriptApi, _eslApi);
+    public void start() {
+        log.info("[{}] start with ScriptApi({})/EslApi({})", sessionId, _scriptApi, _eslApi);
         _asrService.startTranscription(new ASRConsumer() {
             @Override
             public void onSentenceBegin(PayloadSentenceBegin payload) {
@@ -251,57 +251,135 @@ public final class AfsActor {
         }
     }
 
+    private int addIteration(final String name) {
+        _lastIterationIdx++;
+        _pendingIteration.put(_lastIterationIdx, name);
+        return _lastIterationIdx;
+    }
+
+    private void completeIteration(final int iterationIdx) {
+        _pendingIteration.remove(iterationIdx);
+    }
+
+    private boolean isCurrentIteration(final int iterationIdx) {
+        return _lastIterationIdx == iterationIdx;
+    }
+
+    private boolean hasPendingIteration() {
+        return !_pendingIteration.isEmpty();
+    }
+
+    private Supplier<ApiResponse<AIReplyVO>> callAiReplyWithWelcome(final String welcome) {
+        return () -> {
+            log.info("[{}] callAiReplyWithWelcome: before ai_reply => {}", sessionId, welcome);
+            return _scriptApi.ai_reply(sessionId, welcome, null, 0, null, 0);
+        };
+    }
+
+    private Supplier<ApiResponse<AIReplyVO>> callAiReplyWithIdleTime(final long idleTime) {
+        return () -> _scriptApi.ai_reply(
+                sessionId, null, idleTime, 0, null, 0);
+    }
+
+    private Supplier<ApiResponse<AIReplyVO>> callAiReplyWithSpeech(final String userSpeechText, final int content_index) {
+        return ()-> {
+            final boolean isAiSpeaking = isAiSpeaking();
+            final String aiContentId = currentAiContentId();
+            final int speakingDuration = currentSpeakingDuration();
+            log.info("[{}] before ai_reply => ({}) speech:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
+                    sessionId, content_index, userSpeechText, isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
+            return _scriptApi.ai_reply(sessionId, userSpeechText, null, isAiSpeaking ? 1 : 0, aiContentId, speakingDuration);
+        };
+    }
+
+    private  <T> CompletionStage<T> interactAsync(final Supplier<T> getResponse) {
+        return CompletableFuture.supplyAsync(getResponse, executorStore.apply("feign"));
+    }
+
+    private <T> Function<Throwable, CompletionStage<T>> handleRetryable(final Supplier<CompletionStage<T>> buildExecution) {
+        return ex -> {
+            if ((ex instanceof CompletionException)
+                    && (ex.getCause() instanceof feign.RetryableException)) {
+                log.warn("[{}] interact failed for {}, retry", sessionId, ExceptionUtil.exception2detail(ex));
+                return buildExecution.get();
+            } else {
+                return CompletableFuture.failedStage(ex);
+            }
+        };
+    }
+
+    private void playWelcome() {
+        final var getReply = callAiReplyWithWelcome(welcome);
+        interactAsync(getReply)
+                .exceptionallyCompose(handleRetryable(()->interactAsync(getReply)))
+                .whenCompleteAsync(handleWelcomeReply(), executor)
+        ;
+    }
+
     public void checkIdle() {
         final long idleTime = System.currentTimeMillis() - _idleStartInMs.get();
-        if (sessionId != null      // user answered
+        if (isWelcomePlayed.get()
             && !_isUserSpeak.get()  // user not speak
             && !isAiSpeaking()      // AI not speak
             && _idleTimeout > 0
         ) {
             if (idleTime > _idleTimeout) {
-                log.info("[{}] checkIdle: idle duration: {} ms >=: [{}] ms", sessionId, idleTime, _idleTimeout);
-                try {
-                    final ApiResponse<AIReplyVO> response =
-                            _scriptApi.ai_reply(sessionId, null, idleTime, 0, null, 0);
-                    log.info("[{}] checkIdle: ai_reply {}", sessionId, response);
-                    if (response.getData() != null) {
-                        if (doPlayback(response.getData())) {
-                        } else if (response.getData().getHangup() == 1) {
-                            doHangup();
-                            log.info("[{}] checkIdle: hangup ({}) for ai_reply ({})", sessionId, sessionId, response.getData());
-                        }
-                    } else {
-                        log.info("[{}] checkIdle: ai_reply's data is null, do_nothing", sessionId);
-                    }
-                } catch (final Exception ex) {
-                    log.warn("[{}] checkIdle: ai_reply error, detail: {}", sessionId, ExceptionUtil.exception2detail(ex));
+                if (hasPendingIteration()) {
+                    log.info("[{}] checkIdle: has_pending_iteration, skip", sessionId);
+                } else {
+                    final var iterationIdx = addIteration("checkIdle");
+                    log.info("[{}] checkIdle: iteration: {} / idle duration: {} ms >=: [{}] ms", sessionId, iterationIdx, idleTime, _idleTimeout);
+                    interactAsync(callAiReplyWithIdleTime(idleTime))
+                            .whenCompleteAsync((response, ex) -> {
+                                completeIteration(iterationIdx);
+                                if (ex != null) {
+                                    log.warn("[{}] checkIdle: ai_reply error, detail: {}", sessionId, ExceptionUtil.exception2detail(ex));
+                                } else if (!isCurrentIteration(iterationIdx)) {
+                                    log.warn("[{}] checkIdle: iteration mismatch({} != {}), skip", sessionId, iterationIdx, _lastIterationIdx);
+                                } else {
+                                    log.info("[{}] checkIdle: ai_reply {}", sessionId, response);
+                                    if (response.getData() != null) {
+                                        if (!doPlayback(response.getData())) {
+                                            if (response.getData().getHangup() == 1) {
+                                                doHangup();
+                                                log.info("[{}] checkIdle: hangup ({}) for ai_reply ({})", sessionId, sessionId, response.getData());
+                                            }
+                                        }
+                                    } else {
+                                        log.info("[{}] checkIdle: ai_reply's data is null, do_nothing", sessionId);
+                                    }
+                                }
+                            }, executor)
+                    ;
                 }
             }
         }
-        log.info("[{}] checkIdle: is_speaking: {}/is_playing: {}/idle duration: {} ms/idle_timeout: {} ms",
-                sessionId, _isUserSpeak.get(), isAiSpeaking(), idleTime, _idleTimeout);
+        log.info("[{}] checkIdle: welcome: {}/is_speaking: {}/is_playing: {}/idle duration: {} ms/idle_timeout: {} ms",
+                sessionId, isWelcomePlayed.get(), _isUserSpeak.get(), isAiSpeaking(), idleTime, _idleTimeout);
     }
 
-    private void playWelcome() {
-        try {
-            final ApiResponse<AIReplyVO> response =
-                    _scriptApi.ai_reply(sessionId, welcome, null, 0, null, 0);
-            log.info("[{}] playWelcome: call ai_reply with {} => response: {}", sessionId, welcome, response);
-            if (response.getData() != null) {
-                if (!doPlayback(response.getData())) {
-                    if (response.getData().getHangup() == 1) {
-                        doHangup();
-                        log.info("[{}] playWelcome: hangup ({}) for ai_reply ({})", sessionId, sessionId, response.getData());
-                    }
-                }
-            } else {
+    private BiConsumer<ApiResponse<AIReplyVO>, Throwable>
+    handleWelcomeReply() {
+        return (response, ex) -> {
+            isWelcomePlayed.set(true);
+            if (ex != null) {
                 doHangup();
-                log.warn("[{}] playWelcome: ai_reply({}), hangup", sessionId, response);
+                log.warn("[{}] handleWelcomeReply: hangup for ai_reply error, detail: {}", sessionId, ExceptionUtil.exception2detail(ex));
+            } else {
+                log.info("[{}] handleWelcomeReply: call ai_reply with {} => response: {}", sessionId, welcome, response);
+                if (response.getData() != null) {
+                    if (!doPlayback(response.getData())) {
+                        if (response.getData().getHangup() == 1) {
+                            doHangup();
+                            log.info("[{}] handleWelcomeReply: hangup ({}) for ai_reply ({})", sessionId, sessionId, response.getData());
+                        }
+                    }
+                } else {
+                    doHangup();
+                    log.warn("[{}] playWelcome: ai_reply({}), hangup", sessionId, response);
+                }
             }
-        } catch (final Exception ex) {
-            doHangup();
-            log.warn("[{}] playWelcome: ai_reply error, hangup, detail: {}", sessionId, ExceptionUtil.exception2detail(ex));
-        }
+        };
     }
 
     public void playbackStarted(final AFSPlaybackStarted vo) {
@@ -485,47 +563,36 @@ public final class AfsActor {
             log.warn("[{}] whenASRSentenceEnd: skip ai_reply => [{}] speech_is_empty, total empty count: {}",
                     sessionId, payload.getIndex(), _emptyUserSpeechCount);
         } else {
+            if (!isWelcomePlayed.get()) {
+                // TODO: welcome_not_play_yet
+                log.warn("[{}] whenASRSentenceEnd: welcome_not_play_yet, skip", sessionId);
+                return;
+            }
             final var content_index = payload.getIndex() - _emptyUserSpeechCount;
             _userContentIndex.set(content_index);
+            final var iterationIdx = addIteration(speechText);
+            log.info("[{}] whenASRSentenceEnd: addIteration => {}", sessionId, iterationIdx);
             final var getReply = callAiReplyWithSpeech(speechText, content_index);
             interactAsync(getReply)
                     .exceptionallyCompose(handleRetryable(()->interactAsync(getReply)))
-                    .whenCompleteAsync(onAiReply(content_index, payload, sentenceEndInMs), executor)
+                    .whenCompleteAsync(handleAiReply(content_index, payload), executor)
+                    .whenComplete((response, ex)-> {
+                        completeIteration(iterationIdx);
+                        if (ex == null) {
+                            log.info("[{}] whenASRSentenceEnd: completeIteration({})", sessionId, iterationIdx);
+                        } else {
+                            log.warn("[{}] whenASRSentenceEnd: completeIteration_with_ex({}, {})",
+                                    sessionId, iterationIdx, ExceptionUtil.exception2detail(ex));
+                        }
+                    })
+                    .whenComplete(doReport(content_index, payload, sentenceEndInMs))
             ;
         }
     }
 
-    private  <T> CompletionStage<T> interactAsync(final Supplier<T> getResponse) {
-        return CompletableFuture.supplyAsync(getResponse, executorStore.apply("feign"));
-    }
-
-    private <T> Function<Throwable, CompletionStage<T>> handleRetryable(final Supplier<CompletionStage<T>> buildExecution) {
-        return ex -> {
-            if ((ex instanceof CompletionException)
-                && (ex.getCause() instanceof feign.RetryableException)) {
-                log.warn("[{}] interact failed for {}, retry", sessionId, ExceptionUtil.exception2detail(ex));
-                return buildExecution.get();
-            } else {
-                return CompletableFuture.failedStage(ex);
-            }
-        };
-    }
-
-    private Supplier<ApiResponse<AIReplyVO>> callAiReplyWithSpeech(final String userSpeechText, final int content_index) {
-        return ()-> {
-            final boolean isAiSpeaking = isAiSpeaking();
-            final String aiContentId = currentAiContentId();
-            final int speakingDuration = currentSpeakingDuration();
-            log.info("[{}] before ai_reply => ({}) speech:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
-                    sessionId, content_index, userSpeechText, isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
-            return _scriptApi.ai_reply(sessionId, userSpeechText, null, isAiSpeaking ? 1 : 0, aiContentId, speakingDuration);
-        };
-    }
-
     private BiConsumer<ApiResponse<AIReplyVO>, Throwable>
-    onAiReply(final int content_index,
-              final PayloadSentenceEnd payload,
-              final long sentenceEndInMs) {
+    handleAiReply(final int content_index,
+                  final PayloadSentenceEnd payload) {
         return (response, ex) -> {
             if (ex != null) {
                 log.warn("[{}] onAiReply: ai_reply error, detail: {}", sessionId, ExceptionUtil.exception2detail(ex));
@@ -538,18 +605,10 @@ public final class AfsActor {
                 return;
             }
 
-            String userContentId = null;
-            String user_qa_id = null;
             final boolean isAiSpeaking = isAiSpeaking();
 
             log.info("[{}] onAiReply: ai_reply ({})", sessionId, response);
             if (response.getData() != null) {
-                if (response.getData().getUser_content_id() != null) {
-                    userContentId = response.getData().getUser_content_id().toString();
-                    user_qa_id = response.getData().getQa_id();
-                } else {
-                    log.warn("[{}] onAiReply: ai_reply({}) => user_content_id_is_null", sessionId, payload.getResult());
-                }
                 if (!doPlayback(response.getData()))  {
                     if (response.getData().getHangup() == 1) {
                         doHangup();
@@ -564,7 +623,25 @@ public final class AfsActor {
             } else {
                 log.info("[{}] onAiReply: ai_reply's data is null', do_nothing", sessionId);
             }
+        };
+    }
 
+    private BiConsumer<ApiResponse<AIReplyVO>, Throwable>
+    doReport(final int content_index,
+             final PayloadSentenceEnd payload,
+             final long sentenceEndInMs) {
+        return (response, ex) -> {
+            String userContentId = null;
+            String user_qa_id = null;
+            if (response != null && response.getData() != null) {
+                if (response.getData().getUser_content_id() != null) {
+                    userContentId = response.getData().getUser_content_id().toString();
+                    user_qa_id = response.getData().getQa_id();
+
+                } else {
+                    log.warn("[{}] onAiReply: ai_reply({}) => user_content_id_is_null", sessionId, payload.getResult());
+                }
+            }
             reportUserContent(content_index, payload, sentenceEndInMs, userContentId);
             reportAsrTime(content_index, sentenceEndInMs, userContentId);
             callEslApi(content_index, payload, userContentId, user_qa_id);

@@ -114,7 +114,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
             });
             addActor(vo.localIdx, actor);
             actorCount.incrementAndGet();
-            actor.startTranscription();
+            actor.start();
         }
 
         void removeLocal(final AFSRemoveLocalCommand vo, final Timer timer) {
