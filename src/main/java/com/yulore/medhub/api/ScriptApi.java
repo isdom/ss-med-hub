@@ -35,8 +35,8 @@ public interface ScriptApi {
     @RequestMapping(value = "${script.api.ai_reply}", method = RequestMethod.GET)
     ApiResponse<AIReplyVO> ai_reply(
             @RequestParam("ccs_call_id")            String sessionId,
-            //@RequestParam("user_speech_idx")        Integer userSpeechIdx,
-            @RequestParam("user_speech_text")       String userSpeechText,
+            @RequestParam("user_speech_idx")        Integer speechIdx,
+            @RequestParam("user_speech_text")       String speechText,
             @RequestParam("idle_time")              Long idle_time, // in ms
             @RequestParam("is_speaking")            int is_speaking,
             @RequestParam("speaking_content_id")    String speaking_content_id,

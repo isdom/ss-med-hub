@@ -168,7 +168,7 @@ public abstract class FsActor extends ASRActor<FsActor> implements WsHandler {
                 log.info("[{}]: checkIdle: idle duration: {} ms >=: [{}] ms", _sessionId, idleTime, CHECK_IDLE_TIMEOUT);
                 try {
                     final ApiResponse<AIReplyVO> response =
-                            _scriptApi.ai_reply(_sessionId, null, idleTime, 0, null, 0);
+                            _scriptApi.ai_reply(_sessionId, null, null, idleTime, 0, null, 0);
                     log.info("[{}]: checkIdle: ai_reply {}", _sessionId, response);
                     if (response.getData() != null) {
                         if (doPlayback(response.getData())) {
@@ -202,7 +202,7 @@ public abstract class FsActor extends ASRActor<FsActor> implements WsHandler {
     private void playWelcome() {
         try {
             final ApiResponse<AIReplyVO> response =
-                    _scriptApi.ai_reply(_sessionId, _welcome, null, 0, null, 0);
+                    _scriptApi.ai_reply(_sessionId, null, _welcome, null, 0, null, 0);
             if (response.getData() != null) {
                 if (doPlayback(response.getData())) {
                 } else if (response.getData().getHangup() == 1) {
@@ -423,7 +423,7 @@ public abstract class FsActor extends ASRActor<FsActor> implements WsHandler {
             log.info("[{}]: before ai_reply: speech:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
                     _sessionId, userSpeechText, isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
             final ApiResponse<AIReplyVO> response =
-                    _scriptApi.ai_reply(_sessionId, userSpeechText, null, isAiSpeaking ? 1 : 0, aiContentId, speakingDuration);
+                    _scriptApi.ai_reply(_sessionId, payload.getIndex(), userSpeechText, null, isAiSpeaking ? 1 : 0, aiContentId, speakingDuration);
             log.info("[{}]: notifySentenceEnd: ai_reply ({})", _sessionId, response);
             if (response.getData() != null) {
                 if (response.getData().getUser_content_id() != null) {

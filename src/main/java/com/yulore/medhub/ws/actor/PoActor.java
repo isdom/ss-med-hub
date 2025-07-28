@@ -226,7 +226,7 @@ public abstract class PoActor extends ASRActor<PoActor> implements WsHandler {
                 log.info("[{}]: [{}]-[{}]: checkIdle: idle duration: {} ms >=: [{}] ms", _clientIp, _sessionId, _uuid, idleTime, _aiSetting.getIdle_timeout());
                 try {
                     final ApiResponse<AIReplyVO> response =
-                            _scriptApi.ai_reply(_sessionId, null, idleTime, 0, null, 0);
+                            _scriptApi.ai_reply(_sessionId, null, null, idleTime, 0, null, 0);
                     if (response.getData() != null) {
                         if (response.getData().getAi_content_id() != null && doPlayback(response.getData())) {
                             return;
@@ -386,7 +386,7 @@ public abstract class PoActor extends ASRActor<PoActor> implements WsHandler {
             log.info("[{}]: [{}]-[{}]: ai_reply: speech:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
                     _clientIp, _sessionId, _uuid, userSpeechText, isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
             final ApiResponse<AIReplyVO> response =
-                    _scriptApi.ai_reply(_sessionId, userSpeechText,null, isAiSpeaking ? 1 : 0, aiContentId, speakingDuration);
+                    _scriptApi.ai_reply(_sessionId, payload.getIndex(), userSpeechText,null, isAiSpeaking ? 1 : 0, aiContentId, speakingDuration);
 
             if (response.getData() != null) {
                 if (response.getData().getUser_content_id() != null) {
