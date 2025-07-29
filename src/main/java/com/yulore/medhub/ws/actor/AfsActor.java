@@ -578,7 +578,7 @@ public final class AfsActor {
             final var getReply = callAiReplyWithSpeech(speechText, content_index);
             interactAsync(getReply)
                     .exceptionallyCompose(handleRetryable(()->interactAsync(getReply)))
-                    .thenCombine(interactAsync(callEslRef(speechText, content_index, esl_cost))
+                    .thenCombine(interactAsync(callEslSearch(speechText, content_index, esl_cost))
                                     .exceptionally(ex -> {
                                         log.warn("[{}] call_esl_ref_failed: {}", sessionId, ExceptionUtil.exception2detail(ex));
                                         return EslApi.emptyResponse();
@@ -601,16 +601,16 @@ public final class AfsActor {
         }
     }
 
-    private Supplier<EslApi.EslResponse<EslApi.Hit>> callEslRef(
+    private Supplier<EslApi.EslResponse<EslApi.Hit>> callEslSearch(
             final String speechText,
             final int content_index,
             final AtomicLong cost) {
         return ()-> {
             if (_eslApi != null && speechText.length() >=5) {
-                log.info("[{}] before search_ref: ({}) speech:{}", sessionId, content_index, speechText);
+                log.info("[{}] before search_text: ({}) speech:{}", sessionId, content_index, speechText);
                 final var startInMs = System.currentTimeMillis();
                 try {
-                    return _eslApi.search_ref(_esl_headers, speechText, 0.5f);
+                    return _eslApi.search_text(_esl_headers, speechText, 0.95f);
                 } finally {
                     cost.set(System.currentTimeMillis() - startInMs);
                     log.info("[{}] after search_ref: ({}) speech:{} => cost {} ms",

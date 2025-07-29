@@ -42,7 +42,7 @@ public class TestEslApi {
         // 4. 发送请求
         //final var response = eslApi.search_ref(eslHeaders, "我在上班", 0.5f);
         //log.info("eslApi.search_ref resp: {}", response);
-        final var response = eslApi.search_text(eslHeaders, "我在上班", 0.5f);
+        final var response = eslApi.search_text(eslHeaders, "你们哪来我手机的？", 0.95f);
         log.info("eslApi.search_ref resp: {}", response);
     }
 }
