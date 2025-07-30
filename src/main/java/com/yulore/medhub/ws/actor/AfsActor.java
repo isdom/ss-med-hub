@@ -580,7 +580,7 @@ public final class AfsActor {
                     .exceptionallyCompose(handleRetryable(()->interactAsync(getReply)))
                     .thenCombine(interactAsync(callEslSearch(speechText, content_index, esl_cost))
                                     .exceptionally(ex -> {
-                                        log.warn("[{}] call_esl_ref_failed: {}", sessionId, ExceptionUtil.exception2detail(ex));
+                                        log.warn("[{}] call_esl_text_failed: {}", sessionId, ExceptionUtil.exception2detail(ex));
                                         return EslApi.emptyResponse();
                                     }),
                             (ai_resp, esl_resp)->
