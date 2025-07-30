@@ -465,7 +465,7 @@ public final class AfsActor {
                                     "vars_start_timestamp=%d,playback_idx=%d,local_idx=%d";
     private boolean doPlayback(final AIReplyVO replyVO) {
         if (replyVO.getVoiceMode() == null || replyVO.getAi_content_id() == null) {
-            log.warn("[{}] doPlayback without_voice_mode_or_ai_content_id: [{}/{}], skip", sessionId, replyVO.getVoiceMode(), replyVO.getAi_content_id());
+            log.info("[{}] doPlayback without_voice_mode_or_ai_content_id: [{}/{}], skip", sessionId, replyVO.getVoiceMode(), replyVO.getAi_content_id());
             return false;
         }
 
