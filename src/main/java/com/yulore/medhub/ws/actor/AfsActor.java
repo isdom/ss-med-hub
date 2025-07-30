@@ -562,7 +562,7 @@ public final class AfsActor {
         final String speechText = payload.getResult();
         if (speechText == null || speechText.isEmpty()) {
             _emptyUserSpeechCount++;
-            log.warn("[{}] whenASRSentenceEnd: skip ai_reply => [{}] speech_is_empty, total empty count: {}",
+            log.info("[{}] whenASRSentenceEnd: skip ai_reply => [{}] speech_is_empty, total empty count: {}",
                     sessionId, payload.getIndex(), _emptyUserSpeechCount);
         } else {
             if (!isWelcomePlayed.get()) {
