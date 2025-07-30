@@ -613,7 +613,7 @@ public final class AfsActor {
                     return _eslApi.search_text(_esl_headers, speechText, 0.95f);
                 } finally {
                     cost.set(System.currentTimeMillis() - startInMs);
-                    log.info("[{}] after search_ref: ({}) speech:{} => cost {} ms",
+                    log.info("[{}] after search_text: ({}) speech:{} => cost {} ms",
                             sessionId, content_index, speechText, cost.longValue());
                 }
             } else {
