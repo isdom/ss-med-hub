@@ -465,7 +465,7 @@ public final class AfsActor {
                                     "vars_start_timestamp=%d,playback_idx=%d,local_idx=%d";
     private boolean doPlayback(final AIReplyVO replyVO) {
         if (replyVO.getVoiceMode() == null || replyVO.getAi_content_id() == null) {
-            log.warn("[{}] doPlayback without_voice_mode_or_ai_content_id: [{}/{}], skip", sessionId, replyVO.getVoiceMode(), replyVO.getAi_content_id());
+            log.info("[{}] doPlayback without_voice_mode_or_ai_content_id: [{}/{}], skip", sessionId, replyVO.getVoiceMode(), replyVO.getAi_content_id());
             return false;
         }
 
@@ -562,7 +562,7 @@ public final class AfsActor {
         final String speechText = payload.getResult();
         if (speechText == null || speechText.isEmpty()) {
             _emptyUserSpeechCount++;
-            log.warn("[{}] whenASRSentenceEnd: skip ai_reply => [{}] speech_is_empty, total empty count: {}",
+            log.info("[{}] whenASRSentenceEnd: skip ai_reply => [{}] speech_is_empty, total empty count: {}",
                     sessionId, payload.getIndex(), _emptyUserSpeechCount);
         } else {
             if (!isWelcomePlayed.get()) {
@@ -580,7 +580,7 @@ public final class AfsActor {
                     .exceptionallyCompose(handleRetryable(()->interactAsync(getReply)))
                     .thenCombine(interactAsync(callEslSearch(speechText, content_index, esl_cost))
                                     .exceptionally(ex -> {
-                                        log.warn("[{}] call_esl_ref_failed: {}", sessionId, ExceptionUtil.exception2detail(ex));
+                                        log.warn("[{}] call_esl_text_failed: {}", sessionId, ExceptionUtil.exception2detail(ex));
                                         return EslApi.emptyResponse();
                                     }),
                             (ai_resp, esl_resp)->
@@ -613,7 +613,7 @@ public final class AfsActor {
                     return _eslApi.search_text(_esl_headers, speechText, 0.95f);
                 } finally {
                     cost.set(System.currentTimeMillis() - startInMs);
-                    log.info("[{}] after search_ref: ({}) speech:{} => cost {} ms",
+                    log.info("[{}] after search_text: ({}) speech:{} => cost {} ms",
                             sessionId, content_index, speechText, cost.longValue());
                 }
             } else {
