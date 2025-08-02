@@ -13,15 +13,15 @@ import com.yulore.medhub.nls.ASRAgent;
 import com.yulore.medhub.nls.LimitAgent;
 import com.yulore.medhub.nls.TxASRAgent;
 import com.yulore.medhub.vo.*;
-import com.yulore.medhub.vo.cmd.VOStartTranscription;
-import com.yulore.medhub.ws.actor.ASRActor;
+//import com.yulore.medhub.vo.cmd.VOStartTranscription;
+//import com.yulore.medhub.ws.actor.ASRActor;
 import com.yulore.metric.MetricCustomized;
 import io.micrometer.core.instrument.Timer;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
-import org.java_websocket.WebSocket;
+//import org.java_websocket.WebSocket;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
@@ -46,6 +46,7 @@ class ASRServiceImpl implements ASRService {
     private Timer asr_started_timer;
     private Timer txasr_started_timer;
 
+    /*
     @Override
     public CompletionStage<Timer>  startTranscription(final ASRActor<?> actor, final VOStartTranscription vo, final WebSocket webSocket) {
         if (!actor.startTranscription()) {
@@ -85,6 +86,7 @@ class ASRServiceImpl implements ASRService {
 
         actor.stopAndCloseTranscriber();
     }
+    */
 
     @PostConstruct
     public void init() {
@@ -196,17 +198,11 @@ class ASRServiceImpl implements ASRService {
         }
     }
 
+    /*
     private CompletionStage<Void> startWithTxasr(final WebSocket webSocket, final ASRActor<?> actor, final VOStartTranscription vo) {
         final long startConnectingInMs = System.currentTimeMillis();
         return selectTxASRAgentAsync().thenCompose(agent -> {
             final CompletableFuture<Void> completableFuture = new CompletableFuture<>();
-            /*
-            if (ex != null) {
-                log.error("Failed to select TxASR agent", ex);
-                webSocket.close();
-                return;
-            }
-             */
 
             actor.lock();
 
@@ -360,12 +356,6 @@ class ASRServiceImpl implements ASRService {
         final long startConnectingInMs = System.currentTimeMillis();
         return selectASRAgentAsync().thenCompose( agent -> {
             final CompletableFuture<Void> completableFuture = new CompletableFuture<>();
-            /*
-            if (ex != null) {
-                log.error("Failed to select ASR agent", ex);
-                webSocket.close();
-                return;
-            }*/
 
             actor.lock();
 
@@ -425,6 +415,7 @@ class ASRServiceImpl implements ASRService {
             return completableFuture;
         });
     }
+    */
 
     private SpeechTranscriber buildSpeechTranscriber(final ASRAgent agent, final SpeechTranscriberListener listener) throws Exception {
         //创建实例、建立连接。
@@ -462,6 +453,7 @@ class ASRServiceImpl implements ASRService {
         return transcriber;
     }
 
+    /*
     private SpeechTranscriberListener buildTranscriberListener(final ASRActor<?> actor,
                                                                final CompletableFuture<Void> completableFuture,
                                                                final ASRAgent account,
@@ -545,6 +537,7 @@ class ASRServiceImpl implements ASRService {
             }
         };
     }
+    */
 
     @Override
     public CompletionStage<ASROperator> startTranscription(final ASRConsumer consumer) {
