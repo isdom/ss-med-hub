@@ -65,6 +65,9 @@ dependencies {
     implementation 'com.google.protobuf:protobuf-java:2.5.0'
     implementation 'com.aliyun.openservices:aliyun-log-logback-appender:0.1.27'
 
+    // https://mvnrepository.com/artifact/com.aliyun/dashvector-java-sdk
+    // implementation 'com.aliyun:dashvector-java-sdk:1.0.19.1'
+
     // https://mvnrepository.com/artifact/org.asynchttpclient/async-http-client
     //implementation 'org.asynchttpclient:async-http-client:3.0.0'
     // https://mvnrepository.com/artifact/org.asynchttpclient/async-http-client

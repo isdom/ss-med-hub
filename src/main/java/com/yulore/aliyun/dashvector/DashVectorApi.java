@@ -1,0 +1,72 @@
+package com.yulore.aliyun.dashvector;
+
+import feign.Request;
+import lombok.Builder;
+import lombok.Data;
+import lombok.ToString;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.context.annotation.Bean;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+
+@FeignClient(
+        value = "${dv.name}",
+        url = "${dv.api.url}",
+        configuration = DashVectorApi.Config.class
+)
+@ConditionalOnProperty(prefix = "dv.api", name = "url")
+public interface DashVectorApi {
+    @Data
+    @ToString
+    class Doc {
+        public String   id;
+        public float[]  vector;
+        public Map<String, Object> fields;
+        public float score;
+    }
+
+    @Data
+    @ToString
+    class DVResponse<OUTPUT> {
+        public int      code;
+        public String   message;
+        public String   request_id;
+        public OUTPUT[] output;
+    }
+
+    static <R> DVResponse<R> emptyResponse() {
+        final var resp = new DVResponse<R>();
+        resp.output = null;
+        return resp;
+    }
+
+    @Builder
+    @ToString
+    class QueryDocRequest {
+        public String id;
+        public String filter;
+        public float[] vector;
+        public String partition;
+    }
+
+    @RequestMapping(
+            value = "/v1/collections/{collection}/query",
+            method = RequestMethod.POST)
+    DVResponse<Doc> queryDoc(
+            @RequestHeader("dashvector-auth-token") String authToken,
+            @RequestHeader("Content-Type") String contentType,
+            @PathVariable("collection") String collection,
+            @RequestBody QueryDocRequest request);
+
+    // 配置类定义
+    class Config {
+        @Bean
+        public Request.Options options() {
+            // connect(200ms), read(500ms), followRedirects(true)
+            return new Request.Options(200, TimeUnit.MILLISECONDS,  500, TimeUnit.MILLISECONDS,true);
+        }
+    }
+}
