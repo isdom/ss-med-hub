@@ -1,6 +1,5 @@
 package com.yulore.aliyun.dashvector;
 
-import com.yulore.funasr.TestFunasr;
 import feign.Feign;
 import feign.Logger;
 import feign.jackson.JacksonDecoder;
@@ -16,7 +15,7 @@ public class TestDashVectorApi {
     public static void main(String[] args) throws Exception {
         final Properties props = new Properties();
 
-        try (var configStream = TestFunasr.class.getClassLoader().getResourceAsStream("test-dv.properties")) {
+        try (var configStream = TestDashVectorApi.class.getClassLoader().getResourceAsStream("test-dv.properties")) {
             props.load(configStream);
         } catch (Exception e) {
             throw new RuntimeException("加载配置文件失败，请确保 test-esl.properties 存在且路径正确", e);
