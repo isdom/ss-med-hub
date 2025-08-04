@@ -268,13 +268,13 @@ public final class AfsActor {
     private Supplier<ApiResponse<AIReplyVO>> callAiReplyWithWelcome(final String welcome) {
         return () -> {
             log.info("[{}] callAiReplyWithWelcome: before ai_reply => {}", sessionId, welcome);
-            return _scriptApi.ai_reply(sessionId, null, welcome, null, 0, null, 0);
+            return _scriptApi.ai_reply(sessionId, null, welcome, null, null, 0, null, 0);
         };
     }
 
     private Supplier<ApiResponse<AIReplyVO>> callAiReplyWithIdleTime(final long idleTime) {
         return () -> _scriptApi.ai_reply(
-                sessionId, null, null, idleTime, 0, null, 0);
+                sessionId, null, null, null, idleTime, 0, null, 0);
     }
 
     private Supplier<ApiResponse<AIReplyVO>> callAiReplyWithSpeech(final String speechText, final int content_index) {
@@ -284,7 +284,7 @@ public final class AfsActor {
             final int speakingDuration = currentSpeakingDuration();
             log.info("[{}] before ai_reply => ({}) speech:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
                     sessionId, content_index, speechText, isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
-            return _scriptApi.ai_reply(sessionId, content_index, speechText, null, isAiSpeaking ? 1 : 0, aiContentId, speakingDuration);
+            return _scriptApi.ai_reply(sessionId, content_index, speechText, null, null, isAiSpeaking ? 1 : 0, aiContentId, speakingDuration);
         };
     }
 

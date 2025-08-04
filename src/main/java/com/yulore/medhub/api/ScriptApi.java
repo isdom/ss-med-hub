@@ -37,6 +37,7 @@ public interface ScriptApi {
             @RequestParam("ccs_call_id")            String sessionId,
             @RequestParam("user_speech_idx")        Integer speechIdx,
             @RequestParam("user_speech_text")       String speechText,
+            @RequestParam("user_intent")            String intent,
             @RequestParam("idle_time")              Long idle_time, // in ms
             @RequestParam("is_speaking")            int is_speaking,
             @RequestParam("speaking_content_id")    String speaking_content_id,
