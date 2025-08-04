@@ -46,12 +46,32 @@ public class TestDashVectorApi {
             f[idx++] = (float)d;
         }
 
-        final var response = dvApi.queryDoc(
-                dvToken,
-                "application/json",
-                collection,
-                DashVectorApi.QueryDocRequest.builder().vector(f).partition(partition).build()
-        );
-        log.info("dvApi.queryDoc resp: {}", response);
+        {
+            final var response = dvApi.queryDoc(
+                    dvToken,
+                    "application/json",
+                    collection,
+                    DashVectorApi.QueryDocRequest.builder().vector(f).partition(partition).build()
+            );
+            log.info("dvApi.queryDoc resp: {}", response);
+        }
+
+        {
+            final var response = dvApi.queryDocGroupBy(
+                    dvToken,
+                    "application/json",
+                    collection,
+                    DashVectorApi.QueryDocGroupByRequest.builder()
+                            .vector(f)
+                            .partition(partition)
+                            .group_by_field("intention_code")
+                            .group_count(2)
+                            .group_topk(1)
+                            .filter("is_deleted = false and intention_code != ''")
+                            .build()
+            );
+            log.info("dvApi.queryDocGroupBy resp: {}", response);
+        }
+
     }
 }

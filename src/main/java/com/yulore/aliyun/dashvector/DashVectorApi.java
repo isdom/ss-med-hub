@@ -47,11 +47,12 @@ public interface DashVectorApi {
     @ToString
     class QueryDocRequest {
         public String id;
-        public String filter;
         public float[] vector;
+        public String filter;
         public String partition;
     }
 
+    // REF: https://help.aliyun.com/document_detail/2510319.html
     @RequestMapping(
             value = "/v1/collections/{collection}/query",
             method = RequestMethod.POST)
@@ -60,6 +61,36 @@ public interface DashVectorApi {
             @RequestHeader("Content-Type") String contentType,
             @PathVariable("collection") String collection,
             @RequestBody QueryDocRequest request);
+
+    @Builder
+    @ToString
+    class QueryDocGroupByRequest {
+        public String id;
+        public float[] vector;
+        public String group_by_field;
+        public Integer group_topk;
+        public Integer group_count;
+        public String filter;
+        public String partition;
+        public Boolean include_vector;
+    }
+
+    @Data
+    @ToString
+    class Group {
+        public String   group_id;
+        public Doc[]    docs;
+    }
+
+    // REF: https://help.aliyun.com/document_detail/2715274.html
+    @RequestMapping(
+            value = "/v1/collections/{collection}/query_group_by",
+            method = RequestMethod.POST)
+    DVResponse<Group> queryDocGroupBy(
+            @RequestHeader("dashvector-auth-token") String authToken,
+            @RequestHeader("Content-Type") String contentType,
+            @PathVariable("collection") String collection,
+            @RequestBody QueryDocGroupByRequest request);
 
     // 配置类定义
     class Config {
