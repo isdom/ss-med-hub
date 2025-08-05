@@ -92,6 +92,15 @@ public interface DashVectorApi {
             @PathVariable("collection") String collection,
             @RequestBody QueryDocGroupByRequest request);
 
+    // REF: https://help.aliyun.com/document_detail/2510328.html
+    @RequestMapping(
+            value = "/v1/collections/{collection}/partitions",
+            method = RequestMethod.GET)
+    DVResponse<Group> getPartitions(
+            @RequestHeader("dashvector-auth-token") String authToken,
+            @RequestHeader("Content-Type") String contentType,
+            @PathVariable("collection") String collection);
+
     // 配置类定义
     class Config {
         @Bean
