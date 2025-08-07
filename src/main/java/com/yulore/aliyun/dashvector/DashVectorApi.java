@@ -109,6 +109,15 @@ public interface DashVectorApi {
             @RequestHeader("dashvector-auth-token") String authToken,
             @RequestHeader("Content-Type") String contentType);
 
+    // REF: https://help.aliyun.com/document_detail/2510294.html
+    @RequestMapping(
+            value = "/v1/collections/{collection}",
+            method = RequestMethod.GET)
+    DVResponse<String> descCollection(
+            @RequestHeader("dashvector-auth-token") String authToken,
+            @RequestHeader("Content-Type") String contentType,
+            @PathVariable("collection") String collection);
+
     // 配置类定义
     class Config {
         @Bean
