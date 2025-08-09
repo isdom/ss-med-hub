@@ -113,10 +113,10 @@ public interface DashVectorApi {
     @ToString
     class CollectionMeta {
         public String   name;
-        public int dimension;
-        public String dtype;
-        public String metric;
-        public String status;
+        public int      dimension;
+        public String   dtype;
+        public String   metric;
+        public String   status;
         public Map<String, String> fields_schema;
         public Map<String, String> partitions;
     }
@@ -126,6 +126,29 @@ public interface DashVectorApi {
             value = "/v1/collections/{collection}",
             method = RequestMethod.GET)
     DVResponse<CollectionMeta> descCollection(
+            @RequestHeader("dashvector-auth-token") String authToken,
+            @RequestHeader("Content-Type") String contentType,
+            @PathVariable("collection") String collection);
+
+    @Data
+    @ToString
+    class PartitionStats {
+        public int      total_doc_count;
+    }
+
+    @Data
+    @ToString
+    class CollectionStats {
+        public int      total_doc_count;
+        public float    index_completeness;
+        public Map<String, PartitionStats> partitions;
+    }
+
+    // REF: https://help.aliyun.com/document_detail/2510304.html
+    @RequestMapping(
+            value = "/v1/collections/{collection}/stats",
+            method = RequestMethod.GET)
+    DVResponse<CollectionStats> statsCollection(
             @RequestHeader("dashvector-auth-token") String authToken,
             @RequestHeader("Content-Type") String contentType,
             @PathVariable("collection") String collection);
