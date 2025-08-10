@@ -25,7 +25,7 @@ public interface DashVectorApi {
         public String   id;
         public float[]  vector;
         public Map<String, Object> fields;
-        public float score;
+        public Float score;
     }
 
     @Data
@@ -42,6 +42,23 @@ public interface DashVectorApi {
         resp.output = null;
         return resp;
     }
+
+    @Builder
+    @ToString
+    class InsertDocRequest {
+        public Doc[] docs;
+        public String partition;
+    }
+
+    // REF: https://help.aliyun.com/document_detail/2510317.html
+    @RequestMapping(
+            value = "/v1/collections/{collection}/docs",
+            method = RequestMethod.POST)
+    DVResponse<String> insertDoc(
+            @RequestHeader("dashvector-auth-token") String authToken,
+            @RequestHeader("Content-Type") String contentType,
+            @PathVariable("collection") String collection,
+            @RequestBody InsertDocRequest request);
 
     @Builder
     @ToString
