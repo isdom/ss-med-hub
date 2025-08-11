@@ -50,11 +50,20 @@ public interface DashVectorApi {
         public String partition;
     }
 
+    @Data
+    @ToString
+    class DocOpResult {
+        public String   doc_op;
+        public String   id;
+        public int      code;
+        public String   message;
+    }
+
     // REF: https://help.aliyun.com/document_detail/2510317.html
     @RequestMapping(
             value = "/v1/collections/{collection}/docs",
             method = RequestMethod.POST)
-    DVResponse<String> insertDoc(
+    DVResponse<DocOpResult> insertDoc(
             @RequestHeader("dashvector-auth-token") String authToken,
             @RequestHeader("Content-Type") String contentType,
             @PathVariable("collection") String collection,
