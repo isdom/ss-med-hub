@@ -37,7 +37,6 @@ public interface ScriptApi {
             @RequestParam("ccs_call_id")            String sessionId,
             @RequestParam("user_speech_idx")        Integer speechIdx,
             @RequestParam("user_speech_text")       String speechText,
-            @RequestParam("user_intent")            String intent,
             @RequestParam("idle_time")              Long idle_time, // in ms
             @RequestParam("is_speaking")            int is_speaking,
             @RequestParam("speaking_content_id")    String speaking_content_id,
@@ -65,23 +64,34 @@ public interface ScriptApi {
             @RequestParam("sentence_end_event_time") long end_event_time
     );
 
+    @Data
+    @ToString
+    public class Text2IntentResult {
+        private String intentCode;
+        private String traceId;
+    }
+
     @RequestMapping(value = "${script.api.ai_t2i}", method = RequestMethod.GET)
-    ApiResponse<AIReplyVO> ai_t2i(
-            @RequestParam("session_id")            String sessionId,
+    ApiResponse<Text2IntentResult> ai_t2i(
+            @RequestParam("session_id")             String sessionId,
             @RequestParam("user_speech_idx")        Integer speechIdx,
             @RequestParam("user_speech_text")       String speechText
     );
 
-    @RequestMapping(value = "${script.api.ai_i2r}", method = RequestMethod.GET)
-    ApiResponse<AIReplyVO> ai_i2r(
-            @RequestParam("session_id")             String sessionId,
-            @RequestParam("user_speech_idx")        Integer speechIdx,
-            @RequestParam("user_speech_text")       String speechText,
-            @RequestParam("user_intent")            String intent,
-            @RequestParam("is_speaking")            int is_speaking,
-            @RequestParam("speaking_content_id")    String speaking_content_id,
-            @RequestParam("speaking_duration_ms")   int speaking_duration_ms
-    );
+    @Data
+    @ToString
+    public class Intent2ReplyRequest {
+        private String  sessionId;
+        private Integer speechIdx;
+        private String  speechText;
+        private String  intent;
+        private Integer isSpeaking;
+        private Long    speakingContentId;
+        private Integer speakingDurationMs;
+    }
+
+    @RequestMapping(value = "${script.api.ai_i2r}", method = RequestMethod.POST)
+    ApiResponse<AIReplyVO> ai_i2r(@RequestBody Intent2ReplyRequest request);
 
     @Builder
     @Data
