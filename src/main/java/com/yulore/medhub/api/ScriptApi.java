@@ -65,25 +65,32 @@ public interface ScriptApi {
     );
 
     @Data
+    @Builder
+    @ToString
+    public class Text2IntentRequest {
+        private String  sessionId;
+        private Integer speechIdx;
+        private String  speechText;
+    }
+
+    @Data
     @ToString
     public class Text2IntentResult {
         private String intentCode;
         private String traceId;
     }
 
-    @RequestMapping(value = "${script.api.ai_t2i}", method = RequestMethod.GET)
-    ApiResponse<Text2IntentResult> ai_t2i(
-            @RequestParam("session_id")             String sessionId,
-            @RequestParam("user_speech_idx")        Integer speechIdx,
-            @RequestParam("user_speech_text")       String speechText
-    );
+    @RequestMapping(value = "${script.api.ai_t2i}", method = RequestMethod.POST)
+    ApiResponse<Text2IntentResult> ai_t2i(@RequestBody Text2IntentRequest request);
 
     @Data
+    @Builder
     @ToString
     public class Intent2ReplyRequest {
         private String  sessionId;
         private Integer speechIdx;
         private String  speechText;
+        private String  traceId;
         private String  intent;
         private Integer isSpeaking;
         private Long    speakingContentId;

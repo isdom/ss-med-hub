@@ -22,6 +22,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Scope;
@@ -100,6 +101,9 @@ public final class AfsActor {
 
     @Value("#{${esl.api.headers}}")
     private Map<String,String> _esl_headers;
+
+    @Autowired
+    private IntentConfig intentConfig;
 
     @Autowired(required = false)
     private EslApi _eslApi;
@@ -268,23 +272,58 @@ public final class AfsActor {
     private Supplier<ApiResponse<AIReplyVO>> callAiReplyWithWelcome(final String welcome) {
         return () -> {
             log.info("[{}] callAiReplyWithWelcome: before ai_reply => {}", sessionId, welcome);
-            return _scriptApi.ai_reply(sessionId, null, welcome, null, null, 0, null, 0);
+            return _scriptApi.ai_reply(sessionId, null, welcome, null, 0, null, 0);
         };
     }
 
     private Supplier<ApiResponse<AIReplyVO>> callAiReplyWithIdleTime(final long idleTime) {
         return () -> _scriptApi.ai_reply(
-                sessionId, null, null, null, idleTime, 0, null, 0);
+                sessionId, null, null, idleTime, 0, null, 0);
     }
 
-    private Supplier<ApiResponse<AIReplyVO>> callAiReplyWithSpeech(final String speechText, final int content_index) {
+    private Supplier<ApiResponse<AIReplyVO>> callAiReplyWithSpeech(final String intent, final String speechText, final int content_index) {
         return ()-> {
             final boolean isAiSpeaking = isAiSpeaking();
             final String aiContentId = currentAiContentId();
             final int speakingDuration = currentSpeakingDuration();
             log.info("[{}] before ai_reply => ({}) speech:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
                     sessionId, content_index, speechText, isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
-            return _scriptApi.ai_reply(sessionId, content_index, speechText, null, null, isAiSpeaking ? 1 : 0, aiContentId, speakingDuration);
+            return _scriptApi.ai_reply(sessionId, content_index, speechText, null, isAiSpeaking ? 1 : 0, aiContentId, speakingDuration);
+        };
+    }
+
+    private Supplier<ApiResponse<ScriptApi.Text2IntentResult>> callSpeech2Intent(final String speechText, final int content_index) {
+        return ()-> {
+            log.info("[{}] before ai_t2i => ({}) speech:{}", sessionId, content_index, speechText);
+            return _scriptApi.ai_t2i(ScriptApi.Text2IntentRequest.builder()
+                    .speechText(speechText)
+                    .speechIdx(content_index)
+                    .sessionId(sessionId).build());
+        };
+    }
+
+    private Supplier<ApiResponse<AIReplyVO>> callIntent2Reply(
+            final String traceId,
+            final String intent,
+            final String speechText,
+            final int content_index) {
+        return ()-> {
+            final boolean isAiSpeaking = isAiSpeaking();
+            final String aiContentId = currentAiContentId();
+            final int speakingDuration = currentSpeakingDuration();
+            log.info("[{}] before ai_i2r => ({}) speech:{}/traceId:{}/intent:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
+                    sessionId, content_index, speechText, traceId, intent,
+                    isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
+            return _scriptApi.ai_i2r(ScriptApi.Intent2ReplyRequest.builder()
+                    .sessionId(sessionId)
+                    .traceId(traceId)
+                    .intent(intent)
+                    .speechIdx(content_index)
+                    .speechText(speechText)
+                    .isSpeaking(isAiSpeaking ? 1 : 0)
+                    .speakingContentId(Long.parseLong(aiContentId))
+                    .speakingDurationMs(speakingDuration)
+                    .build());
         };
     }
 
@@ -549,12 +588,6 @@ public final class AfsActor {
         }
     }
 
-    @Builder
-    static class AllResp {
-        ApiResponse<AIReplyVO> ai_resp;
-        EslApi.EslResponse<EslApi.Hit> esl_resp;
-    }
-
     private void whenASRSentenceEnd(final PayloadSentenceEnd payload, final long sentenceEndInMs) {
         _isUserSpeak.set(false);
         _idleStartInMs.set(sentenceEndInMs);
@@ -575,30 +608,64 @@ public final class AfsActor {
             final var iterationIdx = addIteration(speechText);
             log.info("[{}] whenASRSentenceEnd: addIteration => {}", sessionId, iterationIdx);
             final var esl_cost = new AtomicLong(0);
-            final var getReply = callAiReplyWithSpeech(speechText, content_index);
-            interactAsync(getReply)
-                    .exceptionallyCompose(handleRetryable(()->interactAsync(getReply)))
-                    .thenCombine(interactAsync(callEslSearch(speechText, content_index, esl_cost))
-                                    .exceptionally(ex -> {
-                                        log.warn("[{}] call_esl_text_failed: {}", sessionId, ExceptionUtil.exception2detail(ex));
-                                        return EslApi.emptyResponse();
-                                    }),
-                            (ai_resp, esl_resp)->
-                                    AllResp.builder().ai_resp(ai_resp).esl_resp(esl_resp).build())
-                    .whenCompleteAsync(handleAiReply(content_index, payload), executor)
-                    .whenComplete((ignored, ex)-> {
-                        completeIteration(iterationIdx);
-                        if (ex == null) {
-                            log.info("[{}] whenASRSentenceEnd: completeIteration({})", sessionId, iterationIdx);
-                        } else {
-                            log.warn("[{}] whenASRSentenceEnd: completeIteration_with_ex({}, {})",
-                                    sessionId, iterationIdx, ExceptionUtil.exception2detail(ex));
-                        }
-                    })
-                    .whenComplete(doReport(content_index, payload, sentenceEndInMs))
-                    .whenComplete(reportEsl(content_index, esl_cost))
+            final AtomicReference<EslApi.EslResponse<EslApi.Hit>> esl_resp_ref = new AtomicReference<>(null);
+            final AtomicReference<String> t2i_intent = new AtomicReference<>(null);
+            final var getIntent = callSpeech2Intent(speechText, content_index);
+            interactAsync(getIntent).exceptionallyCompose(handleRetryable(()->interactAsync(getIntent)))
+                .thenCombine(interactAsync(callEslSearch(speechText, content_index, esl_cost))
+                            .exceptionally(handleEslSearchException()),
+                (intent_resp, esl_resp) -> Pair.of(intent_resp, esl_resp))
+            .thenComposeAsync(script_and_esl->{
+                final var t2i_resp = script_and_esl.getLeft();
+                final var esl_resp = script_and_esl.getRight();
+                esl_resp_ref.set(esl_resp);
+                String final_intent = null;
+                String esl_intent = null;
+                var t2i_result = new ScriptApi.Text2IntentResult();
+                if (esl_resp.result != null && esl_resp.result.length > 0) {
+                    // hit esl
+                    esl_intent = esl_resp.result[0].es.intentionCode;
+                }
+                if (t2i_resp != null && t2i_resp.getData() != null) {
+                    t2i_result = t2i_resp.getData();
+                    t2i_intent.set(t2i_result.getIntentCode());
+                }
+
+                if (t2i_result.getIntentCode() != null
+                    && (intentConfig.getRing0().contains(t2i_result.getIntentCode())
+                        || t2i_result.getIntentCode().startsWith(intentConfig.getPrefix()))
+                ) {
+                    // using t2i's intent
+                    final_intent = t2i_result.getIntentCode();
+                } else if (esl_intent != null) {
+                    final_intent = esl_intent;
+                } else {
+                    final_intent = t2i_result.getIntentCode();
+                }
+                final var getReply = callIntent2Reply(t2i_result.getTraceId(), final_intent, speechText, content_index);
+                return interactAsync(getReply).exceptionallyCompose(handleRetryable(()->interactAsync(getReply)));
+            }, executor)
+            .whenComplete(handleAiReply(content_index, payload))
+            .whenComplete((ignored, ex)-> {
+                completeIteration(iterationIdx);
+                if (ex == null) {
+                    log.info("[{}] whenASRSentenceEnd: completeIteration({})", sessionId, iterationIdx);
+                } else {
+                    log.warn("[{}] whenASRSentenceEnd: completeIteration_with_ex({}, {})",
+                            sessionId, iterationIdx, ExceptionUtil.exception2detail(ex));
+                }
+            })
+            .whenComplete(reportUserSpeech(content_index, payload, sentenceEndInMs))
+            .whenComplete(reportEsl(t2i_intent.get(), esl_resp_ref.get(), content_index, esl_cost))
             ;
         }
+    }
+
+    private Function<Throwable, EslApi.EslResponse<EslApi.Hit>> handleEslSearchException() {
+        return ex -> {
+            log.warn("[{}] call_esl_text_failed: {}", sessionId, ExceptionUtil.exception2detail(ex));
+            return EslApi.emptyResponse();
+        };
     }
 
     private Supplier<EslApi.EslResponse<EslApi.Hit>> callEslSearch(
@@ -623,10 +690,10 @@ public final class AfsActor {
         };
     }
 
-    private BiConsumer<AllResp, Throwable>
+    private BiConsumer<ApiResponse<AIReplyVO>, Throwable>
     handleAiReply(final int content_index,
                   final PayloadSentenceEnd payload) {
-        return (allResp, ex) -> {
+        return (ai_resp, ex) -> {
             if (ex != null) {
                 log.warn("[{}] onAiReply: ai_reply error, detail: {}", sessionId, ExceptionUtil.exception2detail(ex));
                 return;
@@ -634,19 +701,18 @@ public final class AfsActor {
 
             if (_userContentIndex.get() != content_index) {
                 log.warn("[{}] onAiReply: ai_reply's user_content_idx:{} != current_user_content_idx:{}, skip response: {}",
-                        sessionId, content_index, _userContentIndex.get(), allResp.ai_resp);
+                        sessionId, content_index, _userContentIndex.get(), ai_resp);
                 return;
             }
 
-            final var response = allResp.ai_resp;
             final boolean isAiSpeaking = isAiSpeaking();
 
-            log.info("[{}] onAiReply: ai_reply ({})", sessionId, response);
-            if (response.getData() != null) {
-                if (!doPlayback(response.getData()))  {
-                    if (response.getData().getHangup() == 1) {
+            log.info("[{}] onAiReply: ai_reply ({})", sessionId, ai_resp);
+            if (ai_resp.getData() != null) {
+                if (!doPlayback(ai_resp.getData()))  {
+                    if (ai_resp.getData().getHangup() == 1) {
                         doHangup();
-                        log.info("[{}] onAiReply : hangup ({}) for ai_reply ({})", sessionId, sessionId, response.getData());
+                        log.info("[{}] onAiReply : hangup ({}) for ai_reply ({})", sessionId, sessionId, ai_resp.getData());
                     }
                     if (isAiSpeaking && _currentPlaybackPaused.compareAndSet(true, false) ) {
                         sendEvent.accept("FSResumePlayback", null /*new PayloadFSChangePlayback(_uuid, _currentPlaybackId.get())*/);
@@ -660,14 +726,13 @@ public final class AfsActor {
         };
     }
 
-    private BiConsumer<AllResp, Throwable>
-    doReport(final int content_index,
-             final PayloadSentenceEnd payload,
-             final long sentenceEndInMs) {
-        return (allResp, ex) -> {
-            final var response = allResp.ai_resp;
-            final var userContentId = (response != null && response.getData() != null && response.getData().getUser_content_id() != null)
-                    ? response.getData().getUser_content_id().toString() : null;
+    private BiConsumer<ApiResponse<AIReplyVO>, Throwable>
+    reportUserSpeech(final int content_index,
+                     final PayloadSentenceEnd payload,
+                     final long sentenceEndInMs) {
+        return (ai_resp, ex) -> {
+            final var userContentId = (ai_resp != null && ai_resp.getData() != null && ai_resp.getData().getUser_content_id() != null)
+                    ? ai_resp.getData().getUser_content_id().toString() : null;
             if (userContentId == null) {
                 log.warn("[{}] onAiReply: ai_reply({}) => user_content_id_is_null", sessionId, payload.getResult());
             }
@@ -676,15 +741,17 @@ public final class AfsActor {
         };
     }
 
-    private BiConsumer<AllResp, Throwable>
-    reportEsl(final int content_index, final AtomicLong cost) {
-        return (allResp, ex) -> {
-            final var ai_resp = allResp.ai_resp;
+    private BiConsumer<ApiResponse<AIReplyVO>, Throwable>
+    reportEsl(final String t2i_intent,
+              final EslApi.EslResponse<EslApi.Hit> esl_resp,
+              final int content_index,
+              final AtomicLong cost) {
+        return (ai_resp, ex) -> {
             final var userContentId = (ai_resp != null && ai_resp.getData() != null && ai_resp.getData().getUser_content_id() != null)
                     ? ai_resp.getData().getUser_content_id().toString() : null;
-            final var user_qa_id = (ai_resp != null && ai_resp.getData() != null) ? ai_resp.getData().getQa_id() : null;
+            //final var user_qa_id = (ai_resp != null && ai_resp.getData() != null) ? ai_resp.getData().getQa_id() : null;
 
-            final var esl_resp = allResp.esl_resp;
+            //final var esl_resp = allResp.esl_resp;
             log.info("[{}]: ESL Response: {}, cost {} ms", sessionId, esl_resp, cost.longValue());
             if (esl_resp.getResult() != null && esl_resp.getResult().length > 0) {
                 final var ess = new ScriptApi.ExampleSentence[esl_resp.getResult().length];
@@ -704,7 +771,7 @@ public final class AfsActor {
                         .session_id(sessionId)
                         .content_id(userContentId)
                         .content_index(content_index)
-                        .qa_id(user_qa_id)
+                        .qa_id(t2i_intent/*user_qa_id*/)
                         .es(ess)
                         .embedding_cost(esl_resp.dev.embeddingDuration)
                         .db_cost(esl_resp.dev.dbExecutionDuration)
