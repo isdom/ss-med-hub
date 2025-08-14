@@ -647,7 +647,7 @@ public final class AfsActor {
                 final var getReply = callIntent2Reply(t2i_result.getTraceId(), final_intent, speechText, content_index);
                 return interactAsync(getReply).exceptionallyCompose(handleRetryable(()->interactAsync(getReply)));
             }, executor)
-            .whenComplete(handleAiReply(content_index, payload))
+            .whenCompleteAsync(handleAiReply(content_index, payload), executor)
             .whenComplete((ignored, ex)-> {
                 completeIteration(iterationIdx);
                 if (ex == null) {
