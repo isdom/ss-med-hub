@@ -281,7 +281,7 @@ public final class AfsActor {
                 sessionId, null, null, idleTime, 0, null, 0);
     }
 
-    private Supplier<ApiResponse<AIReplyVO>> callAiReplyWithSpeech(final String intent, final String speechText, final int content_index) {
+    private Supplier<ApiResponse<AIReplyVO>> callAiReplyWithSpeech(final String speechText, final int content_index) {
         return ()-> {
             final boolean isAiSpeaking = isAiSpeaking();
             final String aiContentId = currentAiContentId();
@@ -618,6 +618,8 @@ public final class AfsActor {
             .thenComposeAsync(script_and_esl->{
                 final var t2i_resp = script_and_esl.getLeft();
                 final var esl_resp = script_and_esl.getRight();
+                log.info("[{}] whenASRSentenceEnd script_and_esl done with {}\nai_t2i resp: {}\nesl_search resp: {}",
+                        sessionId, intentConfig, t2i_resp, esl_resp);
                 esl_resp_ref.set(esl_resp);
                 String final_intent = null;
                 String esl_intent = null;
