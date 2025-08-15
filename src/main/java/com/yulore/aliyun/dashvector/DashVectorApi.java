@@ -118,6 +118,12 @@ public interface DashVectorApi {
             @PathVariable("collection") String collection,
             @RequestBody QueryDocGroupByRequest request);
 
+    // REF: https://help.aliyun.com/document_detail/2510324.html
+    @RequestMapping(
+            value = "/v1/collections/{collection}/docs",
+            method = RequestMethod.GET)
+    DVResponse<Map<String, Doc>> fetch();
+
     // REF: https://help.aliyun.com/document_detail/2510328.html
     @RequestMapping(
             value = "/v1/collections/{collection}/partitions",
