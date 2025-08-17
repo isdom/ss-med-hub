@@ -122,7 +122,12 @@ public interface DashVectorApi {
     @RequestMapping(
             value = "/v1/collections/{collection}/docs",
             method = RequestMethod.GET)
-    DVResponse<Map<String, Doc>> fetch();
+    DVResponse<Map<String, Doc>> fetch(
+            @RequestHeader("dashvector-auth-token") String authToken,
+            @RequestHeader("Content-Type") String contentType,
+            @PathVariable("collection") String collection,
+            @RequestParam("ids") String ids,
+            @RequestParam("partition") String partition);
 
     // REF: https://help.aliyun.com/document_detail/2510328.html
     @RequestMapping(
