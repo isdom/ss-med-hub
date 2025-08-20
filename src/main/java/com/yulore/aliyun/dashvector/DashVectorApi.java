@@ -81,6 +81,24 @@ public interface DashVectorApi {
 
     @Builder
     @ToString
+    class DeleteDocRequest {
+        public String[] ids;
+        public String   partition;
+        public Boolean  delete_all;
+    }
+
+    // REF: https://help.aliyun.com/document_detail/2510325.html
+    @RequestMapping(
+            value = "/v1/collections/{collection}/docs",
+            method = RequestMethod.DELETE)
+    DVResponse<DocOpResult[]> deleteDoc(
+            @RequestHeader("dashvector-auth-token") String authToken,
+            @RequestHeader("Content-Type") String contentType,
+            @PathVariable("collection") String collection,
+            @RequestBody DeleteDocRequest request);
+
+    @Builder
+    @ToString
     class QueryDocRequest {
         public String id;
         public float[] vector;
