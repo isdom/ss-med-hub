@@ -107,6 +107,9 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                 public BiConsumer<String, Object> sendEvent() {
                     return (name,obj)-> WSEventVO.sendEvent(ws, name, obj);
                 }
+                public AfsActor.MatchEsl matchEsl() {
+                    return null;
+                }
             });
             addActor(vo.localIdx, actor);
             actorCount.incrementAndGet();

@@ -49,6 +49,7 @@ public final class AfsActor {
         public String local_vars;
     }
     public interface Reply2Rms extends BiFunction<AIReplyVO, Supplier<String>, RmsSource> {}
+    public interface MatchEsl extends Function<String, EslApi.EslResponse<EslApi.Hit>> {}
 
     public interface Context {
         int localIdx();
@@ -60,6 +61,7 @@ public final class AfsActor {
         Executor executor();
         Reply2Rms reply2rms();
         BiConsumer<String, Object> sendEvent();
+        MatchEsl matchEsl();
     }
 
     public AfsActor(final Context ctx) {
@@ -72,6 +74,7 @@ public final class AfsActor {
         this.executor = ctx.executor();
         this.reply2rms = ctx.reply2rms();
         this.sendEvent = ctx.sendEvent();
+        this._matchEsl = ctx.matchEsl();
     }
 
     public int localIdx() {
@@ -105,8 +108,9 @@ public final class AfsActor {
     @Autowired
     private IntentConfig intentConfig;
 
-    @Autowired(required = false)
-    private EslApi _eslApi;
+    //@Autowired(required = false)
+    //private EslApi _eslApi;
+    final private MatchEsl _matchEsl;
 
     private final AtomicReference<ASROperator> asrRef = new AtomicReference<>(null);
     private final AtomicBoolean isClosed = new AtomicBoolean(false);
@@ -115,7 +119,7 @@ public final class AfsActor {
     private final Map<Integer, String> _pendingIteration = new HashMap<>();
 
     public void start() {
-        log.info("[{}] start with ScriptApi({})/EslApi({})", sessionId, _scriptApi, _eslApi);
+        log.info("[{}] start with ScriptApi({})/matchEsl({})", sessionId, _scriptApi, _matchEsl);
         _asrService.startTranscription(new ASRConsumer() {
             @Override
             public void onSentenceBegin(PayloadSentenceBegin payload) {
@@ -607,46 +611,7 @@ public final class AfsActor {
             _userContentIndex.set(content_index);
             final var iterationIdx = addIteration(speechText);
             log.info("[{}] whenASRSentenceEnd: addIteration => {}", sessionId, iterationIdx);
-            final var esl_cost = new AtomicLong(0);
-            final AtomicReference<EslApi.EslResponse<EslApi.Hit>> esl_resp_ref = new AtomicReference<>(null);
-            final AtomicReference<String> t2i_intent_ref = new AtomicReference<>(null);
-            final var getIntent = callSpeech2Intent(speechText, content_index);
-            interactAsync(getIntent).exceptionallyCompose(handleRetryable(()->interactAsync(getIntent)))
-                .thenCombine(interactAsync(callEslSearch(speechText, content_index, esl_cost))
-                            .exceptionally(handleEslSearchException()),
-                (intent_resp, esl_resp) -> Pair.of(intent_resp, esl_resp))
-            .thenComposeAsync(script_and_esl->{
-                final var t2i_resp = script_and_esl.getLeft();
-                final var esl_resp = script_and_esl.getRight();
-                log.info("[{}] whenASRSentenceEnd script_and_esl done with {}\nai_t2i resp: {}\nesl_search resp: {}",
-                        sessionId, intentConfig, t2i_resp, esl_resp);
-                esl_resp_ref.set(esl_resp);
-                String final_intent = null;
-                String esl_intent = null;
-                var t2i_result = new ScriptApi.Text2IntentResult();
-                if (esl_resp.result != null && esl_resp.result.length > 0) {
-                    // hit esl
-                    esl_intent = esl_resp.result[0].es.intentionCode;
-                }
-                if (t2i_resp != null && t2i_resp.getData() != null) {
-                    t2i_result = t2i_resp.getData();
-                    t2i_intent_ref.set(t2i_result.getIntentCode());
-                }
-
-                if (t2i_result.getIntentCode() != null
-                    && (intentConfig.getRing0().contains(t2i_result.getIntentCode())
-                        || t2i_result.getIntentCode().startsWith(intentConfig.getPrefix()))
-                ) {
-                    // using t2i's intent
-                    final_intent = t2i_result.getIntentCode();
-                } else if (esl_intent != null) {
-                    final_intent = esl_intent;
-                } else {
-                    final_intent = t2i_result.getIntentCode();
-                }
-                final var getReply = callIntent2Reply(t2i_result.getTraceId(), final_intent, speechText, content_index);
-                return interactAsync(getReply).exceptionallyCompose(handleRetryable(()->interactAsync(getReply)));
-            }, executor)
+            speech2reply(speechText, content_index)
             .whenCompleteAsync(handleAiReply(content_index, payload), executor)
             .whenComplete((ignored, ex)-> {
                 completeIteration(iterationIdx);
@@ -658,9 +623,62 @@ public final class AfsActor {
                 }
             })
             .whenComplete(reportUserSpeech(content_index, payload, sentenceEndInMs))
-            .whenComplete(reportEsl(t2i_intent_ref, esl_resp_ref, content_index, esl_cost))
             ;
         }
+    }
+
+    private CompletionStage<ApiResponse<AIReplyVO>> speech2reply(final String speechText, final int content_index) {
+        return _matchEsl != null ? scriptAndEslMixed(speechText, content_index) : scriptOnly(speechText, content_index);
+    }
+
+    private CompletionStage<ApiResponse<AIReplyVO>> scriptOnly(final String speechText, final int content_index) {
+        final var getReply = callAiReplyWithSpeech(speechText, content_index);
+        return interactAsync(getReply).exceptionallyCompose(handleRetryable(()->interactAsync(getReply)));
+    }
+
+    private CompletionStage<ApiResponse<AIReplyVO>> scriptAndEslMixed(final String speechText, final int content_index) {
+        final var esl_cost = new AtomicLong(0);
+        final AtomicReference<EslApi.EslResponse<EslApi.Hit>> esl_resp_ref = new AtomicReference<>(null);
+        final AtomicReference<String> t2i_intent_ref = new AtomicReference<>(null);
+        final var getIntent = callSpeech2Intent(speechText, content_index);
+
+        return interactAsync(getIntent).exceptionallyCompose(handleRetryable(()->interactAsync(getIntent)))
+                .thenCombine(interactAsync(callMatchEsl(speechText, content_index, esl_cost))
+                                .exceptionally(handleEslSearchException()),
+                        (intent_resp, esl_resp) -> Pair.of(intent_resp, esl_resp))
+                .thenComposeAsync(script_and_esl->{
+                    final var t2i_resp = script_and_esl.getLeft();
+                    final var esl_resp = script_and_esl.getRight();
+                    log.info("[{}] whenASRSentenceEnd script_and_esl done with {}\nai_t2i resp: {}\nesl_search resp: {}",
+                            sessionId, intentConfig, t2i_resp, esl_resp);
+                    esl_resp_ref.set(esl_resp);
+                    String final_intent = null;
+                    String esl_intent = null;
+                    var t2i_result = new ScriptApi.Text2IntentResult();
+                    if (esl_resp.result != null && esl_resp.result.length > 0) {
+                        // hit esl
+                        esl_intent = esl_resp.result[0].es.intentionCode;
+                    }
+                    if (t2i_resp != null && t2i_resp.getData() != null) {
+                        t2i_result = t2i_resp.getData();
+                        t2i_intent_ref.set(t2i_result.getIntentCode());
+                    }
+
+                    if (t2i_result.getIntentCode() != null
+                            && (intentConfig.getRing0().contains(t2i_result.getIntentCode())
+                            || t2i_result.getIntentCode().startsWith(intentConfig.getPrefix()))
+                    ) {
+                        // using t2i's intent
+                        final_intent = t2i_result.getIntentCode();
+                    } else if (esl_intent != null) {
+                        final_intent = esl_intent;
+                    } else {
+                        final_intent = t2i_result.getIntentCode();
+                    }
+                    final var getReply = callIntent2Reply(t2i_result.getTraceId(), final_intent, speechText, content_index);
+                    return interactAsync(getReply).exceptionallyCompose(handleRetryable(()->interactAsync(getReply)));
+                }, executor)
+                .whenComplete(reportEsl(t2i_intent_ref, esl_resp_ref, content_index, esl_cost));
     }
 
     private Function<Throwable, EslApi.EslResponse<EslApi.Hit>> handleEslSearchException() {
@@ -670,11 +688,22 @@ public final class AfsActor {
         };
     }
 
-    private Supplier<EslApi.EslResponse<EslApi.Hit>> callEslSearch(
+    private Supplier<EslApi.EslResponse<EslApi.Hit>> callMatchEsl(
             final String speechText,
             final int content_index,
             final AtomicLong cost) {
         return ()-> {
+            log.info("[{}] before match_esl: ({}) speech:{}", sessionId, content_index, speechText);
+            final var startInMs = System.currentTimeMillis();
+            try {
+                return _matchEsl.apply(speechText);
+            } finally {
+                cost.set(System.currentTimeMillis() - startInMs);
+                log.info("[{}] after match_esl: ({}) speech:{} => cost {} ms",
+                        sessionId, content_index, speechText, cost.longValue());
+            }
+        };
+        /*
             if (_eslApi != null && speechText.length() >=5) {
                 log.info("[{}] before search_text: ({}) speech:{}", sessionId, content_index, speechText);
                 final var startInMs = System.currentTimeMillis();
@@ -690,6 +719,7 @@ public final class AfsActor {
                 return EslApi.emptyResponse();
             }
         };
+        */
     }
 
     private BiConsumer<ApiResponse<AIReplyVO>, Throwable>
