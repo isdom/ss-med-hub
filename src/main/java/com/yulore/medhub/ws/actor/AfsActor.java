@@ -102,19 +102,16 @@ public final class AfsActor {
     @Autowired
     private ScriptApi _scriptApi;
 
-    @Value("#{${esl.api.headers}}")
-    private Map<String,String> _esl_headers;
-
     @Autowired
     private IntentConfig intentConfig;
 
-    //@Autowired(required = false)
-    //private EslApi _eslApi;
     final private MatchEsl _matchEsl;
 
     private final AtomicReference<ASROperator> asrRef = new AtomicReference<>(null);
     private final AtomicBoolean isClosed = new AtomicBoolean(false);
     private final AtomicBoolean isWelcomePlayed = new AtomicBoolean(false);
+    private boolean _use_esl = false;
+
     private int _lastIterationIdx = 0;
     private final Map<Integer, String> _pendingIteration = new HashMap<>();
 
@@ -407,6 +404,8 @@ public final class AfsActor {
             } else {
                 log.info("[{}] handleWelcomeReply: call ai_reply with {} => response: {}", sessionId, welcome, response);
                 if (response.getData() != null) {
+                    _use_esl = response.getData().getUse_esl() != null ? response.getData().getUse_esl() : false;
+                    log.info("[{}] handleWelcomeReply: using_esl_status {}", sessionId, _use_esl);
                     if (!doPlayback(response.getData())) {
                         if (response.getData().getHangup() == 1) {
                             doHangup();
@@ -628,7 +627,7 @@ public final class AfsActor {
     }
 
     private CompletionStage<ApiResponse<AIReplyVO>> speech2reply(final String speechText, final int content_index) {
-        return _matchEsl != null ? scriptAndEslMixed(speechText, content_index) : scriptOnly(speechText, content_index);
+        return _use_esl ? scriptAndEslMixed(speechText, content_index) : scriptOnly(speechText, content_index);
     }
 
     private CompletionStage<ApiResponse<AIReplyVO>> scriptOnly(final String speechText, final int content_index) {
@@ -718,7 +717,6 @@ public final class AfsActor {
                 // esl response with 0 hit
                 return EslApi.emptyResponse();
             }
-        };
         */
     }
 

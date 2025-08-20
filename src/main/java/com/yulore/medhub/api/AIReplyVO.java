@@ -60,4 +60,7 @@ public class AIReplyVO {
 
     @SerializedName("cps")
     private CompositeVO[] cps;
+
+    @SerializedName("use_esl")
+    private Boolean use_esl;
 }

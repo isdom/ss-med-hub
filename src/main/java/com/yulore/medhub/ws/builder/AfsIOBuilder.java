@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.medhub.api.AIReplyVO;
 import com.yulore.medhub.api.CompositeVO;
+import com.yulore.medhub.api.EslApi;
 import com.yulore.medhub.vo.WSCommandVO;
 import com.yulore.medhub.vo.WSEventVO;
 import com.yulore.medhub.vo.cmd.*;
@@ -26,6 +27,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -36,6 +38,7 @@ import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -108,7 +111,14 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                     return (name,obj)-> WSEventVO.sendEvent(ws, name, obj);
                 }
                 public AfsActor.MatchEsl matchEsl() {
-                    return null;
+                    return speech -> {
+                        if (_eslApi != null && speech.length() >=5) {
+                            return _eslApi.search_text(_esl_headers, speech, 0.95f);
+                        } else {
+                            // esl response with 0 hit
+                            return EslApi.emptyResponse();
+                        }
+                    };
                 }
             });
             addActor(vo.localIdx, actor);
@@ -420,6 +430,12 @@ public class AfsIOBuilder implements WsHandlerBuilder {
             throw new RuntimeException(e);
         }
     }
+
+    @Value("#{${esl.api.headers}}")
+    private Map<String,String> _esl_headers;
+
+    @Autowired(required = false)
+    private EslApi _eslApi;
 
     final static class MediaExecutor implements OrderedExecutor {
         // 使用连接ID的哈希绑定固定线程
