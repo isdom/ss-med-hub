@@ -679,7 +679,7 @@ public final class AfsActor {
                     final var getReply = callIntent2Reply(t2i_result.getTraceId(), final_intent, speechText, content_index);
                     return interactAsync(getReply).exceptionallyCompose(handleRetryable(()->interactAsync(getReply)));
                 }, executor)
-                .whenComplete(reportEsl(t2i_intent_ref, esl_resp_ref, content_index, esl_cost));
+                .whenCompleteAsync(reportEsl(t2i_intent_ref, esl_resp_ref, content_index, esl_cost), executorStore.apply("feign"));
     }
 
     private Function<Throwable, EslApi.EslResponse<EslApi.Hit>> handleEslSearchException() {
@@ -694,32 +694,16 @@ public final class AfsActor {
             final int content_index,
             final AtomicLong cost) {
         return ()-> {
-            log.info("[{}] before match_esl: ({}) speech:{}", sessionId, content_index, speechText);
+            log.info("[{}] before match_esl: ({}) speech:{} partition:{}", sessionId, content_index, speechText, _esl_partition);
             final var startInMs = System.currentTimeMillis();
             try {
                 return _matchEsl.apply(speechText, _esl_partition);
             } finally {
                 cost.set(System.currentTimeMillis() - startInMs);
-                log.info("[{}] after match_esl: ({}) speech:{} => cost {} ms",
-                        sessionId, content_index, speechText, cost.longValue());
+                log.info("[{}] after match_esl: ({}) speech:{} partition:{} => cost {} ms",
+                        sessionId, content_index, speechText, _esl_partition, cost.longValue());
             }
         };
-        /*
-            if (_eslApi != null && speechText.length() >=5) {
-                log.info("[{}] before search_text: ({}) speech:{}", sessionId, content_index, speechText);
-                final var startInMs = System.currentTimeMillis();
-                try {
-                    return _eslApi.search_text(_esl_headers, speechText, 0.95f);
-                } finally {
-                    cost.set(System.currentTimeMillis() - startInMs);
-                    log.info("[{}] after search_text: ({}) speech:{} => cost {} ms",
-                            sessionId, content_index, speechText, cost.longValue());
-                }
-            } else {
-                // esl response with 0 hit
-                return EslApi.emptyResponse();
-            }
-        */
     }
 
     private BiConsumer<ApiResponse<AIReplyVO>, Throwable>
@@ -781,7 +765,6 @@ public final class AfsActor {
         return (ai_resp, ex) -> {
             final var userContentId = (ai_resp != null && ai_resp.getData() != null && ai_resp.getData().getUser_content_id() != null)
                     ? ai_resp.getData().getUser_content_id().toString() : null;
-            //final var user_qa_id = (ai_resp != null && ai_resp.getData() != null) ? ai_resp.getData().getQa_id() : null;
 
             final var t2i_intent = t2i_intent_ref.get();
             final var esl_resp = esl_resp_ref.get();
@@ -804,7 +787,7 @@ public final class AfsActor {
                         .session_id(sessionId)
                         .content_id(userContentId)
                         .content_index(content_index)
-                        .qa_id(t2i_intent/*user_qa_id*/)
+                        .qa_id(t2i_intent)
                         .es(ess)
                         .embedding_cost(esl_resp.dev.embeddingDuration)
                         .db_cost(esl_resp.dev.dbExecutionDuration)
