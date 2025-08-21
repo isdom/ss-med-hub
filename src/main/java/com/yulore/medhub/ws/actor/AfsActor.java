@@ -49,7 +49,7 @@ public final class AfsActor {
         public String local_vars;
     }
     public interface Reply2Rms extends BiFunction<AIReplyVO, Supplier<String>, RmsSource> {}
-    public interface MatchEsl extends Function<String, EslApi.EslResponse<EslApi.Hit>> {}
+    public interface MatchEsl extends BiFunction<String, String, EslApi.EslResponse<EslApi.Hit>> {}
 
     public interface Context {
         int localIdx();
@@ -111,6 +111,7 @@ public final class AfsActor {
     private final AtomicBoolean isClosed = new AtomicBoolean(false);
     private final AtomicBoolean isWelcomePlayed = new AtomicBoolean(false);
     private boolean _use_esl = false;
+    private String _esl_partition = null;
 
     private int _lastIterationIdx = 0;
     private final Map<Integer, String> _pendingIteration = new HashMap<>();
@@ -405,6 +406,7 @@ public final class AfsActor {
                 log.info("[{}] handleWelcomeReply: call ai_reply with {} => response: {}", sessionId, welcome, response);
                 if (response.getData() != null) {
                     _use_esl = response.getData().getUse_esl() != null ? response.getData().getUse_esl() : false;
+                    _esl_partition = response.getData().getEsl_partition();
                     log.info("[{}] handleWelcomeReply: using_esl_status {}", sessionId, _use_esl);
                     if (!doPlayback(response.getData())) {
                         if (response.getData().getHangup() == 1) {
@@ -695,7 +697,7 @@ public final class AfsActor {
             log.info("[{}] before match_esl: ({}) speech:{}", sessionId, content_index, speechText);
             final var startInMs = System.currentTimeMillis();
             try {
-                return _matchEsl.apply(speechText);
+                return _matchEsl.apply(speechText, _esl_partition);
             } finally {
                 cost.set(System.currentTimeMillis() - startInMs);
                 log.info("[{}] after match_esl: ({}) speech:{} => cost {} ms",

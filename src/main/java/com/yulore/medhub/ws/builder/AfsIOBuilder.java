@@ -37,6 +37,7 @@ import javax.annotation.PostConstruct;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
@@ -111,9 +112,13 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                     return (name,obj)-> WSEventVO.sendEvent(ws, name, obj);
                 }
                 public AfsActor.MatchEsl matchEsl() {
-                    return speech -> {
+                    return (speech, partition) -> {
                         if (_eslApi != null && speech.length() >=5) {
-                            return _eslApi.search_text(_esl_headers, speech, 0.95f);
+                            final var hdrs = new HashMap<>(_esl_headers);
+                            if (partition != null) {
+                                hdrs.put(_esl_hdr_partition, partition);
+                            }
+                            return _eslApi.search_text(hdrs, speech, 0.95f);
                         } else {
                             // esl response with 0 hit
                             return EslApi.emptyResponse();
@@ -433,6 +438,9 @@ public class AfsIOBuilder implements WsHandlerBuilder {
 
     @Value("#{${esl.api.headers}}")
     private Map<String,String> _esl_headers;
+
+    @Value("${esl.api.header.partition}")
+    private String _esl_hdr_partition;
 
     @Autowired(required = false)
     private EslApi _eslApi;

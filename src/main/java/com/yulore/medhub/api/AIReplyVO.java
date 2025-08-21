@@ -63,4 +63,7 @@ public class AIReplyVO {
 
     @SerializedName("use_esl")
     private Boolean use_esl;
+
+    @SerializedName("esl_partition")
+    private String esl_partition;
 }
