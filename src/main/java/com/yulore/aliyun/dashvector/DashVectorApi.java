@@ -201,6 +201,17 @@ public interface DashVectorApi {
         public int      total_doc_count;
     }
 
+    // REF: https://help.aliyun.com/document_detail/2510327.html
+    @RequestMapping(
+            value = "/v1/collections/{collection}/partitions/{partition}",
+            method = RequestMethod.GET)
+    DVResponse<String> describePartition(
+            @RequestHeader("dashvector-auth-token") String authToken,
+            @RequestHeader("Content-Type") String contentType,
+            @PathVariable("collection") String collection,
+            @PathVariable("partition") String partition
+    );
+
     // REF: https://help.aliyun.com/document_detail/2510329.html
     @RequestMapping(
             value = "/v1/collections/{collection}/partitions/{partition}/stats",
