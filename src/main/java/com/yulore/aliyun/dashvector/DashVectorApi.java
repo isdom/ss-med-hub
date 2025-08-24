@@ -161,7 +161,7 @@ public interface DashVectorApi {
     @RequestMapping(
             value = "/v1/collections/{collection}/partitions",
             method = RequestMethod.GET)
-    DVResponse<String> getPartitions(
+    DVResponse<String> listPartitions(
             @RequestHeader("dashvector-auth-token") String authToken,
             @RequestHeader("Content-Type") String contentType,
             @PathVariable("collection") String collection);
