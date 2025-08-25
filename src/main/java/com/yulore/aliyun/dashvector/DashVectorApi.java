@@ -170,7 +170,7 @@ public interface DashVectorApi {
     @RequestMapping(
             value = "/v1/collections",
             method = RequestMethod.GET)
-    DVResponse<String> getCollections(
+    DVResponse<String> listCollections(
             @RequestHeader("dashvector-auth-token") String authToken,
             @RequestHeader("Content-Type") String contentType);
 
