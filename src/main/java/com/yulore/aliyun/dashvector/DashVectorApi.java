@@ -201,6 +201,24 @@ public interface DashVectorApi {
         public int      total_doc_count;
     }
 
+    @Builder
+    @ToString
+    class CreatePartitionRequest {
+        public String name;
+    }
+
+    // REF: https://help.aliyun.com/document_detail/2510326.html
+    @RequestMapping(
+            value = "/v1/collections/{collection}/partitions",
+            method = RequestMethod.POST)
+    DVResponse<Void> createPartition(
+            @RequestHeader("dashvector-auth-token") String authToken,
+            @RequestHeader("Content-Type") String contentType,
+            @PathVariable("collection") String collection,
+            @RequestBody CreatePartitionRequest request
+    );
+
+
     // REF: https://help.aliyun.com/document_detail/2510327.html
     @RequestMapping(
             value = "/v1/collections/{collection}/partitions/{partition}",
