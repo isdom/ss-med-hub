@@ -163,7 +163,7 @@ public class ApoIOBuilder implements WsHandlerBuilder {
             // public long answerInMss() {
             //    return 0;
             //}
-            public Consumer<Runnable> runOn(int idx) {
+            public Executor executor(int idx) {
                 return runnable -> orderedExecutor.submit(idx, runnable);
             }
             public Consumer<ApoActor> doHangup() {

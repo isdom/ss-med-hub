@@ -35,6 +35,7 @@ import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -87,7 +88,7 @@ public final class ApoActor {
 
     private final AtomicReference<ASROperator> asrRef = new AtomicReference<>(null);
 
-    private final Consumer<Runnable> _runOn;
+    private final Executor _executor;
 
     public interface Reply2Playback extends BiFunction<String, AIReplyVO, Supplier<Runnable>> {}
 
@@ -98,7 +99,7 @@ public final class ApoActor {
         String uuid();
         String tid();
         // long answerInMss();
-        Consumer<Runnable> runOn(int idx);
+        Executor executor(int idx);
         Consumer<ApoActor> doHangup();
         Consumer<RecordContext> saveRecord();
         Consumer<ApoActor> callStarted();
@@ -111,7 +112,7 @@ public final class ApoActor {
         _clientIp = ctx.clientIp();
         _uuid = ctx.uuid();
         _tid = ctx.tid();
-        _runOn = ctx.runOn(actorIdx());
+        _executor = ctx.executor(actorIdx());
         _doHangup = ctx.doHangup();
         _doSaveRecord = ctx.saveRecord();
         _callStarted = ctx.callStarted();
@@ -140,7 +141,7 @@ public final class ApoActor {
     }
 
     public void notifyMockAnswer() {
-        _runOn.accept(()-> {
+        _executor.execute(()-> {
             if (!isClosed.get()) {
                 if (_isUserAnswered.get()) {
                     log.info("[{}]: [{}]-[{}]: notifyUserAnswer has called already, ignore notifyMockAnswer!", _clientIp, _sessionId, _uuid);
@@ -230,7 +231,7 @@ public final class ApoActor {
 
             @Override
             public void onSentenceBegin(PayloadSentenceBegin payload) {
-                _runOn.accept(()-> {
+                _executor.execute(()-> {
                     log.info("apo_io => onSentenceBegin: {}", payload);
                     whenASRSentenceBegin(payload);
                 });
@@ -244,7 +245,7 @@ public final class ApoActor {
             @Override
             public void onSentenceEnd(final PayloadSentenceEnd payload) {
                 final long sentenceEndInMs = System.currentTimeMillis();
-                _runOn.accept(()->{
+                _executor.execute(()->{
                     log.info("apo_io => onSentenceEnd: {}", payload);
                     whenASRSentenceEnd(payload, sentenceEndInMs);
                 });
@@ -255,7 +256,7 @@ public final class ApoActor {
                 log.warn("[{}] apo_io => onTranscriberFail: {}", _sessionId,
                         reason != null ? reason.toString() : "(null)");
             }
-        }).whenComplete((asrOperator, ex) -> _runOn.accept(()->{
+        }).whenComplete((asrOperator, ex) -> _executor.execute(()->{
             if (ex != null) {
                 log.warn("startTranscription failed", ex);
             } else {
@@ -279,7 +280,7 @@ public final class ApoActor {
     }
 
     public void checkIdle() {
-        _runOn.accept(()-> {
+        _executor.execute(()-> {
             final long idleTime = System.currentTimeMillis() - _idleStartInMs.get();
             boolean isAiSpeaking = isAiSpeaking();
             if (_isUserAnswered.get()  // user answered
