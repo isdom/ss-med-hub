@@ -645,8 +645,7 @@ public final class AfsActor {
 
         return interactAsync(getIntent).exceptionallyCompose(handleRetryable(()->interactAsync(getIntent)))
                 .thenCombine(interactAsync(callMatchEsl(speechText, content_index, esl_cost))
-                                .exceptionally(handleEslSearchException()),
-                        (intent_resp, esl_resp) -> Pair.of(intent_resp, esl_resp))
+                                .exceptionally(handleEslSearchException()), Pair::of)
                 .thenComposeAsync(script_and_esl->{
                     final var t2i_resp = script_and_esl.getLeft();
                     final var esl_resp = script_and_esl.getRight();
