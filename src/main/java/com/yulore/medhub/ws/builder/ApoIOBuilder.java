@@ -154,7 +154,6 @@ public class ApoIOBuilder implements WsHandlerBuilder {
 
         final var actorIdx = actorCounter.incrementAndGet();
         final var actor = apoProvider.getObject(new ApoActor.Context() {
-            @Override
             public int actorIdx() {
                 return actorIdx;
             }
