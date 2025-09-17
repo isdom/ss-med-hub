@@ -53,8 +53,6 @@ import static org.springframework.beans.factory.config.ConfigurableBeanFactory.S
 @Component
 @Scope(SCOPE_PROTOTYPE)
 public final class ApoActor {
-    private static final AtomicInteger currentCounter = new AtomicInteger(0);
-
     private final int _actorIdx;
 
     private final Consumer<ApoActor> _callStarted;
@@ -95,24 +93,25 @@ public final class ApoActor {
     private Reply2Playback _reply2playback;
 
     public interface Context {
+        int actorIdx();
         String clientIp();
         String uuid();
         String tid();
         // long answerInMss();
-        Executor executor(int idx);
+        Executor executor();
         Consumer<ApoActor> doHangup();
         Consumer<RecordContext> saveRecord();
         Consumer<ApoActor> callStarted();
     }
 
     public ApoActor(final Context ctx) {
-        _actorIdx = currentCounter.incrementAndGet();
+        _actorIdx = ctx.actorIdx();
         _sessionBeginInMs = System.currentTimeMillis();
 
         _clientIp = ctx.clientIp();
         _uuid = ctx.uuid();
         _tid = ctx.tid();
-        _executor = ctx.executor(actorIdx());
+        _executor = ctx.executor();
         _doHangup = ctx.doHangup();
         _doSaveRecord = ctx.saveRecord();
         _callStarted = ctx.callStarted();

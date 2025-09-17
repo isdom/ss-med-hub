@@ -46,6 +46,8 @@ import java.util.function.Supplier;
 @Component("apo_io")
 @ConditionalOnProperty(prefix = "feature", name = "apo_io", havingValue = "enabled")
 public class ApoIOBuilder implements WsHandlerBuilder {
+    private final AtomicInteger actorCounter = new AtomicInteger(0);
+
     @PostConstruct
     public void init() {
         playback_timer = timerProvider.getObject("mh.playback.delay", MetricCustomized.builder().tags(List.of("actor", "apo_io")).build());
@@ -150,7 +152,12 @@ public class ApoIOBuilder implements WsHandlerBuilder {
         final String clientIp = handshake.getFieldValue("X-Forwarded-For");
         final var executor = executorProvider.apply("ltx");
 
+        final var actorIdx = actorCounter.incrementAndGet();
         final var actor = apoProvider.getObject(new ApoActor.Context() {
+            @Override
+            public int actorIdx() {
+                return actorIdx;
+            }
             public String clientIp() {
                 return clientIp;
             }
@@ -163,8 +170,8 @@ public class ApoIOBuilder implements WsHandlerBuilder {
             // public long answerInMss() {
             //    return 0;
             //}
-            public Executor executor(int idx) {
-                return runnable -> orderedExecutor.submit(idx, runnable);
+            public Executor executor() {
+                return runnable -> orderedExecutor.submit(actorIdx, runnable);
             }
             public Consumer<ApoActor> doHangup() {
                 return actor_ -> {
