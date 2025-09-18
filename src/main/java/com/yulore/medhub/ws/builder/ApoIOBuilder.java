@@ -5,6 +5,7 @@ import com.aliyun.oss.OSS;
 import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.bst.BuildStreamTask;
 import com.yulore.medhub.api.AIReplyVO;
+import com.yulore.medhub.api.EslApi;
 import com.yulore.medhub.service.BSTService;
 import com.yulore.medhub.task.PlayStreamPCMTask2;
 import com.yulore.medhub.task.SampleInfo;
@@ -13,6 +14,7 @@ import com.yulore.medhub.vo.cmd.*;
 import com.yulore.medhub.ws.WSCommandRegistry;
 import com.yulore.medhub.ws.WsHandler;
 import com.yulore.medhub.ws.WsHandlerBuilder;
+import com.yulore.medhub.ws.actor.AfsActor;
 import com.yulore.medhub.ws.actor.ApoActor;
 import com.yulore.metric.DisposableGauge;
 import com.yulore.metric.MetricCustomized;
@@ -27,6 +29,7 @@ import org.java_websocket.WebSocket;
 import org.java_websocket.exceptions.WebsocketNotConnectedException;
 import org.java_websocket.handshake.ClientHandshake;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -34,7 +37,9 @@ import org.springframework.stereotype.Component;
 import javax.annotation.PostConstruct;
 import java.nio.ByteBuffer;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -198,6 +203,20 @@ public class ApoIOBuilder implements WsHandlerBuilder {
                 return actor_ -> {
                     _actors.put(actor_.sessionId(), actor_);
                     WSEventVO.sendEvent(webSocket, "CallStarted", new PayloadCallStarted(actor_.sessionId()));
+                };
+            }
+            public ApoActor.MatchEsl matchEsl() {
+                return (speech, partition) -> {
+                    if (_eslApi != null && speech.length() >=5) {
+                        final var hdrs = new HashMap<>(_esl_headers);
+                        if (partition != null) {
+                            hdrs.put(_esl_hdr_partition, partition);
+                        }
+                        return _eslApi.search_text(hdrs, speech, 0.95f);
+                    } else {
+                        // esl response with 0 hit
+                        return EslApi.emptyResponse();
+                    }
                 };
             }
         });
@@ -365,6 +384,15 @@ public class ApoIOBuilder implements WsHandlerBuilder {
             .register(VOUserAnswer.TYPE,"UserAnswer",
                       ctx->ctx.actor().notifyUserAnswer(ctx.payload()))
             ;
+
+    @Value("#{${esl.api.headers}}")
+    private Map<String,String> _esl_headers;
+
+    @Value("${esl.api.header.partition}")
+    private String _esl_hdr_partition;
+
+    @Autowired(required = false)
+    private EslApi _eslApi;
 
     final static class MediaExecutor implements OrderedExecutor {
         // 使用连接ID的哈希绑定固定线程

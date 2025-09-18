@@ -86,9 +86,13 @@ public final class ApoActor {
 
     private final AtomicReference<ASROperator> asrRef = new AtomicReference<>(null);
 
+    private int _lastIterationIdx = 0;
+    private final Map<Integer, String> _pendingIteration = new HashMap<>();
+
     private final Executor _executor;
 
     public interface Reply2Playback extends BiFunction<String, AIReplyVO, Supplier<Runnable>> {}
+    public interface MatchEsl extends BiFunction<String, String, EslApi.EslResponse<EslApi.Hit>> {}
 
     private Reply2Playback _reply2playback;
 
@@ -102,6 +106,7 @@ public final class ApoActor {
         Consumer<ApoActor> doHangup();
         Consumer<RecordContext> saveRecord();
         Consumer<ApoActor> callStarted();
+        MatchEsl matchEsl();
     }
 
     public ApoActor(final Context ctx) {
@@ -115,6 +120,7 @@ public final class ApoActor {
         _doHangup = ctx.doHangup();
         _doSaveRecord = ctx.saveRecord();
         _callStarted = ctx.callStarted();
+        _matchEsl = ctx.matchEsl();
         if (Strings.isNullOrEmpty(_uuid) || Strings.isNullOrEmpty(_tid)) {
             log.warn("[{}]: ApoActor_ctor error for uuid:{}/tid:{}, abort apply_session.", _clientIp, _sessionId, _uuid);
             return;
@@ -255,23 +261,27 @@ public final class ApoActor {
                 log.warn("[{}] apo_io => onTranscriberFail: {}", _sessionId,
                         reason != null ? reason.toString() : "(null)");
             }
-        }).whenComplete((asrOperator, ex) -> _executor.execute(()->{
+        }).whenCompleteAsync(onStartTranscriptionComplete(), _executor);
+    }
+
+    private BiConsumer<ASROperator, Throwable> onStartTranscriptionComplete() {
+        return (operator, ex) -> {
             if (ex != null) {
                 log.warn("startTranscription failed", ex);
             } else {
-                asrRef.set(asrOperator);
+                asrRef.set(operator);
                 if (isClosed.get()) {
                     // means close() method has been called
-                    final var asr = asrRef.getAndSet(null);
-                    if (asr != null) { // means when close() called, operator !NOT! set yet
-                        asr.close();
+                    final var op = asrRef.getAndSet(null);
+                    if (op != null) { // means when close() called, operator !NOT! set yet
+                        op.close();
                     }
                 } else {
                     // apo session not closed
                     tryPlayWelcome();
                 }
             }
-        }));
+        };
     }
 
     private boolean isAiSpeaking() {
@@ -479,7 +489,6 @@ public final class ApoActor {
     private void whenASRSentenceEnd(final PayloadSentenceEnd payload, final long sentenceEndInMs) {
         log.info("[{}]: [{}]-[{}]: whenASRSentenceEnd: {}", _clientIp, _sessionId, _uuid, payload);
 
-        // final long sentenceEndInMs = System.currentTimeMillis();
         _isUserSpeak.set(false);
         _idleStartInMs.set(sentenceEndInMs);
         if (_sessionId != null && _reply2playback != null && _aiSetting != null) {
@@ -505,27 +514,6 @@ public final class ApoActor {
             log.info("[{}]: [{}]-[{}]: {} => ESL Response: {}, cost {} ms", _clientIp, _sessionId, _uuid, payload.getResult(), resp, System.currentTimeMillis() - startInMs);
         }
     }
-
-    /*
-    @Override
-    public void notifySentenceEnd(final PayloadSentenceEnd payload) {
-        super.notifySentenceEnd(payload);
-        log.info("[{}]: [{}]-[{}]: notifySentenceEnd: {}", _clientIp, _sessionId, _uuid, payload);
-
-        final long sentenceEndInMs = System.currentTimeMillis();
-        _isUserSpeak.set(false);
-        _idleStartInMs.set(sentenceEndInMs);
-        if (_sessionId != null && _playbackOn != null && _aiSetting != null) {
-            // playback ws has connected && _aiSetting is valid
-            final String userContentId = interactWithScriptEngine(payload);
-            reportUserContent(payload, userContentId);
-            reportAsrTime(payload, sentenceEndInMs, userContentId);
-        } else {
-            log.warn("[{}]: [{}]-[{}]: notifySentenceEnd but sessionId is null or playback not ready or aiSetting not ready => _playbackOn: {}/aiSetting: {}",
-                    _clientIp, _sessionId, _uuid, _playbackOn, _aiSetting);
-        }
-    }
-    */
 
     private String interactWithScriptEngine(final PayloadSentenceEnd payload) {
         final boolean isAiSpeaking = isAiSpeaking();
@@ -949,6 +937,24 @@ public final class ApoActor {
         }
     }
 
+    private int addIteration(final String name) {
+        _lastIterationIdx++;
+        _pendingIteration.put(_lastIterationIdx, name);
+        return _lastIterationIdx;
+    }
+
+    private void completeIteration(final int iterationIdx) {
+        _pendingIteration.remove(iterationIdx);
+    }
+
+    private boolean isCurrentIteration(final int iterationIdx) {
+        return _lastIterationIdx == iterationIdx;
+    }
+
+    private boolean hasPendingIteration() {
+        return !_pendingIteration.isEmpty();
+    }
+
     private boolean doPlayback(final AIReplyVO replyVO) {
         final String newPlaybackId = UUID.randomUUID().toString();
         log.info("[{}]: [{}]-[{}]: doPlayback: {}", _clientIp, _sessionId, _uuid, replyVO);
@@ -986,6 +992,8 @@ public final class ApoActor {
 
     @Autowired
     private ScriptApi _scriptApi;
+
+    final private MatchEsl _matchEsl;
 
     @Value("#{${esl.api.headers}}")
     private Map<String,String> _esl_headers;
