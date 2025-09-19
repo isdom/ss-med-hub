@@ -12,16 +12,14 @@ import com.yulore.medhub.vo.PayloadSentenceBegin;
 import com.yulore.medhub.vo.PayloadSentenceEnd;
 import com.yulore.medhub.vo.PayloadTranscriptionResultChanged;
 import com.yulore.medhub.vo.cmd.*;
-import com.yulore.util.ByteArrayListInputStream;
-import com.yulore.util.ExceptionUtil;
-import com.yulore.util.VarsUtil;
-import com.yulore.util.WaveUtil;
+import com.yulore.util.*;
 import io.micrometer.core.instrument.Timer;
 import lombok.Builder;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Scope;
@@ -33,10 +31,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -80,6 +75,9 @@ public final class ApoActor {
     public String uuid() {
         return _uuid;
     }
+
+    @Autowired
+    private ExecutorStore executorStore;
 
     @Autowired
     private ASRService _asrService;
@@ -499,6 +497,8 @@ public final class ApoActor {
                         _sessionId, payload.getIndex(), _emptyUserSpeechCount);
                 return;
             }
+            final var content_index = payload.getIndex() - _emptyUserSpeechCount;
+            _userContentIndex.set(content_index);
 
             final String userContentId = interactWithScriptEngine(payload);
             reportUserContent(payload, userContentId);
@@ -551,6 +551,125 @@ public final class ApoActor {
             log.warn("[{}]: [{}]-[{}]: notifySentenceEnd: ai_reply error, detail: {}", _clientIp, _sessionId, _uuid, ExceptionUtil.exception2detail(ex));
         }
         return userContentId;
+    }
+
+    private CompletionStage<ApiResponse<AIReplyVO>> speech2reply(final String speechText, final int content_index) {
+        return _use_esl ? scriptAndEslMixed(speechText, content_index) : scriptOnly(speechText, content_index);
+    }
+
+    private CompletionStage<ApiResponse<AIReplyVO>> scriptOnly(final String speechText, final int content_index) {
+        final var getReply = callAiReplyWithSpeech(speechText, content_index);
+        return interactAsync(getReply).exceptionallyCompose(handleRetryable(()->interactAsync(getReply)));
+    }
+
+    private CompletionStage<ApiResponse<AIReplyVO>> scriptAndEslMixed(final String speechText, final int content_index) {
+        final var esl_cost = new AtomicLong(0);
+        final AtomicReference<EslApi.EslResponse<EslApi.Hit>> esl_resp_ref = new AtomicReference<>(null);
+        final AtomicReference<String> t2i_intent_ref = new AtomicReference<>(null);
+        final var getIntent = callSpeech2Intent(speechText, content_index);
+
+        return interactAsync(getIntent).exceptionallyCompose(handleRetryable(()->interactAsync(getIntent)))
+                .thenCombine(interactAsync(callMatchEsl(speechText, content_index, esl_cost))
+                        .exceptionally(handleEslSearchException()), Pair::of)
+                .thenComposeAsync(script_and_esl->{
+                    final var t2i_resp = script_and_esl.getLeft();
+                    final var esl_resp = script_and_esl.getRight();
+                    log.info("[{}] whenASRSentenceEnd script_and_esl done with {}\nai_t2i resp: {}\nesl_search resp: {}",
+                            _sessionId, intentConfig, t2i_resp, esl_resp);
+                    esl_resp_ref.set(esl_resp);
+                    String final_intent = null;
+                    String esl_intent = null;
+                    var t2i_result = new ScriptApi.Text2IntentResult();
+                    if (esl_resp.result != null && esl_resp.result.length > 0) {
+                        // hit esl
+                        esl_intent = esl_resp.result[0].es.intentionCode;
+                    }
+                    if (t2i_resp != null && t2i_resp.getData() != null) {
+                        t2i_result = t2i_resp.getData();
+                        t2i_intent_ref.set(t2i_result.getIntentCode());
+                    }
+
+                    if (t2i_result.getIntentCode() != null
+                            && (intentConfig.getRing0().contains(t2i_result.getIntentCode())
+                            || t2i_result.getIntentCode().startsWith(intentConfig.getPrefix()))
+                    ) {
+                        // using t2i's intent
+                        final_intent = t2i_result.getIntentCode();
+                    } else if (esl_intent != null) {
+                        final_intent = esl_intent;
+                    } else {
+                        final_intent = t2i_result.getIntentCode();
+                    }
+                    final var getReply = callIntent2Reply(t2i_result.getTraceId(), final_intent, speechText, content_index);
+                    return interactAsync(getReply).exceptionallyCompose(handleRetryable(()->interactAsync(getReply)));
+                }, _executor)
+                .whenCompleteAsync(reportEsl(t2i_intent_ref, esl_resp_ref, content_index, esl_cost), executorStore.apply("feign"));
+    }
+
+    private Function<Throwable, EslApi.EslResponse<EslApi.Hit>> handleEslSearchException() {
+        return ex -> {
+            log.warn("[{}] call_esl_text_failed: {}", _sessionId, ExceptionUtil.exception2detail(ex));
+            return EslApi.emptyResponse();
+        };
+    }
+
+    private Supplier<EslApi.EslResponse<EslApi.Hit>> callMatchEsl(
+            final String speechText,
+            final int content_index,
+            final AtomicLong cost) {
+        return ()-> {
+            log.info("[{}] before match_esl: ({}) speech:{} partition:{}", _sessionId, content_index, speechText, _esl_partition);
+            final var startInMs = System.currentTimeMillis();
+            try {
+                return _matchEsl.apply(speechText, _esl_partition);
+            } finally {
+                cost.set(System.currentTimeMillis() - startInMs);
+                log.info("[{}] after match_esl: ({}) speech:{} partition:{} => cost {} ms",
+                        _sessionId, content_index, speechText, _esl_partition, cost.longValue());
+            }
+        };
+    }
+
+    private BiConsumer<ApiResponse<AIReplyVO>, Throwable>
+    reportEsl(final AtomicReference<String> t2i_intent_ref,
+              final AtomicReference<EslApi.EslResponse<EslApi.Hit>> esl_resp_ref,
+              final int content_index,
+              final AtomicLong cost) {
+        return (ai_resp, ex) -> {
+            final var userContentId = (ai_resp != null && ai_resp.getData() != null && ai_resp.getData().getUser_content_id() != null)
+                    ? ai_resp.getData().getUser_content_id().toString() : null;
+
+            final var t2i_intent = t2i_intent_ref.get();
+            final var esl_resp = esl_resp_ref.get();
+            log.info("[{}]: ESL Response: {}, cost {} ms", _sessionId, esl_resp, cost.longValue());
+            if (esl_resp.getResult() != null && esl_resp.getResult().length > 0) {
+                final var ess = new ScriptApi.ExampleSentence[esl_resp.getResult().length];
+                int idx = 0;
+                for (var hit : esl_resp.getResult()) {
+                    ess[idx] = ScriptApi.ExampleSentence.builder()
+                            .index(idx+1)
+                            .id(hit.es.id)
+                            .confidence(hit.confidence)
+                            .intentionCode(hit.es.intentionCode)
+                            .intentionName(hit.es.intentionName)
+                            .text(hit.es.text)
+                            .build();
+                    idx++;
+                }
+                final var req = ScriptApi.ESRequest.builder()
+                        .session_id(_sessionId)
+                        .content_id(userContentId)
+                        .content_index(content_index)
+                        .qa_id(t2i_intent)
+                        .es(ess)
+                        .embedding_cost(esl_resp.dev.embeddingDuration)
+                        .db_cost(esl_resp.dev.dbExecutionDuration)
+                        .total_cost(cost.intValue())
+                        .build();
+                final var resp2 = _scriptApi.report_es(req);
+                log.info("[{}]: report_es => req: {}/resp: {}", _sessionId, req, resp2);
+            }
+        };
     }
 
     public void notifyPlaybackStart(final String playbackId) {
@@ -955,6 +1074,68 @@ public final class ApoActor {
         return !_pendingIteration.isEmpty();
     }
 
+    private Supplier<ApiResponse<AIReplyVO>> callAiReplyWithSpeech(final String speechText, final int content_index) {
+        return ()-> {
+            final boolean isAiSpeaking = isAiSpeaking();
+            final String aiContentId = currentAiContentId();
+            final int speakingDuration = currentSpeakingDuration();
+            log.info("[{}] before ai_reply => ({}) speech:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
+                    _sessionId, content_index, speechText, isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
+            return _scriptApi.ai_reply(_sessionId, content_index, speechText, null, isAiSpeaking ? 1 : 0, aiContentId, speakingDuration);
+        };
+    }
+
+    private Supplier<ApiResponse<ScriptApi.Text2IntentResult>> callSpeech2Intent(final String speechText, final int content_index) {
+        return ()-> {
+            log.info("[{}] before ai_t2i => ({}) speech:{}", _sessionId, content_index, speechText);
+            return _scriptApi.ai_t2i(ScriptApi.Text2IntentRequest.builder()
+                    .speechText(speechText)
+                    .speechIdx(content_index)
+                    .sessionId(_sessionId).build());
+        };
+    }
+
+    private Supplier<ApiResponse<AIReplyVO>> callIntent2Reply(
+            final String traceId,
+            final String intent,
+            final String speechText,
+            final int content_index) {
+        return ()-> {
+            final boolean isAiSpeaking = isAiSpeaking();
+            final String aiContentId = currentAiContentId();
+            final int speakingDuration = currentSpeakingDuration();
+            log.info("[{}] before ai_i2r => ({}) speech:{}/traceId:{}/intent:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
+                    _sessionId, content_index, speechText, traceId, intent,
+                    isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
+            return _scriptApi.ai_i2r(ScriptApi.Intent2ReplyRequest.builder()
+                    .sessionId(_sessionId)
+                    .traceId(traceId)
+                    .intent(intent)
+                    .speechIdx(content_index)
+                    .speechText(speechText)
+                    .isSpeaking(isAiSpeaking ? 1 : 0)
+                    .speakingContentId(aiContentId != null ? Long.parseLong(aiContentId) : null)
+                    .speakingDurationMs(speakingDuration)
+                    .build());
+        };
+    }
+
+    private  <T> CompletionStage<T> interactAsync(final Supplier<T> getResponse) {
+        return CompletableFuture.supplyAsync(getResponse, executorStore.apply("feign"));
+    }
+
+    private <T> Function<Throwable, CompletionStage<T>> handleRetryable(final Supplier<CompletionStage<T>> buildExecution) {
+        return ex -> {
+            if ((ex instanceof CompletionException)
+                    && (ex.getCause() instanceof feign.RetryableException)) {
+                log.warn("[{}] interact failed for {}, retry", _sessionId, ExceptionUtil.exception2detail(ex));
+                return buildExecution.get();
+            } else {
+                return CompletableFuture.failedStage(ex);
+            }
+        };
+    }
+
     private boolean doPlayback(final AIReplyVO replyVO) {
         final String newPlaybackId = UUID.randomUUID().toString();
         log.info("[{}]: [{}]-[{}]: doPlayback: {}", _clientIp, _sessionId, _uuid, replyVO);
@@ -993,7 +1174,13 @@ public final class ApoActor {
     @Autowired
     private ScriptApi _scriptApi;
 
+    @Autowired
+    private IntentConfig intentConfig;
+
     final private MatchEsl _matchEsl;
+
+    private boolean _use_esl = false;
+    private String _esl_partition = null;
 
     @Value("#{${esl.api.headers}}")
     private Map<String,String> _esl_headers;
@@ -1026,6 +1213,7 @@ public final class ApoActor {
 
     private final AtomicLong _asrStartInMs = new AtomicLong(0);
     private int _emptyUserSpeechCount = 0;
+    private final AtomicInteger _userContentIndex = new AtomicInteger(0);
 
     private final Consumer<RecordContext> _doSaveRecord;
 
