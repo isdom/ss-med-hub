@@ -500,7 +500,7 @@ public final class ApoActor {
             final var content_index = payload.getIndex() - _emptyUserSpeechCount;
             _userContentIndex.set(content_index);
 
-            final String userContentId = interactWithScriptEngine(payload);
+            final String userContentId = interactWithScriptEngine(payload, content_index);
             reportUserContent(payload, userContentId);
             reportAsrTime(payload, sentenceEndInMs, userContentId);
         } else {
@@ -515,7 +515,7 @@ public final class ApoActor {
         }
     }
 
-    private String interactWithScriptEngine(final PayloadSentenceEnd payload) {
+    private String interactWithScriptEngine(final PayloadSentenceEnd payload, final int content_index) {
         final boolean isAiSpeaking = isAiSpeaking();
         String userContentId = null;
         try {
