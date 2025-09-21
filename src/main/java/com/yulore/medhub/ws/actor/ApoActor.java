@@ -540,15 +540,15 @@ public final class ApoActor {
                         _doHangup.accept(this);
                     } else if (isAiSpeaking && _currentPlaybackPaused.compareAndSet(true, false) ) {
                         _sendEvent.accept("PCMResumePlayback", new PayloadPCMEvent(_currentPlaybackId.get(), ""));
-                        log.info("[{}]: [{}]-[{}]: notifySentenceEnd: resume_current ({}) for ai_reply ({}) without_new_ai_playback",
+                        log.info("[{}]: [{}]-[{}]: interactWithScriptEngine: resume_current ({}) for ai_reply ({}) without_new_ai_playback",
                                 _clientIp, _sessionId, _uuid, _currentPlaybackId.get(), payload.getResult());
                     }
                 }
             } else {
-                log.info("[{}]: [{}]-[{}]: notifySentenceEnd: ai_reply {}, do_nothing", _clientIp, _sessionId, _uuid, response);
+                log.info("[{}]: [{}]-[{}]: interactWithScriptEngine: ai_reply {}, do_nothing", _clientIp, _sessionId, _uuid, response);
             }
         } catch (final Exception ex) {
-            log.warn("[{}]: [{}]-[{}]: notifySentenceEnd: ai_reply error, detail: {}", _clientIp, _sessionId, _uuid, ExceptionUtil.exception2detail(ex));
+            log.warn("[{}]: [{}]-[{}]: interactWithScriptEngine: ai_reply error, detail: {}", _clientIp, _sessionId, _uuid, ExceptionUtil.exception2detail(ex));
         }
         return userContentId;
     }
