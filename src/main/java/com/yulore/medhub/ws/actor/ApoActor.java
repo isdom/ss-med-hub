@@ -490,8 +490,9 @@ public final class ApoActor {
         _isUserSpeak.set(false);
         _idleStartInMs.set(sentenceEndInMs);
         if (_sessionId != null && _reply2playback != null && _aiSetting != null) {
+            final String speechText = payload.getResult();
             // playback ws has connected && _aiSetting is valid
-            if (payload.getResult() == null || payload.getResult().isEmpty()) {
+            if (speechText == null || speechText.isEmpty()) {
                 _emptyUserSpeechCount++;
                 log.warn("[{}] whenASRSentenceEnd: skip ai_reply => [{}] speech_is_empty, total empty count: {}",
                         _sessionId, payload.getIndex(), _emptyUserSpeechCount);
@@ -499,20 +500,37 @@ public final class ApoActor {
             }
             final var content_index = payload.getIndex() - _emptyUserSpeechCount;
             _userContentIndex.set(content_index);
-
+            final var iterationIdx = addIteration(speechText);
+            log.info("[{}] whenASRSentenceEnd: addIteration => {}", _sessionId, iterationIdx);
+            speech2reply(speechText, content_index)
+            .whenCompleteAsync(handleAiReply(content_index, payload), _executor)
+            .whenComplete((ignored, ex)-> {
+                completeIteration(iterationIdx);
+                if (ex == null) {
+                    log.info("[{}] whenASRSentenceEnd: completeIteration({})", _sessionId, iterationIdx);
+                } else {
+                    log.warn("[{}] whenASRSentenceEnd: completeIteration_with_ex({}, {})",
+                            _sessionId, iterationIdx, ExceptionUtil.exception2detail(ex));
+                }
+            })
+            .whenComplete(reportUserSpeech(content_index, payload, sentenceEndInMs))
+            ;
+            /*
             final String userContentId = interactWithScriptEngine(payload, content_index);
             reportUserContent(payload, userContentId);
             reportAsrTime(payload, sentenceEndInMs, userContentId);
+             */
         } else {
             log.warn("[{}]: [{}]-[{}]: whenASRSentenceEnd but sessionId is null or playback not ready or aiSetting not ready => (reply2playback: {}), (aiSetting: {})",
                     _clientIp, _sessionId, _uuid, _reply2playback, _aiSetting);
         }
 
+        /*
         if (_eslApi != null) {
             final var startInMs = System.currentTimeMillis();
             final var resp = _eslApi.search_ref(_esl_headers, payload.getResult(), 0.5f);
             log.info("[{}]: [{}]-[{}]: {} => ESL Response: {}, cost {} ms", _clientIp, _sessionId, _uuid, payload.getResult(), resp, System.currentTimeMillis() - startInMs);
-        }
+        }*/
     }
 
     private String interactWithScriptEngine(final PayloadSentenceEnd payload, final int content_index) {
@@ -574,7 +592,7 @@ public final class ApoActor {
                 .thenComposeAsync(script_and_esl->{
                     final var t2i_resp = script_and_esl.getLeft();
                     final var esl_resp = script_and_esl.getRight();
-                    log.info("[{}] whenASRSentenceEnd script_and_esl done with {}\nai_t2i resp: {}\nesl_search resp: {}",
+                    log.info("[{}] scriptAndEslMixed script_and_esl done with {}\nai_t2i resp: {}\nesl_search resp: {}",
                             _sessionId, intentConfig, t2i_resp, esl_resp);
                     esl_resp_ref.set(esl_resp);
                     String final_intent = null;
@@ -618,15 +636,67 @@ public final class ApoActor {
             final int content_index,
             final AtomicLong cost) {
         return ()-> {
-            log.info("[{}] before match_esl: ({}) speech:{} partition:{}", _sessionId, content_index, speechText, _esl_partition);
+            log.info("[{}]: [{}]-[{}]: before match_esl: ({}) speech:{} partition:{}",
+                    _clientIp, _sessionId, _uuid, content_index, speechText, _esl_partition);
             final var startInMs = System.currentTimeMillis();
             try {
                 return _matchEsl.apply(speechText, _esl_partition);
             } finally {
                 cost.set(System.currentTimeMillis() - startInMs);
-                log.info("[{}] after match_esl: ({}) speech:{} partition:{} => cost {} ms",
-                        _sessionId, content_index, speechText, _esl_partition, cost.longValue());
+                log.info("[{}]: [{}]-[{}]: after match_esl: ({}) speech:{} partition:{} => cost {} ms",
+                        _clientIp, _sessionId, _uuid, content_index, speechText, _esl_partition, cost.longValue());
             }
+        };
+    }
+
+    private BiConsumer<ApiResponse<AIReplyVO>, Throwable>
+    handleAiReply(final int content_index,
+                  final PayloadSentenceEnd payload) {
+        return (ai_resp, ex) -> {
+            if (ex != null) {
+                log.warn("[{}] onAiReply: ai_reply error, detail: {}", _sessionId, ExceptionUtil.exception2detail(ex));
+                return;
+            }
+
+            if (_userContentIndex.get() != content_index) {
+                log.warn("[{}] onAiReply: ai_reply's user_content_idx:{} != current_user_content_idx:{}, skip response: {}",
+                        _sessionId, content_index, _userContentIndex.get(), ai_resp);
+                return;
+            }
+
+            final boolean isAiSpeaking = isAiSpeaking();
+
+            log.info("[{}] onAiReply: ai_reply ({})", _sessionId, ai_resp);
+            if (ai_resp.getData() != null) {
+                if (!doPlayback(ai_resp.getData()))  {
+                    if (ai_resp.getData().getHangup() == 1) {
+                        _doHangup.accept(this);
+                        log.info("[{}] onAiReply : hangup ({}) for ai_reply ({})", _sessionId, _sessionId, ai_resp.getData());
+                    }
+                    if (isAiSpeaking && _currentPlaybackPaused.compareAndSet(true, false) ) {
+                        _sendEvent.accept("PCMResumePlayback", new PayloadPCMEvent(_currentPlaybackId.get(), ""));
+                        log.info("[{}]: [{}]-[{}]: handleAiReply: resume_current ({}) for ai_reply ({}) without_new_ai_playback",
+                                _clientIp, _sessionId, _uuid, _currentPlaybackId.get(), payload.getResult());
+                    }
+                }
+            } else {
+                log.info("[{}] onAiReply: ai_reply's data is null', do_nothing", _sessionId);
+            }
+        };
+    }
+
+    private BiConsumer<ApiResponse<AIReplyVO>, Throwable>
+    reportUserSpeech(final int content_index,
+                     final PayloadSentenceEnd payload,
+                     final long sentenceEndInMs) {
+        return (ai_resp, ex) -> {
+            final var userContentId = (ai_resp != null && ai_resp.getData() != null && ai_resp.getData().getUser_content_id() != null)
+                    ? ai_resp.getData().getUser_content_id().toString() : null;
+            if (userContentId == null) {
+                log.warn("[{}] reportUserSpeech: ai_reply({}) => user_content_id_is_null", _sessionId, payload.getResult());
+            }
+            reportUserContent(content_index, payload, sentenceEndInMs, userContentId);
+            reportAsrTime(content_index, sentenceEndInMs, userContentId);
         };
     }
 
@@ -759,6 +829,39 @@ public final class ApoActor {
                 resp);
     }
 
+    private void reportUserContent(final int content_index,
+                                   final PayloadSentenceEnd payload,
+                                   final long sentenceEndInMs,
+                                   final String content_id) {
+        // report USER speak timing
+        // ASR-Sentence-Begin-Time in Milliseconds
+        final long start_speak_timestamp = _asrStartInMs.get() + payload.getBegin_time();
+        // ASR-Sentence-End-Time in Milliseconds
+        final long stop_speak_timestamp = _asrStartInMs.get() + payload.getTime();
+        final long user_speak_duration = stop_speak_timestamp - start_speak_timestamp;
+
+        final ApiResponse<Void> resp = _scriptApi.report_content(
+                _sessionId,
+                content_id,
+                content_index,
+                "USER",
+                _asrStartInMs.get(),
+                start_speak_timestamp,
+                stop_speak_timestamp,
+                user_speak_duration);
+        log.info("[{}]: [{}]-[{}]: user_report_content(content_id:{}/idx:{}/asr_start:{}/start_speak:{}/stop_speak:{}/speak_duration:{} s)'s resp: {}",
+                _clientIp,
+                _sessionId,
+                _uuid,
+                content_id,
+                content_index,
+                _asrStartInMs.get(),
+                start_speak_timestamp,
+                stop_speak_timestamp,
+                user_speak_duration / 1000.0,
+                resp);
+    }
+
     private void reportAsrTime(final PayloadSentenceEnd payload, final long sentenceEndInMs, final String userContentId) {
         // report ASR event timing
         // sentence_begin_event_time in Milliseconds
@@ -776,6 +879,25 @@ public final class ApoActor {
                 begin_event_time,
                 end_event_time);
         log.info("[{}]: user report_asrtime({})'s resp: {}", _sessionId, userContentId, resp);
+    }
+
+    private void reportAsrTime(final int content_index,
+                               final long sentenceEndInMs,
+                               final String content_id) {
+        // report ASR event timing
+        // sentence_begin_event_time in Milliseconds
+        final long begin_event_time = _currentSentenceBeginInMs.get() - _asrStartInMs.get();
+
+        // sentence_end_event_time in Milliseconds
+        final long end_event_time = sentenceEndInMs - _asrStartInMs.get();
+
+        final ApiResponse<Void> resp = _scriptApi.report_asrtime(
+                _sessionId,
+                content_id,
+                content_index,
+                begin_event_time,
+                end_event_time);
+        log.info("[{}]: user_report_asrtime({})'s resp: {}", _sessionId, content_id, resp);
     }
 
     private void reportAIContent(final String playbackId,
@@ -1079,15 +1201,15 @@ public final class ApoActor {
             final boolean isAiSpeaking = isAiSpeaking();
             final String aiContentId = currentAiContentId();
             final int speakingDuration = currentSpeakingDuration();
-            log.info("[{}] before ai_reply => ({}) speech:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
-                    _sessionId, content_index, speechText, isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
+            log.info("[{}]: [{}]-[{}]: before ai_reply => ({}) speech:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
+                    _clientIp, _sessionId, _uuid, content_index, speechText, isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
             return _scriptApi.ai_reply(_sessionId, content_index, speechText, null, isAiSpeaking ? 1 : 0, aiContentId, speakingDuration);
         };
     }
 
     private Supplier<ApiResponse<ScriptApi.Text2IntentResult>> callSpeech2Intent(final String speechText, final int content_index) {
         return ()-> {
-            log.info("[{}] before ai_t2i => ({}) speech:{}", _sessionId, content_index, speechText);
+            log.info("[{}]: [{}]-[{}]: before ai_t2i => ({}) speech:{}", _clientIp, _sessionId, _uuid, content_index, speechText);
             return _scriptApi.ai_t2i(ScriptApi.Text2IntentRequest.builder()
                     .speechText(speechText)
                     .speechIdx(content_index)
@@ -1182,11 +1304,11 @@ public final class ApoActor {
     private boolean _use_esl = false;
     private String _esl_partition = null;
 
-    @Value("#{${esl.api.headers}}")
-    private Map<String,String> _esl_headers;
+    //@Value("#{${esl.api.headers}}")
+    //private Map<String,String> _esl_headers;
 
-    @Autowired(required = false)
-    private EslApi _eslApi;
+    //@Autowired(required = false)
+    //private EslApi _eslApi;
 
     private final Consumer<ApoActor> _doHangup;
     private final AtomicReference<AIReplyVO> _welcome = new AtomicReference<>(null);
