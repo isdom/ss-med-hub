@@ -297,6 +297,39 @@ public final class ApoActor {
                 && _aiSetting != null
                 ) {
                 if (idleTime > _aiSetting.getIdle_timeout()) {
+                    if (hasPendingIteration()) {
+                        log.info("[{}] checkIdle: has_pending_iteration, skip", _sessionId);
+                    } else {
+                        final var iterationIdx = addIteration("checkIdle");
+                        log.info("[{}]: [{}]-[{}]: checkIdle: iteration: {} / idle duration: {} ms >=: [{}] ms",
+                                _clientIp, _sessionId, _uuid, iterationIdx, idleTime, _aiSetting.getIdle_timeout());
+                        interactAsync(callAiReplyWithIdleTime(idleTime))
+                        .whenCompleteAsync((response, ex) -> {
+                            completeIteration(iterationIdx);
+                            if (ex != null) {
+                                log.warn("[{}] checkIdle: ai_reply error, detail: {}", _sessionId, ExceptionUtil.exception2detail(ex));
+                            } else if (!isCurrentIteration(iterationIdx)) {
+                                log.warn("[{}] checkIdle: iteration mismatch({} != {}), skip", _sessionId, iterationIdx, _lastIterationIdx);
+                            } else {
+                                log.info("[{}] checkIdle: ai_reply {}", _sessionId, response);
+                                if (response.getData() != null) {
+                                    if (!doPlayback(response.getData())) {
+                                        log.info("[{}]: [{}]-[{}]: checkIdle: ai_reply {}, !NOT! doPlayback", _clientIp, _sessionId, _uuid, response);
+                                        if (response.getData().getHangup() == 1) {
+                                            // hangup call
+                                            _doHangup.accept(this);
+                                            log.info("[{}] checkIdle: hangup ({}) for ai_reply ({})", _sessionId, _sessionId, response.getData());
+                                        }
+                                    }
+                                } else {
+                                    log.info("[{}] checkIdle: ai_reply's data is null, do_nothing", _sessionId);
+                                }
+                            }
+                        }, _executor)
+                        ;
+                    }
+
+                    /*
                     log.info("[{}]: [{}]-[{}]: checkIdle: idle duration: {} ms >=: [{}] ms", _clientIp, _sessionId, _uuid, idleTime, _aiSetting.getIdle_timeout());
                     try {
                         final ApiResponse<AIReplyVO> response =
@@ -318,6 +351,7 @@ public final class ApoActor {
                         log.warn("[{}]: [{}]-[{}]: checkIdle: ai_reply error, detail: {}", _clientIp, _sessionId, _uuid,
                                 ExceptionUtil.exception2detail(ex));
                     }
+                    */
                 }
             }
             log.info("[{}]: [{}]-[{}]: checkIdle: is_speaking: {}/is_playing: {}/idle duration: {} ms",
@@ -1194,6 +1228,11 @@ public final class ApoActor {
 
     private boolean hasPendingIteration() {
         return !_pendingIteration.isEmpty();
+    }
+
+    private Supplier<ApiResponse<AIReplyVO>> callAiReplyWithIdleTime(final long idleTime) {
+        return () -> _scriptApi.ai_reply(
+                _sessionId, null, null, idleTime, 0, null, 0);
     }
 
     private Supplier<ApiResponse<AIReplyVO>> callAiReplyWithSpeech(final String speechText, final int content_index) {
