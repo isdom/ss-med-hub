@@ -201,7 +201,11 @@ public final class ApoActor {
 
     private void saveAndPlayWelcome(final ApiResponse<UserAnswerVO> response) {
         if (null != response.getData()) {
+            _use_esl = response.getData().getUse_esl() != null ? response.getData().getUse_esl() : false;
+            _esl_partition = response.getData().getEsl_partition();
             _welcome.set(response.getData());
+            log.info("[{}]: [{}]-[{}]: saveAndPlayWelcome: _use_esl:{}/_esl_partition:{}/_welcome:{}",
+                    _clientIp, _sessionId, _uuid, _use_esl, _esl_partition, _welcome.get());
             if (null != response.getData()) {
                 _aiSetting = response.getData().getAiSetting();
             }
