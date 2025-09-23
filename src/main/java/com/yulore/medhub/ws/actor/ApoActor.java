@@ -496,30 +496,30 @@ public final class ApoActor {
                 _emptyUserSpeechCount++;
                 log.warn("[{}] whenASRSentenceEnd: skip ai_reply => [{}] speech_is_empty, total empty count: {}",
                         _sessionId, payload.getIndex(), _emptyUserSpeechCount);
-                return;
-            }
-            final var content_index = payload.getIndex() - _emptyUserSpeechCount;
-            _userContentIndex.set(content_index);
-            final var iterationIdx = addIteration(speechText);
-            log.info("[{}] whenASRSentenceEnd: addIteration => {}", _sessionId, iterationIdx);
-            speech2reply(speechText, content_index)
-            .whenCompleteAsync(handleAiReply(content_index, payload), _executor)
-            .whenComplete((ignored, ex)-> {
-                completeIteration(iterationIdx);
-                if (ex == null) {
-                    log.info("[{}] whenASRSentenceEnd: completeIteration({})", _sessionId, iterationIdx);
-                } else {
-                    log.warn("[{}] whenASRSentenceEnd: completeIteration_with_ex({}, {})",
-                            _sessionId, iterationIdx, ExceptionUtil.exception2detail(ex));
-                }
-            })
-            .whenComplete(reportUserSpeech(content_index, payload, sentenceEndInMs))
-            ;
+            } else {
+                final var content_index = payload.getIndex() - _emptyUserSpeechCount;
+                _userContentIndex.set(content_index);
+                final var iterationIdx = addIteration(speechText);
+                log.info("[{}] whenASRSentenceEnd: addIteration => {}", _sessionId, iterationIdx);
+                speech2reply(speechText, content_index)
+                .whenCompleteAsync(handleAiReply(content_index, payload), _executor)
+                .whenComplete((ignored, ex) -> {
+                    completeIteration(iterationIdx);
+                    if (ex == null) {
+                        log.info("[{}] whenASRSentenceEnd: completeIteration({})", _sessionId, iterationIdx);
+                    } else {
+                        log.warn("[{}] whenASRSentenceEnd: completeIteration_with_ex({}, {})",
+                                _sessionId, iterationIdx, ExceptionUtil.exception2detail(ex));
+                    }
+                })
+                .whenComplete(reportUserSpeech(content_index, payload, sentenceEndInMs))
+                ;
             /*
             final String userContentId = interactWithScriptEngine(payload, content_index);
             reportUserContent(payload, userContentId);
             reportAsrTime(payload, sentenceEndInMs, userContentId);
              */
+            }
         } else {
             log.warn("[{}]: [{}]-[{}]: whenASRSentenceEnd but sessionId is null or playback not ready or aiSetting not ready => (reply2playback: {}), (aiSetting: {})",
                     _clientIp, _sessionId, _uuid, _reply2playback, _aiSetting);
