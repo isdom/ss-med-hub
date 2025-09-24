@@ -21,7 +21,6 @@ import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
@@ -332,30 +331,6 @@ public final class ApoActor {
                         }, _executor)
                         ;
                     }
-
-                    /*
-                    log.info("[{}]: [{}]-[{}]: checkIdle: idle duration: {} ms >=: [{}] ms", _clientIp, _sessionId, _uuid, idleTime, _aiSetting.getIdle_timeout());
-                    try {
-                        final ApiResponse<AIReplyVO> response =
-                                _scriptApi.ai_reply(_sessionId, null, null, idleTime, 0, null, 0);
-                        if (response.getData() != null) {
-                            if (response.getData().getAi_content_id() != null && doPlayback(response.getData())) {
-                                return;
-                            } else {
-                                log.info("[{}]: [{}]-[{}]: checkIdle: ai_reply {}, !NOT! doPlayback", _clientIp, _sessionId, _uuid, response);
-                                if (response.getData().getHangup() == 1) {
-                                    // hangup call
-                                    _doHangup.accept(this);
-                                }
-                            }
-                        } else {
-                            log.info("[{}]: [{}]-[{}]: checkIdle: ai_reply {}, do nothing", _clientIp, _sessionId, _uuid, response);
-                        }
-                    } catch (Exception ex) {
-                        log.warn("[{}]: [{}]-[{}]: checkIdle: ai_reply error, detail: {}", _clientIp, _sessionId, _uuid,
-                                ExceptionUtil.exception2detail(ex));
-                    }
-                    */
                 }
             }
             log.info("[{}]: [{}]-[{}]: checkIdle: is_speaking: {}/is_playing: {}/idle duration: {} ms",
@@ -1235,8 +1210,7 @@ public final class ApoActor {
     }
 
     private Supplier<ApiResponse<AIReplyVO>> callAiReplyWithIdleTime(final long idleTime) {
-        return () -> _scriptApi.ai_reply(
-                _sessionId, null, null, idleTime, 0, null, 0);
+        return () -> _scriptApi.ai_reply(_sessionId, null, null, idleTime, 0, null, 0);
     }
 
     private Supplier<ApiResponse<AIReplyVO>> callAiReplyWithSpeech(final String speechText, final int content_index) {

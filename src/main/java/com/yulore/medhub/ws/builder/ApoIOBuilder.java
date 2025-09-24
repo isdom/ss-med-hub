@@ -14,7 +14,6 @@ import com.yulore.medhub.vo.cmd.*;
 import com.yulore.medhub.ws.WSCommandRegistry;
 import com.yulore.medhub.ws.WsHandler;
 import com.yulore.medhub.ws.WsHandlerBuilder;
-import com.yulore.medhub.ws.actor.AfsActor;
 import com.yulore.medhub.ws.actor.ApoActor;
 import com.yulore.metric.DisposableGauge;
 import com.yulore.metric.MetricCustomized;
