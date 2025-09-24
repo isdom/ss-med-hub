@@ -155,12 +155,15 @@ public final class ApoActor {
                 }
 
                 final var now = System.currentTimeMillis();
-                interactAsync(()->_callApi.mock_answer(CallApi.MockAnswerRequest.builder()
+                interactAsync(()->{
+                    log.info("[{}]: [{}]-[{}]: before_mockAnswer for tid:{}", _clientIp, _sessionId, _uuid, _tid);
+                    return _callApi.mock_answer(CallApi.MockAnswerRequest.builder()
                         .sessionId(_sessionId)
                         .uuid(_uuid)
                         .tid(_tid)
                         .answerTime(now)
-                        .build()))
+                        .build());
+                })
                 .whenCompleteAsync((response, ex) -> {
                     if (ex != null) {
                         log.warn("[{}]: [{}]-[{}]: failed for callApi.mock_answer, detail: {}",

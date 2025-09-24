@@ -648,8 +648,8 @@ public final class AfsActor {
                 .thenComposeAsync(script_and_esl->{
                     final var t2i_resp = script_and_esl.getLeft();
                     final var esl_resp = script_and_esl.getRight();
-                    log.info("[{}] whenASRSentenceEnd script_and_esl done with {}\nai_t2i resp: {}\nesl_search resp: {}",
-                            sessionId, intentConfig, t2i_resp, esl_resp);
+                    log.info("[{}] whenASRSentenceEnd script_and_esl done with {}\n[{}] ai_t2i resp: {}\n[{}] esl_search resp: {}",
+                            sessionId, intentConfig, sessionId, t2i_resp, sessionId, esl_resp);
                     esl_resp_ref.set(esl_resp);
                     String final_intent = null;
                     String esl_intent = null;
