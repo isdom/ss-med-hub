@@ -153,19 +153,23 @@ public final class ApoActor {
                     log.warn("[{}]/[{}]: doMockAnswer error for uuid:{}/tid:{}, abort mock_answer.", _clientIp, _sessionId, _uuid, _tid);
                     return;
                 }
-                try {
-                    final ApiResponse<UserAnswerVO> response = _callApi.mock_answer(CallApi.MockAnswerRequest.builder()
-                            .sessionId(_sessionId)
-                            .uuid(_uuid)
-                            .tid(_tid)
-                            .answerTime(System.currentTimeMillis())
-                            .build());
-                    log.info("[{}]: [{}]-[{}]: mockAnswer: tid:{} => response: {}", _clientIp, _sessionId, _uuid, _tid, response);
 
-                    saveAndPlayWelcome(response);
-                } catch (Exception ex) {
-                    log.warn("[{}]: [{}]-[{}]: failed for callApi.mock_answer, detail: {}", _clientIp, _sessionId, _uuid, ex.toString());
-                }
+                final var now = System.currentTimeMillis();
+                interactAsync(()->_callApi.mock_answer(CallApi.MockAnswerRequest.builder()
+                        .sessionId(_sessionId)
+                        .uuid(_uuid)
+                        .tid(_tid)
+                        .answerTime(now)
+                        .build()))
+                .whenCompleteAsync((response, ex) -> {
+                    if (ex != null) {
+                        log.warn("[{}]: [{}]-[{}]: failed for callApi.mock_answer, detail: {}",
+                                _clientIp, _sessionId, _uuid, ExceptionUtil.exception2detail(ex));
+                    } else {
+                        log.info("[{}]: [{}]-[{}]: mockAnswer: tid:{} => response: {}", _clientIp, _sessionId, _uuid, _tid, response);
+                        saveAndPlayWelcome(response);
+                    }
+                }, _executor);
             }
         });
     }
@@ -179,23 +183,27 @@ public final class ApoActor {
             log.warn("[{}]/[{}]: ApoActor_notifyUserAnswer error for uuid:{}/tid:{}, abort user_answer.", _clientIp, _sessionId, _uuid, _tid);
             return;
         }
-        try {
-            final ApiResponse<UserAnswerVO> response = _callApi.user_answer(CallApi.UserAnswerRequest.builder()
-                            .sessionId(_sessionId)
-                            .kid(vo.kid)
-                            .tid(vo.tid)
-                            .realName(vo.realName)
-                            .genderStr(vo.genderStr)
-                            .aesMobile(vo.aesMobile)
-                            .answerTime(System.currentTimeMillis())
-                            .build());
-            log.info("[{}]: [{}]-[{}]: userAnswer: kid:{}/tid:{}/realName:{}/gender:{}/aesMobile:{} => response: {}",
-                    _clientIp, _sessionId, _uuid, vo.kid, vo.tid, vo.realName, vo.genderStr, vo.aesMobile, response);
 
-            saveAndPlayWelcome(response);
-        } catch (Exception ex) {
-            log.warn("[{}]: [{}]-[{}]: failed for callApi.user_answer, detail: {}", _clientIp, _sessionId, _uuid, ex.toString());
-        }
+        final var now = System.currentTimeMillis();
+        interactAsync(()->_callApi.user_answer(CallApi.UserAnswerRequest.builder()
+                .sessionId(_sessionId)
+                .kid(vo.kid)
+                .tid(vo.tid)
+                .realName(vo.realName)
+                .genderStr(vo.genderStr)
+                .aesMobile(vo.aesMobile)
+                .answerTime(now)
+                .build()))
+        .whenCompleteAsync((response, ex) -> {
+            if (ex != null) {
+                log.warn("[{}]: [{}]-[{}]: failed for callApi.user_answer, detail: {}",
+                        _clientIp, _sessionId, _uuid, ExceptionUtil.exception2detail(ex));
+            } else {
+                log.info("[{}]: [{}]-[{}]: userAnswer: kid:{}/tid:{}/realName:{}/gender:{}/aesMobile:{} => response: {}",
+                        _clientIp, _sessionId, _uuid, vo.kid, vo.tid, vo.realName, vo.genderStr, vo.aesMobile, response);
+                saveAndPlayWelcome(response);
+            }
+        }, _executor);
     }
 
     private void saveAndPlayWelcome(final ApiResponse<UserAnswerVO> response) {
@@ -537,13 +545,6 @@ public final class ApoActor {
             log.warn("[{}]: [{}]-[{}]: whenASRSentenceEnd but sessionId is null or playback not ready or aiSetting not ready => (reply2playback: {}), (aiSetting: {})",
                     _clientIp, _sessionId, _uuid, _reply2playback, _aiSetting);
         }
-
-        /*
-        if (_eslApi != null) {
-            final var startInMs = System.currentTimeMillis();
-            final var resp = _eslApi.search_ref(_esl_headers, payload.getResult(), 0.5f);
-            log.info("[{}]: [{}]-[{}]: {} => ESL Response: {}, cost {} ms", _clientIp, _sessionId, _uuid, payload.getResult(), resp, System.currentTimeMillis() - startInMs);
-        }*/
     }
 
     private String interactWithScriptEngine(final PayloadSentenceEnd payload, final int content_index) {
@@ -1320,12 +1321,6 @@ public final class ApoActor {
 
     private boolean _use_esl = false;
     private String _esl_partition = null;
-
-    //@Value("#{${esl.api.headers}}")
-    //private Map<String,String> _esl_headers;
-
-    //@Autowired(required = false)
-    //private EslApi _eslApi;
 
     private final Consumer<ApoActor> _doHangup;
     private final AtomicReference<AIReplyVO> _welcome = new AtomicReference<>(null);
