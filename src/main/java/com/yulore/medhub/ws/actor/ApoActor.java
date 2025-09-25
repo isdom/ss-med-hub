@@ -188,7 +188,9 @@ public final class ApoActor {
         }
 
         final var now = System.currentTimeMillis();
-        interactAsync(()->_callApi.user_answer(CallApi.UserAnswerRequest.builder()
+        interactAsync(()->{
+            log.info("[{}]: [{}]-[{}]: before_userAnswer: {}", _clientIp, _sessionId, _uuid, vo);
+            return _callApi.user_answer(CallApi.UserAnswerRequest.builder()
                 .sessionId(_sessionId)
                 .kid(vo.kid)
                 .tid(vo.tid)
@@ -196,14 +198,14 @@ public final class ApoActor {
                 .genderStr(vo.genderStr)
                 .aesMobile(vo.aesMobile)
                 .answerTime(now)
-                .build()))
+                .build());
+        })
         .whenCompleteAsync((response, ex) -> {
             if (ex != null) {
                 log.warn("[{}]: [{}]-[{}]: failed for callApi.user_answer, detail: {}",
                         _clientIp, _sessionId, _uuid, ExceptionUtil.exception2detail(ex));
             } else {
-                log.info("[{}]: [{}]-[{}]: userAnswer: kid:{}/tid:{}/realName:{}/gender:{}/aesMobile:{} => response: {}",
-                        _clientIp, _sessionId, _uuid, vo.kid, vo.tid, vo.realName, vo.genderStr, vo.aesMobile, response);
+                log.info("[{}]: [{}]-[{}]: userAnswer: {} => response: {}", _clientIp, _sessionId, _uuid, vo, response);
                 saveAndPlayWelcome(response);
             }
         }, _executor);
