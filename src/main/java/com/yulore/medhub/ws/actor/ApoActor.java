@@ -154,14 +154,14 @@ public final class ApoActor {
                     return;
                 }
 
-                final var now = System.currentTimeMillis();
+                final var answerTime = System.currentTimeMillis();
                 interactAsync(()->{
                     log.info("[{}]: [{}]-[{}]: before_mockAnswer for tid:{}", _clientIp, _sessionId, _uuid, _tid);
                     return _callApi.mock_answer(CallApi.MockAnswerRequest.builder()
                         .sessionId(_sessionId)
                         .uuid(_uuid)
                         .tid(_tid)
-                        .answerTime(now)
+                        .answerTime(answerTime)
                         .build());
                 })
                 .whenCompleteAsync((response, ex) -> {
@@ -187,7 +187,7 @@ public final class ApoActor {
             return;
         }
 
-        final var now = System.currentTimeMillis();
+        final var answerTime = System.currentTimeMillis();
         interactAsync(()->{
             log.info("[{}]: [{}]-[{}]: before_userAnswer: {}", _clientIp, _sessionId, _uuid, vo);
             return _callApi.user_answer(CallApi.UserAnswerRequest.builder()
@@ -197,7 +197,7 @@ public final class ApoActor {
                 .realName(vo.realName)
                 .genderStr(vo.genderStr)
                 .aesMobile(vo.aesMobile)
-                .answerTime(now)
+                .answerTime(answerTime)
                 .build());
         })
         .whenCompleteAsync((response, ex) -> {
