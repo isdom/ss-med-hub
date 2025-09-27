@@ -19,7 +19,7 @@ import java.util.function.Supplier;
 
 @Slf4j
 public class TTSStreamTask implements BuildStreamTask {
-    final HashFunction _MD5 = Hashing.md5();
+    final static HashFunction _MD5 = Hashing.md5();
 
     public TTSStreamTask(final String path,
                          final Supplier<CompletionStage<TTSAgent>> getTTSAgent,
