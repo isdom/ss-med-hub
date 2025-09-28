@@ -19,6 +19,7 @@ import java.util.concurrent.TimeUnit;
 )
 @ConditionalOnProperty(prefix = "dv.api", name = "url")
 public interface DashVectorApi {
+    @Builder
     @Data
     @ToString
     class Doc {
@@ -44,6 +45,7 @@ public interface DashVectorApi {
     }
 
     @Builder
+    @Data
     @ToString
     class InsertDocRequest {
         public Doc[] docs;
