@@ -19,7 +19,7 @@ import java.util.function.Supplier;
 
 @Slf4j
 public class CosyStreamTask implements BuildStreamTask {
-    final HashFunction _MD5 = Hashing.md5();
+    final static HashFunction _MD5 = Hashing.md5();
 
     public CosyStreamTask(final String path, final Supplier<CompletionStage<CosyAgent>> getCosyAgent, final Consumer<StreamInputTts> onSynthesizer) {
         _getCosyAgent = getCosyAgent;
