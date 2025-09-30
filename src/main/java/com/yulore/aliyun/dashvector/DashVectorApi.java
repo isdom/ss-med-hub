@@ -82,6 +82,7 @@ public interface DashVectorApi {
             @RequestBody InsertDocRequest request);
 
     @Builder
+    @Data
     @ToString
     class DeleteDocRequest {
         public String[] ids;
