@@ -101,6 +101,7 @@ public interface DashVectorApi {
             @RequestBody DeleteDocRequest request);
 
     @Builder
+    @Data
     @ToString
     class QueryDocRequest {
         public String id;
