@@ -121,6 +121,7 @@ public interface DashVectorApi {
             @RequestBody QueryDocRequest request);
 
     @Builder
+    @Data
     @ToString
     class QueryDocGroupByRequest {
         public String id;
