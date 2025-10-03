@@ -207,6 +207,7 @@ public interface DashVectorApi {
     }
 
     @Builder
+    @Data
     @ToString
     class CreatePartitionRequest {
         public String name;
