@@ -19,6 +19,9 @@ import java.util.concurrent.TimeUnit;
 )
 @ConditionalOnProperty(prefix = "dv.api", name = "url")
 public interface DashVectorApi {
+
+    String DASHVECTOR_AUTH_TOKEN = "dashvector-auth-token";
+
     @Builder
     @Data
     @ToString
@@ -66,7 +69,7 @@ public interface DashVectorApi {
             value = "/v1/collections/{collection}/docs",
             method = RequestMethod.POST)
     DVResponse<DocOpResult> insertDoc(
-            @RequestHeader("dashvector-auth-token") String authToken,
+            @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
             @RequestHeader("Content-Type") String contentType,
             @PathVariable("collection") String collection,
             @RequestBody InsertDocRequest request);
@@ -76,7 +79,7 @@ public interface DashVectorApi {
             value = "/v1/collections/{collection}/docs",
             method = RequestMethod.PUT)
     DVResponse<DocOpResult[]> updateDoc(
-            @RequestHeader("dashvector-auth-token") String authToken,
+            @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
             @RequestHeader("Content-Type") String contentType,
             @PathVariable("collection") String collection,
             @RequestBody InsertDocRequest request);
@@ -95,7 +98,7 @@ public interface DashVectorApi {
             value = "/v1/collections/{collection}/docs",
             method = RequestMethod.DELETE)
     DVResponse<DocOpResult[]> deleteDoc(
-            @RequestHeader("dashvector-auth-token") String authToken,
+            @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
             @RequestHeader("Content-Type") String contentType,
             @PathVariable("collection") String collection,
             @RequestBody DeleteDocRequest request);
@@ -115,7 +118,7 @@ public interface DashVectorApi {
             value = "/v1/collections/{collection}/query",
             method = RequestMethod.POST)
     DVResponse<Doc> queryDoc(
-            @RequestHeader("dashvector-auth-token") String authToken,
+            @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
             @RequestHeader("Content-Type") String contentType,
             @PathVariable("collection") String collection,
             @RequestBody QueryDocRequest request);
@@ -146,7 +149,7 @@ public interface DashVectorApi {
             value = "/v1/collections/{collection}/query_group_by",
             method = RequestMethod.POST)
     DVResponse<Group> queryDocGroupBy(
-            @RequestHeader("dashvector-auth-token") String authToken,
+            @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
             @RequestHeader("Content-Type") String contentType,
             @PathVariable("collection") String collection,
             @RequestBody QueryDocGroupByRequest request);
@@ -156,7 +159,7 @@ public interface DashVectorApi {
             value = "/v1/collections/{collection}/docs",
             method = RequestMethod.GET)
     DVResponse<Map<String, Doc>> fetchDoc(
-            @RequestHeader("dashvector-auth-token") String authToken,
+            @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
             @RequestHeader("Content-Type") String contentType,
             @PathVariable("collection") String collection,
             @RequestParam("ids") String ids,
@@ -167,7 +170,7 @@ public interface DashVectorApi {
             value = "/v1/collections/{collection}/partitions",
             method = RequestMethod.GET)
     DVResponse<String> listPartitions(
-            @RequestHeader("dashvector-auth-token") String authToken,
+            @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
             @RequestHeader("Content-Type") String contentType,
             @PathVariable("collection") String collection);
 
@@ -176,7 +179,7 @@ public interface DashVectorApi {
             value = "/v1/collections",
             method = RequestMethod.GET)
     DVResponse<String> listCollections(
-            @RequestHeader("dashvector-auth-token") String authToken,
+            @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
             @RequestHeader("Content-Type") String contentType);
 
     @Data
@@ -196,7 +199,7 @@ public interface DashVectorApi {
             value = "/v1/collections/{collection}",
             method = RequestMethod.GET)
     DVResponse<CollectionMeta> descCollection(
-            @RequestHeader("dashvector-auth-token") String authToken,
+            @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
             @RequestHeader("Content-Type") String contentType,
             @PathVariable("collection") String collection);
 
@@ -210,7 +213,7 @@ public interface DashVectorApi {
     @Data
     @ToString
     class CreatePartitionRequest {
-        public String name;
+        private String name;
     }
 
     // REF: https://help.aliyun.com/document_detail/2510326.html
@@ -218,7 +221,7 @@ public interface DashVectorApi {
             value = "/v1/collections/{collection}/partitions",
             method = RequestMethod.POST)
     DVResponse<Void> createPartition(
-            @RequestHeader("dashvector-auth-token") String authToken,
+            @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
             @RequestHeader("Content-Type") String contentType,
             @PathVariable("collection") String collection,
             @RequestBody CreatePartitionRequest request
@@ -230,7 +233,7 @@ public interface DashVectorApi {
             value = "/v1/collections/{collection}/partitions/{partition}",
             method = RequestMethod.GET)
     DVResponse<String> describePartition(
-            @RequestHeader("dashvector-auth-token") String authToken,
+            @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
             @RequestHeader("Content-Type") String contentType,
             @PathVariable("collection") String collection,
             @PathVariable("partition") String partition
@@ -241,7 +244,7 @@ public interface DashVectorApi {
             value = "/v1/collections/{collection}/partitions/{partition}/stats",
             method = RequestMethod.GET)
     DVResponse<PartitionStats> statsPartition(
-            @RequestHeader("dashvector-auth-token") String authToken,
+            @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
             @RequestHeader("Content-Type") String contentType,
             @PathVariable("collection") String collection,
             @PathVariable("partition") String partition
@@ -260,7 +263,7 @@ public interface DashVectorApi {
             value = "/v1/collections/{collection}/stats",
             method = RequestMethod.GET)
     DVResponse<CollectionStats> statsCollection(
-            @RequestHeader("dashvector-auth-token") String authToken,
+            @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
             @RequestHeader("Content-Type") String contentType,
             @PathVariable("collection") String collection);
 
