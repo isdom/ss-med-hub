@@ -21,6 +21,7 @@ import java.util.concurrent.TimeUnit;
 public interface DashVectorApi {
 
     String DASHVECTOR_AUTH_TOKEN = "dashvector-auth-token";
+    String CONTENT_TYPE = "Content-Type";
 
     @Builder
     @Data
@@ -70,7 +71,7 @@ public interface DashVectorApi {
             method = RequestMethod.POST)
     DVResponse<DocOpResult> insertDoc(
             @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
-            @RequestHeader("Content-Type") String contentType,
+            @RequestHeader(CONTENT_TYPE) String contentType,
             @PathVariable("collection") String collection,
             @RequestBody InsertDocRequest request);
 
@@ -80,7 +81,7 @@ public interface DashVectorApi {
             method = RequestMethod.PUT)
     DVResponse<DocOpResult[]> updateDoc(
             @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
-            @RequestHeader("Content-Type") String contentType,
+            @RequestHeader(CONTENT_TYPE) String contentType,
             @PathVariable("collection") String collection,
             @RequestBody InsertDocRequest request);
 
@@ -99,7 +100,7 @@ public interface DashVectorApi {
             method = RequestMethod.DELETE)
     DVResponse<DocOpResult[]> deleteDoc(
             @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
-            @RequestHeader("Content-Type") String contentType,
+            @RequestHeader(CONTENT_TYPE) String contentType,
             @PathVariable("collection") String collection,
             @RequestBody DeleteDocRequest request);
 
@@ -119,7 +120,7 @@ public interface DashVectorApi {
             method = RequestMethod.POST)
     DVResponse<Doc> queryDoc(
             @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
-            @RequestHeader("Content-Type") String contentType,
+            @RequestHeader(CONTENT_TYPE) String contentType,
             @PathVariable("collection") String collection,
             @RequestBody QueryDocRequest request);
 
@@ -150,7 +151,7 @@ public interface DashVectorApi {
             method = RequestMethod.POST)
     DVResponse<Group> queryDocGroupBy(
             @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
-            @RequestHeader("Content-Type") String contentType,
+            @RequestHeader(CONTENT_TYPE) String contentType,
             @PathVariable("collection") String collection,
             @RequestBody QueryDocGroupByRequest request);
 
@@ -160,7 +161,7 @@ public interface DashVectorApi {
             method = RequestMethod.GET)
     DVResponse<Map<String, Doc>> fetchDoc(
             @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
-            @RequestHeader("Content-Type") String contentType,
+            @RequestHeader(CONTENT_TYPE) String contentType,
             @PathVariable("collection") String collection,
             @RequestParam("ids") String ids,
             @RequestParam("partition") String partition);
@@ -171,7 +172,7 @@ public interface DashVectorApi {
             method = RequestMethod.GET)
     DVResponse<String> listPartitions(
             @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
-            @RequestHeader("Content-Type") String contentType,
+            @RequestHeader(CONTENT_TYPE) String contentType,
             @PathVariable("collection") String collection);
 
     // REF: https://help.aliyun.com/document_detail/2510298.html
@@ -180,7 +181,7 @@ public interface DashVectorApi {
             method = RequestMethod.GET)
     DVResponse<String> listCollections(
             @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
-            @RequestHeader("Content-Type") String contentType);
+            @RequestHeader(CONTENT_TYPE) String contentType);
 
     @Data
     @ToString
@@ -200,7 +201,7 @@ public interface DashVectorApi {
             method = RequestMethod.GET)
     DVResponse<CollectionMeta> descCollection(
             @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
-            @RequestHeader("Content-Type") String contentType,
+            @RequestHeader(CONTENT_TYPE) String contentType,
             @PathVariable("collection") String collection);
 
     @Data
@@ -222,7 +223,7 @@ public interface DashVectorApi {
             method = RequestMethod.POST)
     DVResponse<Void> createPartition(
             @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
-            @RequestHeader("Content-Type") String contentType,
+            @RequestHeader(CONTENT_TYPE) String contentType,
             @PathVariable("collection") String collection,
             @RequestBody CreatePartitionRequest request
     );
@@ -234,7 +235,7 @@ public interface DashVectorApi {
             method = RequestMethod.GET)
     DVResponse<String> describePartition(
             @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
-            @RequestHeader("Content-Type") String contentType,
+            @RequestHeader(CONTENT_TYPE) String contentType,
             @PathVariable("collection") String collection,
             @PathVariable("partition") String partition
     );
@@ -245,7 +246,7 @@ public interface DashVectorApi {
             method = RequestMethod.GET)
     DVResponse<PartitionStats> statsPartition(
             @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
-            @RequestHeader("Content-Type") String contentType,
+            @RequestHeader(CONTENT_TYPE) String contentType,
             @PathVariable("collection") String collection,
             @PathVariable("partition") String partition
     );
@@ -264,7 +265,7 @@ public interface DashVectorApi {
             method = RequestMethod.GET)
     DVResponse<CollectionStats> statsCollection(
             @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
-            @RequestHeader("Content-Type") String contentType,
+            @RequestHeader(CONTENT_TYPE) String contentType,
             @PathVariable("collection") String collection);
 
     // 配置类定义
