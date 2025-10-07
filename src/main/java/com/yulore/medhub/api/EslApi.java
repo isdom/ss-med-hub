@@ -1,7 +1,6 @@
 package com.yulore.medhub.api;
 
 import feign.Request;
-import lombok.Builder;
 import lombok.Data;
 import lombok.ToString;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -18,7 +17,7 @@ import java.util.concurrent.TimeUnit;
 @FeignClient(
         value = "${esl.name}",
         url = "${esl.api.url}",
-        configuration = EslApi.EslApiConfig.class
+        configuration = EslApi.Config.class
 )
 @ConditionalOnProperty(prefix = "esl.api", name = "url")
 public interface EslApi {
@@ -85,7 +84,7 @@ public interface EslApi {
     EslResponse<Hit> search_ref(@RequestHeader Map<String, String> headers, @RequestParam("text") String text, @RequestParam("ct") float ct);
 
     // 配置类定义
-    class EslApiConfig {
+    class Config {
         @Bean
         public Request.Options options() {
             // connect(200ms), read(500ms), followRedirects(true)
