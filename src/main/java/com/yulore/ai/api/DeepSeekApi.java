@@ -1,8 +1,10 @@
 package com.yulore.ai.api;
 
 import feign.Request;
+import lombok.*;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.context.annotation.Bean;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.concurrent.TimeUnit;
 
@@ -11,6 +13,12 @@ import java.util.concurrent.TimeUnit;
         configuration = DeepSeekApi.ApiConfig.class
 )
 public interface DeepSeekApi {
+    String AUTHORIZATION = "Authorization";
+    String CONTENT_TYPE = "Content-Type";
+    String ACCEPT = "Accept";
+
+    String APP_JSON = "application/json";
+
     /*
     OkHttpClient client = new OkHttpClient().newBuilder()
             .build();
@@ -43,7 +51,73 @@ public interface DeepSeekApi {
             "top_logprobs": null
         }
     ");
+    */
+    @Builder
+    @Data
+    @ToString
+    @NoArgsConstructor
+    @AllArgsConstructor
+    class Message {
+        private String content;
+        private String reasoning_content;
+        private String role;
+    }
 
+    @Builder
+    @Data
+    @ToString
+    class ResponseFormat {
+        private String type;
+    }
+
+    ResponseFormat JSON_OBJ = ResponseFormat.builder().type("json_object").build();
+
+    @Builder
+    @Data
+    @ToString
+    class CompletionsRequest {
+        private Message[] messages;
+        private String model;
+        private Float frequency_penalty;
+        private Integer max_tokens;
+        private Float presence_penalty;
+        private ResponseFormat response_format;
+        private Object stop;
+        private Boolean stream;
+        private Float temperature;
+        private Float top_p;
+    }
+
+    @Data
+    @ToString
+    class Completion {
+        private int index;
+        private String finish_reason;
+        private Message message;
+    }
+
+    @Data
+    @ToString
+    class Usage {
+        private int completion_tokens;
+        private int prompt_tokens;
+        private int prompt_cache_hit_tokens;
+        private int prompt_cache_miss_tokens;
+        private int total_tokens;
+    }
+
+    @Data
+    @ToString
+    class CompletionResponse {
+        private String id;
+        private Completion[] choices;
+        private int created;
+        private String model;
+        private String system_fingerprint;
+        private String object;
+        private Usage usage;
+    }
+    /*
     Request request = new Request.Builder()
             .url("https://api.deepseek.com/chat/completions")
             .method("POST", body)
@@ -53,7 +127,14 @@ public interface DeepSeekApi {
             .build();
     Response response = client.newCall(request).execute();
     */
-
+    @RequestMapping(value = "/chat/completions",
+            method = RequestMethod.POST)
+    CompletionResponse completions(
+            @RequestHeader(AUTHORIZATION) String authorization,
+            @RequestHeader(CONTENT_TYPE) String contentType,
+            @RequestHeader(ACCEPT) String acceptType,
+            @RequestBody CompletionsRequest request
+    );
     // 配置类定义
     class ApiConfig {
         @Bean
