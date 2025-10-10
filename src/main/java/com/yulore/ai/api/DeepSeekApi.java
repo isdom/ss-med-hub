@@ -70,6 +70,7 @@ public interface DeepSeekApi {
         private String type;
     }
 
+    ResponseFormat TEXT = ResponseFormat.builder().type("text").build();
     ResponseFormat JSON_OBJ = ResponseFormat.builder().type("json_object").build();
 
     @Builder
