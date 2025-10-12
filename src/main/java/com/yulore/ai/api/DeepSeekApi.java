@@ -141,7 +141,9 @@ public interface DeepSeekApi {
         @Bean
         public Request.Options options() {
             // connect(200ms), read(500ms), followRedirects(true)
-            return new Request.Options(200, TimeUnit.MILLISECONDS,  500, TimeUnit.MILLISECONDS,true);
+            return new Request.Options(200, TimeUnit.MILLISECONDS,
+                    500, TimeUnit.MILLISECONDS,
+                    true);
         }
     }
 }
