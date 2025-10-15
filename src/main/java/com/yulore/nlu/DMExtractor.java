@@ -48,8 +48,8 @@ public class DMExtractor {
      * @return 位置信息列表
      */
     public static List<HesitationPosition> extractPositions(final Pattern dmp, final String text) {
-        List<HesitationPosition> positions = new ArrayList<>();
-        Matcher matcher = dmp.matcher(text);
+        final List<HesitationPosition> positions = new ArrayList<>();
+        final Matcher matcher = dmp.matcher(text);
 
         while (matcher.find()) {
             String hesitation = matcher.group(1);
