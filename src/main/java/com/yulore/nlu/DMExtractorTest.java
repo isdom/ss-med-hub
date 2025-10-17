@@ -36,5 +36,11 @@ public class DMExtractorTest {
         String cleaned = DMExtractor.removeDMPhrases(dmp, sampleText);
         System.out.printf("原始: '%s'%n", sampleText);
         System.out.printf("清理后: '%s'%n", cleaned);
+
+        String sampleText2 = "嗯，";
+        System.out.printf("原始: '%s'%n", sampleText2);
+
+        String cleaned2 = DMExtractor.removeDMPhrases(dmp, sampleText2);
+        System.out.printf("清理后: '%s' => isEmpty: %b%n", cleaned2, cleaned2.isEmpty());
     }
 }
