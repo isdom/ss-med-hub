@@ -6,19 +6,16 @@ import java.util.regex.Pattern;
 
 public class ClauseSplitter {
     static final Pattern cp_pattern = Pattern.compile(
-            // 中文常见分句标点（全角）
-            //"[^，。？！；：]*[，。？！；：]"
             // 不带标点捕获
             "([^，。？！；：、]+)[，。？！；：、]"
     );
 
     static final Pattern cp_pattern_with_punctuation = Pattern.compile(
-            // 中文常见分句标点（全角）
+            // 带标点捕获，中文常见分句标点（全角）
             "[^，。？！；：、]*[，。？！；：、]"
     );
 
     public static List<String> splitClauses(final String sentence) {
-
         final var matcher = cp_pattern.matcher(sentence);
         final List<String> clauses = new ArrayList<>();
         int lastEnd = 0; // 记录上一次匹配结束的位置
@@ -35,11 +32,10 @@ public class ClauseSplitter {
                 clauses.add(trailing);
             }
         }
-        return clauses; //.toArray(String[]::new);
+        return clauses;
     }
 
     public static List<String> splitClausesWithPunctuation(final String sentence) {
-
         final var matcher = cp_pattern_with_punctuation.matcher(sentence);
         final List<String> clauses = new ArrayList<>();
         int lastEnd = 0; // 记录上一次匹配结束的位置
@@ -54,7 +50,7 @@ public class ClauseSplitter {
             String trailing = sentence.substring(lastEnd);
             clauses.add(trailing);
         }
-        return clauses; //.toArray(new String[0]);
+        return clauses;
     }
 
     public static String erasePunctuation(final String clause) {
