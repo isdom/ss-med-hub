@@ -12,8 +12,8 @@ public class NluUtilTest {
         System.out.printf("原始: '%s'%n", sampleText);
 
         final var result = NluUtil.extractAndRemoveClause(cu2in, sampleText);
-        System.out.printf("清理后: '%s' => ins: %s%n", result.getCleanedText(),
-                Arrays.stream(result.getIns()).map(String::valueOf).collect(Collectors.joining(",")));
+        System.out.printf("清理后: '%s' => ins: %s%n", result.cleanedText(),
+                Arrays.stream(result.ins()).map(String::valueOf).collect(Collectors.joining(",")));
 
         //RedisUtil.release_all();
     }

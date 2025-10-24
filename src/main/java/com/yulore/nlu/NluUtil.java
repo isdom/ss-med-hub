@@ -68,24 +68,24 @@ public class NluUtil {
             final String text) {
         final var dmr = extractAndRemoveDM(dms, text);
         if (dmr != null) {
-            if (dmr.getCleanedText().isEmpty()) {
+            if (dmr.cleanedText().isEmpty()) {
                 // equals.(""), DM(s) has remove text's all Phrase
                 return dmr;
             } else {
                 // need merge two result's ins
-                final var cur = extractAndRemoveClause(cu2in, dmr.getCleanedText());
+                final var cur = extractAndRemoveClause(cu2in, dmr.cleanedText());
                 if (cur == null) {
                     // not change anything
                     return dmr;
                 } else {
-                    final Set<Integer> ins = new HashSet<>(Arrays.asList(dmr.getIns()));
-                    ins.addAll(Arrays.asList(cur.getIns()));
+                    final Set<Integer> ins = new HashSet<>(Arrays.asList(dmr.ins()));
+                    ins.addAll(Arrays.asList(cur.ins()));
 
                     // Both remove sth. from text
                     return new RemovePhraseResult(
-                            dmr.getOrgId(),
-                            cur.getCleanedText(),
-                            cur.getCleanedId(),
+                            dmr.orgId(),
+                            cur.cleanedText(),
+                            cur.cleanedId(),
                             ins.toArray(Integer[]::new));
                 }
             }
