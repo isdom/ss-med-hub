@@ -9,5 +9,7 @@ public class ClauseSplitterTest {
                 ClauseSplitter.splitClauses("你好啊，怎么说？"));
         System.out.printf("%s%n",
                 ClauseSplitter.splitClausesWithPunctuation("你好啊，怎么说？").stream().map(ClauseSplitter::erasePunctuation).toList());
+        System.out.printf("%s%n",
+                ClauseSplitter.splitClausesWithPunctuation("嗯、你好啊，怎么说？").stream().map(ClauseSplitter::erasePunctuation).toList());
     }
 }
