@@ -66,4 +66,8 @@ public class AIReplyVO {
 
     @SerializedName("esl_partition")
     private String esl_partition;
+
+    // current session's botId
+    @SerializedName("bot_id")
+    private Integer bot_id;
 }
