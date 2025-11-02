@@ -21,6 +21,9 @@ import java.util.concurrent.TimeUnit;
 @ConditionalOnProperty(prefix = "dialog", name = "srv")
 public interface DialogApi {
 
+    @RequestMapping(value = "${dialog.api.user_speech}", method = RequestMethod.POST)
+    ApiResponse<Void> user_speech(@RequestBody ScriptApi.ESRequest request);
+
     // 配置类定义
     class ApiConfig {
         @Bean
