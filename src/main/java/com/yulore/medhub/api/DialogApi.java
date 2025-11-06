@@ -21,6 +21,7 @@ import java.util.concurrent.TimeUnit;
 @ConditionalOnProperty(prefix = "dialog", name = "srv")
 public interface DialogApi {
     @Builder
+    @Data
     @ToString
     class UserSpeechResult {
         public RemovePhraseResult result;
