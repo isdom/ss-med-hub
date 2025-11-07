@@ -5,6 +5,8 @@ import com.aliyun.oss.OSS;
 import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.bst.BuildStreamTask;
 import com.yulore.medhub.api.AIReplyVO;
+import com.yulore.medhub.api.ApiResponse;
+import com.yulore.medhub.api.DialogApi;
 import com.yulore.medhub.api.EslApi;
 import com.yulore.medhub.service.BSTService;
 import com.yulore.medhub.task.PlayStreamPCMTask2;
@@ -218,6 +220,18 @@ public class ApoIOBuilder implements WsHandlerBuilder {
                     }
                 };
             }
+
+            @Override
+            public ApoActor.NDMUserSpeech userSpeech() {
+                return request -> {
+                    if (_dmApi != null) {
+                        return _dmApi.user_speech(request);
+                    } else {
+                        log.warn("dmApi is null, skip userSpeech({})", request);
+                    }
+                    return null;
+                };
+            }
         });
 
         final var wsh = new WsHandler() {
@@ -392,6 +406,9 @@ public class ApoIOBuilder implements WsHandlerBuilder {
 
     @Autowired(required = false)
     private EslApi _eslApi;
+
+    @Autowired(required = false)
+    private DialogApi _dmApi;
 
     final static class MediaExecutor implements OrderedExecutor {
         // 使用连接ID的哈希绑定固定线程

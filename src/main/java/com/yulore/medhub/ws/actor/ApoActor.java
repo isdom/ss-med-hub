@@ -90,6 +90,7 @@ public final class ApoActor {
 
     public interface Reply2Playback extends BiFunction<String, AIReplyVO, Supplier<Runnable>> {}
     public interface MatchEsl extends BiFunction<String, String, EslApi.EslResponse<EslApi.Hit>> {}
+    public interface NDMUserSpeech extends Function<DialogApi.UserSpeechRequest, ApiResponse<DialogApi.UserSpeechResult>> {}
 
     private Reply2Playback _reply2playback;
 
@@ -104,6 +105,7 @@ public final class ApoActor {
         Consumer<RecordContext> saveRecord();
         Consumer<ApoActor> callStarted();
         MatchEsl matchEsl();
+        NDMUserSpeech userSpeech();
     }
 
     public ApoActor(final Context ctx) {
@@ -118,6 +120,7 @@ public final class ApoActor {
         _doSaveRecord = ctx.saveRecord();
         _callStarted = ctx.callStarted();
         _matchEsl = ctx.matchEsl();
+        _ndmUserSpeech = ctx.userSpeech();
         if (Strings.isNullOrEmpty(_uuid) || Strings.isNullOrEmpty(_tid)) {
             log.warn("[{}]: ApoActor_ctor error for uuid:{}/tid:{}, abort apply_session.", _clientIp, _sessionId, _uuid);
             return;
@@ -716,6 +719,17 @@ public final class ApoActor {
             }
             reportUserContent(content_index, payload, sentenceEndInMs, userContentId);
             reportAsrTime(content_index, sentenceEndInMs, userContentId);
+            if (ai_resp != null && ai_resp.getData() != null) {
+                final var request = DialogApi.UserSpeechRequest.builder()
+                        .sessionId(_sessionId)
+                        .botId(ai_resp.getData().getBot_id())
+                        .nodeId(ai_resp.getData().getNode_id())
+                        .userContentId(ai_resp.getData().getUser_content_id())
+                        .speechText(payload.getResult())
+                        .build();
+                final var resp = _ndmUserSpeech.apply(request);
+                log.info("ndmUserSpeech's: req:{} => resp:{}", request, resp);
+            }
         };
     }
 
@@ -1323,6 +1337,7 @@ public final class ApoActor {
     private IntentConfig intentConfig;
 
     final private MatchEsl _matchEsl;
+    final private NDMUserSpeech _ndmUserSpeech;
 
     private boolean _use_esl = false;
     private String _esl_partition = null;
