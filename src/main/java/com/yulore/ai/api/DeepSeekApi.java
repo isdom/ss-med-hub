@@ -2,6 +2,7 @@ package com.yulore.ai.api;
 
 import feign.Request;
 import lombok.*;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.context.annotation.Bean;
 import org.springframework.web.bind.annotation.*;
@@ -12,6 +13,7 @@ import java.util.concurrent.TimeUnit;
         value = "${ds.api}",
         configuration = DeepSeekApi.ApiConfig.class
 )
+@ConditionalOnProperty(prefix = "ds", name = "api")
 public interface DeepSeekApi {
     String AUTHORIZATION = "Authorization";
     String CONTENT_TYPE = "Content-Type";
