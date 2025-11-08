@@ -1,9 +1,6 @@
 package com.yulore.medhub.ws.actor;
 
-import com.yulore.medhub.api.AIReplyVO;
-import com.yulore.medhub.api.ApiResponse;
-import com.yulore.medhub.api.EslApi;
-import com.yulore.medhub.api.ScriptApi;
+import com.yulore.medhub.api.*;
 import com.yulore.medhub.service.ASRConsumer;
 import com.yulore.medhub.service.ASROperator;
 import com.yulore.medhub.service.ASRService;
@@ -49,6 +46,7 @@ public final class AfsActor {
     }
     public interface Reply2Rms extends BiFunction<AIReplyVO, Supplier<String>, RmsSource> {}
     public interface MatchEsl extends BiFunction<String, String, EslApi.EslResponse<EslApi.Hit>> {}
+    public interface NDMUserSpeech extends Function<DialogApi.UserSpeechRequest, ApiResponse<DialogApi.UserSpeechResult>> {}
 
     public interface Context {
         int localIdx();
