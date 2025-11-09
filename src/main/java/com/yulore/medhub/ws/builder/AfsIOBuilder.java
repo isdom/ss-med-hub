@@ -125,6 +125,9 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                         }
                     };
                 }
+                public AfsActor.NDMUserSpeech userSpeech() {
+                    return null;
+                }
             });
             addActor(vo.localIdx, actor);
             actorCount.incrementAndGet();

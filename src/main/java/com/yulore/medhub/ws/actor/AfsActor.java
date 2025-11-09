@@ -59,6 +59,7 @@ public final class AfsActor {
         Reply2Rms reply2rms();
         BiConsumer<String, Object> sendEvent();
         MatchEsl matchEsl();
+        NDMUserSpeech userSpeech();
     }
 
     public AfsActor(final Context ctx) {
