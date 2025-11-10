@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.medhub.api.AIReplyVO;
 import com.yulore.medhub.api.CompositeVO;
+import com.yulore.medhub.api.DialogApi;
 import com.yulore.medhub.api.EslApi;
 import com.yulore.medhub.vo.WSCommandVO;
 import com.yulore.medhub.vo.WSEventVO;
@@ -126,7 +127,14 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                     };
                 }
                 public AfsActor.NDMUserSpeech userSpeech() {
-                    return null;
+                    return request -> {
+                        if (_dmApi != null) {
+                            return _dmApi.user_speech(request);
+                        } else {
+                            log.warn("dmApi is null, skip userSpeech({})", request);
+                        }
+                        return null;
+                    };
                 }
             });
             addActor(vo.localIdx, actor);
@@ -447,6 +455,9 @@ public class AfsIOBuilder implements WsHandlerBuilder {
 
     @Autowired(required = false)
     private EslApi _eslApi;
+
+    @Autowired(required = false)
+    private DialogApi _dmApi;
 
     final static class MediaExecutor implements OrderedExecutor {
         // 使用连接ID的哈希绑定固定线程
