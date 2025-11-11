@@ -73,6 +73,7 @@ public final class AfsActor {
         this.reply2rms = ctx.reply2rms();
         this.sendEvent = ctx.sendEvent();
         this._matchEsl = ctx.matchEsl();
+        this._ndmUserSpeech = ctx.userSpeech();
     }
 
     public int localIdx() {
@@ -104,6 +105,7 @@ public final class AfsActor {
     private IntentConfig intentConfig;
 
     final private MatchEsl _matchEsl;
+    final private NDMUserSpeech _ndmUserSpeech;
 
     private final AtomicReference<ASROperator> asrRef = new AtomicReference<>(null);
     private final AtomicBoolean isClosed = new AtomicBoolean(false);
