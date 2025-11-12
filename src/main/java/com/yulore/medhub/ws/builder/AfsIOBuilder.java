@@ -131,7 +131,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                         if (_dmApi != null) {
                             return _dmApi.user_speech(request);
                         } else {
-                            log.warn("dmApi is null, skip userSpeech({})", request);
+                            log.warn("AfsActor: dmApi is null, skip userSpeech({})", request);
                         }
                         return null;
                     };
