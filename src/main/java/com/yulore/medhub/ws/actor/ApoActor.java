@@ -219,6 +219,7 @@ public final class ApoActor {
             _use_esl = response.getData().getUse_esl() != null ? response.getData().getUse_esl() : false;
             _esl_partition = response.getData().getEsl_partition();
             _welcome.set(response.getData());
+            _lastReply.set(response.getData());
             log.info("[{}]: [{}]-[{}]: saveAndPlayWelcome: _use_esl:{}/_esl_partition:{}/_welcome:{}",
                     _clientIp, _sessionId, _uuid, _use_esl, _esl_partition, _welcome.get());
             if (null != response.getData()) {
@@ -720,15 +721,21 @@ public final class ApoActor {
             reportUserContent(content_index, payload, sentenceEndInMs, userContentId);
             reportAsrTime(content_index, sentenceEndInMs, userContentId);
             if (ai_resp != null && ai_resp.getData() != null) {
-                final var request = DialogApi.UserSpeechRequest.builder()
-                        .sessionId(_sessionId)
-                        .botId(ai_resp.getData().getBot_id())
-                        .nodeId(ai_resp.getData().getNode_id())
-                        .userContentId(ai_resp.getData().getUser_content_id())
-                        .speechText(payload.getResult())
-                        .build();
-                final var resp = _ndmUserSpeech.apply(request);
-                log.info("ndmUserSpeech's: req:{} => resp:{}", request, resp);
+                final var last = _lastReply.getAndSet(ai_resp.getData());
+                if (last != null) {
+                    final var request = DialogApi.UserSpeechRequest.builder()
+                            .sessionId(_sessionId)
+                            .botId(last.getBot_id())
+                            .nodeId(last.getNode_id())
+                            .qa_id(last.getQa_id())
+                            .userContentId(ai_resp.getData().getUser_content_id())
+                            .speechText(payload.getResult())
+                            .build();
+                    final var resp = _ndmUserSpeech.apply(request);
+                    log.info("ndmUserSpeech's: req:{} => resp:{}", request, resp);
+                } else {
+                    log.info("[{}]: ndmUserSpeech's: last_reply_is_null", _sessionId);
+                }
             }
         };
     }
@@ -1337,6 +1344,8 @@ public final class ApoActor {
     private IntentConfig intentConfig;
 
     final private MatchEsl _matchEsl;
+
+    final private AtomicReference<AIReplyVO> _lastReply = new AtomicReference<>(null);
     final private NDMUserSpeech _ndmUserSpeech;
 
     private boolean _use_esl = false;

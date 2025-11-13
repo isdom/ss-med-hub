@@ -34,6 +34,7 @@ public interface DialogApi {
         public String   sessionId;
         public Integer  botId;
         public Long     nodeId;
+        public String   qa_id;
         public Long     userContentId;
         public String   speechText;
     }
