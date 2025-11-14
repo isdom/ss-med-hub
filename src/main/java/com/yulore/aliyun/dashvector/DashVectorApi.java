@@ -23,7 +23,17 @@ public interface DashVectorApi {
     String DASHVECTOR_AUTH_TOKEN = "dashvector-auth-token";
     String CONTENT_TYPE = "Content-Type";
 
-    @Builder
+    /*
+    DashVector支持的数据类型
+    当前DashVector支持Python的5种基础数据类型：
+    str
+    float
+    int
+    bool
+    long
+    */
+
+    //@Builder
     @Data
     @ToString
     class Doc {
@@ -115,6 +125,7 @@ public interface DashVectorApi {
     }
 
     // REF: https://help.aliyun.com/document_detail/2510319.html
+    //      https://help.aliyun.com/document_detail/2513006.html
     @RequestMapping(
             value = "/v1/collections/{collection}/query",
             method = RequestMethod.POST)
