@@ -15,6 +15,7 @@ import java.util.concurrent.TimeUnit;
 @FeignClient(
         value = "${dv.name}",
         url = "${dv.api.url}",
+        path="/v1/collections/${dv.collection}",
         configuration = DashVectorApi.Config.class
 )
 @ConditionalOnProperty(prefix = "dv.api", name = "url")
