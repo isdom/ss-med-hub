@@ -128,13 +128,13 @@ public interface DashVectorApi {
     // REF: https://help.aliyun.com/document_detail/2510319.html
     //      https://help.aliyun.com/document_detail/2513006.html
     @RequestMapping(
-            value = "/v1/collections/{collection}/query",
-            method = RequestMethod.POST)
-    DVResponse<Doc> queryDoc(
-            @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
-            @RequestHeader(CONTENT_TYPE) String contentType,
-            @PathVariable("collection") String collection,
-            @RequestBody QueryDocRequest request);
+            value = "/query",
+            method = RequestMethod.POST,
+            headers={"Content-Type=application/json",
+                    "Accept=application/json",
+                    "dashvector-auth-token=${dv.api.token}"
+            })
+    DVResponse<Doc> queryDoc(@RequestBody QueryDocRequest request);
 
     @Builder
     @Data
