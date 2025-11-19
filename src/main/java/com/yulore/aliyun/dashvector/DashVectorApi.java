@@ -107,13 +107,13 @@ public interface DashVectorApi {
 
     // REF: https://help.aliyun.com/document_detail/2510325.html
     @RequestMapping(
-            value = "/v1/collections/{collection}/docs",
-            method = RequestMethod.DELETE)
-    DVResponse<DocOpResult[]> deleteDoc(
-            @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
-            @RequestHeader(CONTENT_TYPE) String contentType,
-            @PathVariable("collection") String collection,
-            @RequestBody DeleteDocRequest request);
+            value = "/docs",
+            method = RequestMethod.DELETE,
+            headers={"Content-Type=application/json",
+                    "Accept=application/json",
+                    "dashvector-auth-token=${dv.api.token}"
+            })
+    DVResponse<DocOpResult[]> deleteDoc(@RequestBody DeleteDocRequest request);
 
     @Builder
     @Data
