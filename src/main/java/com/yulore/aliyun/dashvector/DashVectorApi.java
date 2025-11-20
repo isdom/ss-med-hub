@@ -159,13 +159,13 @@ public interface DashVectorApi {
 
     // REF: https://help.aliyun.com/document_detail/2715274.html
     @RequestMapping(
-            value = "/v1/collections/{collection}/query_group_by",
-            method = RequestMethod.POST)
-    DVResponse<Group> queryDocGroupBy(
-            @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
-            @RequestHeader(CONTENT_TYPE) String contentType,
-            @PathVariable("collection") String collection,
-            @RequestBody QueryDocGroupByRequest request);
+            value = "/query_group_by",
+            method = RequestMethod.POST,
+            headers={"Content-Type=application/json",
+                    "Accept=application/json",
+                    "dashvector-auth-token=${dv.api.token}"
+            })
+    DVResponse<Group> queryDocGroupBy(@RequestBody QueryDocGroupByRequest request);
 
     // REF: https://help.aliyun.com/document_detail/2510324.html
     @RequestMapping(
