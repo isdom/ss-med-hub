@@ -209,12 +209,13 @@ public interface DashVectorApi {
 
     // REF: https://help.aliyun.com/document_detail/2510294.html
     @RequestMapping(
-            value = "/v1/collections/{collection}",
-            method = RequestMethod.GET)
-    DVResponse<CollectionMeta> descCollection(
-            @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
-            @RequestHeader(CONTENT_TYPE) String contentType,
-            @PathVariable("collection") String collection);
+            value = "",
+            method = RequestMethod.GET,
+            headers={"Content-Type=application/json",
+                    "Accept=application/json",
+                    "dashvector-auth-token=${dv.api.token}"
+            })
+    DVResponse<CollectionMeta> descCollection();
 
     @Data
     @ToString
