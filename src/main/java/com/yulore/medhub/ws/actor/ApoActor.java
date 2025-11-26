@@ -127,7 +127,7 @@ public final class ApoActor {
         }
     }
 
-    public void start(final ScheduledFuture<?> checkFuture) {
+    public boolean start(final ScheduledFuture<?> checkFuture) {
         log.info("[{}]: [{}]-[{}] ApoActor start with CallApi({})/ScriptApi({})", _clientIp, _sessionId, _uuid, _callApi, _scriptApi);
         _checkFuture = checkFuture;
         try {
@@ -139,9 +139,11 @@ public final class ApoActor {
             log.info("[{}]: [{}]-[{}]: apply_session => response: {}", _clientIp, _sessionId, _uuid, response);
             _callStarted.accept(this);
             startTranscription();
+            return true;
         } catch (Exception ex) {
-            log.warn("[{}]: [{}]-[{}]: failed for callApi.apply_session, detail: {}", _clientIp, _sessionId, _uuid,
+            log.warn("[{}]: [{}]-[{}]: failed for ApoActor.start, detail: {}", _clientIp, _sessionId, _uuid,
                     ExceptionUtil.exception2detail(ex));
+            return false;
         }
     }
 

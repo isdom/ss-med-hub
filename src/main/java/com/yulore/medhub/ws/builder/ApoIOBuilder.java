@@ -285,10 +285,16 @@ public class ApoIOBuilder implements WsHandlerBuilder {
 
         schedulerProvider.getObject().schedule(actor::notifyMockAnswer, _answer_timeout_ms, TimeUnit.MILLISECONDS);
 
-        actor.start(schedulerProvider.getObject().scheduleWithFixedDelay(actor::checkIdle, _check_idle_interval_ms, _check_idle_interval_ms, TimeUnit.MILLISECONDS));
-
-        log.info("ws path match: {}, using ws as ApoActor with role: {}", prefix, role);
-        return wsh;
+        final var started = actor.start(schedulerProvider.getObject().scheduleWithFixedDelay(
+                actor::checkIdle, _check_idle_interval_ms, _check_idle_interval_ms, TimeUnit.MILLISECONDS));
+        if (started) {
+            log.info("ws path match: {}, using ws as ApoActor({}) with role: {}", prefix, actor.sessionId(), role);
+            return wsh;
+        } else {
+            webSocket.close(1001, "start failed");
+            log.warn("ApoActor({}) start failed, close WebSocket", actor.sessionId());
+            return null;
+        }
     }
 
     record PlaybackContext(String playbackId, String path, String contentId) {
