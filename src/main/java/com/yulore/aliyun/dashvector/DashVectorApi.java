@@ -255,14 +255,13 @@ public interface DashVectorApi {
 
     // REF: https://help.aliyun.com/document_detail/2510329.html
     @RequestMapping(
-            value = "/v1/collections/{collection}/partitions/{partition}/stats",
-            method = RequestMethod.GET)
-    DVResponse<PartitionStats> statsPartition(
-            @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
-            @RequestHeader(CONTENT_TYPE) String contentType,
-            @PathVariable("collection") String collection,
-            @PathVariable("partition") String partition
-    );
+            value = "/partitions/{partition}/stats",
+            method = RequestMethod.GET,
+            headers={"Content-Type=application/json",
+                    "Accept=application/json",
+                    "dashvector-auth-token=${dv.api.token}"
+            })
+    DVResponse<PartitionStats> statsPartition(@PathVariable("partition") String partition);
 
     @Data
     @ToString
