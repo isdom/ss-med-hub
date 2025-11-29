@@ -23,8 +23,8 @@ import java.util.concurrent.TimeUnit;
 @ConditionalOnProperty(prefix = "dv.api", name = "url")
 public interface DashVectorApi {
 
-    String DASHVECTOR_AUTH_TOKEN = "dashvector-auth-token";
-    String CONTENT_TYPE = "Content-Type";
+    //String DASHVECTOR_AUTH_TOKEN = "dashvector-auth-token";
+    //String CONTENT_TYPE = "Content-Type";
 
     /*
     DashVector支持的数据类型
@@ -189,6 +189,7 @@ public interface DashVectorApi {
             })
     DVResponse<String> listPartitions();
 
+    /*
     // REF: https://help.aliyun.com/document_detail/2510298.html
     @RequestMapping(
             value = "/v1/collections",
@@ -196,6 +197,7 @@ public interface DashVectorApi {
     DVResponse<String> listCollections(
             @RequestHeader(DASHVECTOR_AUTH_TOKEN) String authToken,
             @RequestHeader(CONTENT_TYPE) String contentType);
+    */
 
     @Data
     @ToString
