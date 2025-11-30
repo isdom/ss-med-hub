@@ -22,10 +22,6 @@ import java.util.concurrent.TimeUnit;
 )
 @ConditionalOnProperty(prefix = "dv.api", name = "url")
 public interface DashVectorApi {
-
-    //String DASHVECTOR_AUTH_TOKEN = "dashvector-auth-token";
-    //String CONTENT_TYPE = "Content-Type";
-
     /*
     DashVector支持的数据类型
     当前DashVector支持Python的5种基础数据类型：
