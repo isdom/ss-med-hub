@@ -13,7 +13,7 @@ import java.util.concurrent.TimeUnit;
 
 @FeignClient(
         value = "${ds.api}",
-        configuration = DeepSeekApi.ApiConfig.class
+        configuration = DeepSeekApi.Config.class
 )
 @ConditionalOnProperty(prefix = "ds", name = "api")
 public interface DeepSeekApi {
@@ -141,7 +141,7 @@ public interface DeepSeekApi {
             @RequestBody CompletionsRequest request
     );
     // 配置类定义
-    class ApiConfig {
+    class Config {
         @Bean
         public Request.Options options() {
             // connect(200ms), read(500ms), followRedirects(true)
