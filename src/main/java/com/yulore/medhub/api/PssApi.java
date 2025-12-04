@@ -62,7 +62,7 @@ public interface PssApi {
     // 配置类定义
     class PssApiConfig {
         @Bean
-        public Request.Options pssOptions() {
+        public Request.Options options() {
             // connect(200 ms), read(60 minutes), followRedirects(true)
             return new Request.Options(200, TimeUnit.MILLISECONDS,  60, TimeUnit.MINUTES,true);
         }
