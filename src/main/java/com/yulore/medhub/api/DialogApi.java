@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit;
 
 @FeignClient(
         value = "${dialog.srv}",
-        configuration = DialogApi.ApiConfig.class
+        configuration = DialogApi.Config.class
 )
 @ConditionalOnProperty(prefix = "dialog", name = "srv")
 public interface DialogApi {
@@ -43,7 +43,7 @@ public interface DialogApi {
     ApiResponse<UserSpeechResult> user_speech(@RequestBody UserSpeechRequest request);
 
     // 配置类定义
-    class ApiConfig {
+    class Config {
         @Bean
         public Request.Options options() {
             // connect(200ms), read(500ms), followRedirects(true)
