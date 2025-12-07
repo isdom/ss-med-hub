@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit;
 @FeignClient(
         value = "${pss.name}",
         url = "${pss.api.url}",
-        configuration = PssApi.PssApiConfig.class
+        configuration = PssApi.Config.class
 )
 @ConditionalOnProperty(prefix = "pss.api", name = "url")
 public interface PssApi {
@@ -62,7 +62,7 @@ public interface PssApi {
     SpkResponse vector_spk(@RequestBody SpkRequest request);
 
     // 配置类定义
-    class PssApiConfig {
+    class Config {
         @Bean
         public Request.Options options() {
             // connect(200 ms), read(60 minutes), followRedirects(true)
