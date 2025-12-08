@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit;
 
 @FeignClient(
         value = "${script.srv}",
-        configuration = ScriptApi.ApiConfig.class
+        configuration = ScriptApi.Config.class
 )
 @ConditionalOnProperty(prefix = "script", name = "srv")
 public interface ScriptApi {
@@ -130,7 +130,7 @@ public interface ScriptApi {
     ApiResponse<Void> report_es(@RequestBody ESRequest request);
 
     // 配置类定义
-    class ApiConfig {
+    class Config {
         @Bean
         public Request.Options options() {
             // connect(200ms), read(500ms), followRedirects(true)
