@@ -1,15 +1,22 @@
 package com.yulore.medhub.api;
 
+import feign.Request;
 import lombok.Builder;
 import lombok.Data;
 import lombok.ToString;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.context.annotation.Bean;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 
-@FeignClient(value = "${call.srv}")
+import java.util.concurrent.TimeUnit;
+
+@FeignClient(
+        value = "${call.srv}",
+        configuration = CallApi.Config.class
+)
 @ConditionalOnProperty(prefix = "call", name = "srv")
 public interface CallApi {
     @Builder
@@ -49,4 +56,13 @@ public interface CallApi {
     }
     @RequestMapping(value = "${call.api.user_answer}", method = RequestMethod.POST)
     ApiResponse<UserAnswerVO> user_answer(@RequestBody UserAnswerRequest request);
+
+    // 配置类定义
+    class Config {
+        @Bean
+        public Request.Options options() {
+            // connect(200ms), read(500ms), followRedirects(true)
+            return new Request.Options(200, TimeUnit.MILLISECONDS, 500, TimeUnit.MILLISECONDS, true);
+        }
+    }
 }
