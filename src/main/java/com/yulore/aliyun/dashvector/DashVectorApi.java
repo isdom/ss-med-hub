@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit;
 @FeignClient(
         value = "${dv.name}",
         url = "${dv.api.url}",
-        path="/v1/collections/${dv.collection}",
+        path="/v1/collections",
         configuration = DashVectorApi.Config.class
 )
 @ConditionalOnProperty(prefix = "dv.api", name = "url")
@@ -126,13 +126,15 @@ public interface DashVectorApi {
     // REF: https://help.aliyun.com/document_detail/2510319.html
     //      https://help.aliyun.com/document_detail/2513006.html
     @RequestMapping(
-            value = "/query",
+            value = "/{collection}/query",
             method = RequestMethod.POST,
             headers={"Content-Type=application/json",
                     "Accept=application/json",
                     "dashvector-auth-token=${dv.api.token}"
             })
-    DVResponse<Doc> queryDoc(@RequestBody QueryDocRequest request);
+    DVResponse<Doc> queryDoc(
+            @PathVariable("collection") String collection,
+            @RequestBody QueryDocRequest request);
 
     @Builder
     @Data

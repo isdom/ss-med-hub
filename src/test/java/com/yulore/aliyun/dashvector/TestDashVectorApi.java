@@ -48,9 +48,7 @@ public class TestDashVectorApi {
 
         {
             final var response = dvApi.queryDoc(
-                    //dvToken,
-                    //"application/json",
-                    //collection,
+                    collection,
                     DashVectorApi.QueryDocRequest.builder().vector(f).partition(partition).build()
             );
             log.info("dvApi.queryDoc resp: {}", response);
