@@ -56,9 +56,7 @@ public class TestDashVectorApi {
 
         {
             final var response = dvApi.queryDocGroupBy(
-                    //dvToken,
-                    //"application/json",
-                    //collection,
+                    collection,
                     DashVectorApi.QueryDocGroupByRequest.builder()
                             .vector(f)
                             .partition(partition)
