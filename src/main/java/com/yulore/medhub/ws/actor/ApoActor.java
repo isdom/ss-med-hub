@@ -21,6 +21,7 @@ import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
@@ -91,6 +92,7 @@ public final class ApoActor {
     public interface Reply2Playback extends BiFunction<String, AIReplyVO, Supplier<Runnable>> {}
     public interface MatchEsl extends BiFunction<String, String, EslApi.EslResponse<EslApi.Hit>> {}
     public interface NDMUserSpeech extends Function<DialogApi.UserSpeechRequest, ApiResponse<DialogApi.UserSpeechResult>> {}
+    public interface NDMSpeech2Intent extends Function<DialogApi.ClassifySpeechRequest, String> {}
 
     private Reply2Playback _reply2playback;
 
@@ -106,6 +108,7 @@ public final class ApoActor {
         Consumer<ApoActor> callStarted();
         MatchEsl matchEsl();
         NDMUserSpeech userSpeech();
+        NDMSpeech2Intent speech2intent();
     }
 
     public ApoActor(final Context ctx) {
@@ -121,6 +124,7 @@ public final class ApoActor {
         _callStarted = ctx.callStarted();
         _matchEsl = ctx.matchEsl();
         _ndmUserSpeech = ctx.userSpeech();
+        _ndmSpeech2Intent = ctx.speech2intent();
         if (Strings.isNullOrEmpty(_uuid) || Strings.isNullOrEmpty(_tid)) {
             log.warn("[{}]: ApoActor_ctor error for uuid:{}/tid:{}, abort apply_session.", _clientIp, _sessionId, _uuid);
             return;
@@ -597,12 +601,63 @@ public final class ApoActor {
     }
 
     private CompletionStage<ApiResponse<AIReplyVO>> speech2reply(final String speechText, final int content_index) {
-        return _use_esl ? scriptAndEslMixed(speechText, content_index) : scriptOnly(speechText, content_index);
+        //return _use_esl ? scriptAndEslMixed(speechText, content_index) : scriptOnly(speechText, content_index);
+        return scriptAndNdm(speechText, content_index);
     }
 
     private CompletionStage<ApiResponse<AIReplyVO>> scriptOnly(final String speechText, final int content_index) {
         final var getReply = callAiReplyWithSpeech(speechText, content_index);
         return interactAsync(getReply).exceptionallyCompose(handleRetryable(()->interactAsync(getReply)));
+    }
+
+    private CompletionStage<ApiResponse<AIReplyVO>> scriptAndNdm(final String speechText, final int content_index) {
+        final var esl_cost = new AtomicLong(0);
+        final var getIntent = callSpeech2Intent(speechText, content_index);
+
+        return interactAsync(getIntent).exceptionallyCompose(handleRetryable(()->interactAsync(getIntent)))
+                .thenCombine(interactAsync(callNdmS2I(speechText, content_index, esl_cost)), Pair::of)
+                .thenComposeAsync(script_and_ndm->{
+                    final var t2i_resp = script_and_ndm.getLeft();
+                    final var ndm_intent = script_and_ndm.getRight();
+                    log.info("[{}] scriptAndNdm script_and_esl done with {}\nai_t2i resp: {}\nndm_intent resp: {}",
+                            _sessionId, intentConfig, t2i_resp, ndm_intent);
+                    String final_intent = null;
+                    var t2i_result = new ScriptApi.Text2IntentResult();
+                    if (t2i_resp != null && t2i_resp.getData() != null) {
+                        t2i_result = t2i_resp.getData();
+                    }
+
+                    if (ndm_intent != null) {
+                        final_intent = ndm_intent;
+                    } else {
+                        final_intent = t2i_result.getIntentCode();
+                    }
+                    final var getReply = callIntent2Reply(t2i_result.getTraceId(), final_intent, speechText, content_index);
+                    return interactAsync(getReply).exceptionallyCompose(handleRetryable(()->interactAsync(getReply)));
+                }, _executor);
+    }
+
+    private Supplier<String> callNdmS2I(
+            final String speechText,
+            final int content_index,
+            final AtomicLong cost) {
+        return ()-> {
+            log.info("[{}]: [{}]-[{}]: before speech2intent: ({}) speech:{} esl:{}",
+                    _clientIp, _sessionId, _uuid, content_index, speechText, _ndm_esl);
+            final var startInMs = System.currentTimeMillis();
+            try {
+                return _ndmSpeech2Intent.apply(DialogApi.ClassifySpeechRequest.builder()
+                        .esl(_ndm_esl)
+                        .botId(0)
+                        .nodeId(0L)
+                        .speechText(speechText)
+                        .build());
+            } finally {
+                cost.set(System.currentTimeMillis() - startInMs);
+                log.info("[{}]: [{}]-[{}]: after speech2intent: ({}) speech:{} esl:{} => cost {} ms",
+                        _clientIp, _sessionId, _uuid, content_index, speechText, _esl_partition, cost.longValue());
+            }
+        };
     }
 
     private CompletionStage<ApiResponse<AIReplyVO>> scriptAndEslMixed(final String speechText, final int content_index) {
@@ -1349,6 +1404,10 @@ public final class ApoActor {
 
     final private AtomicReference<AIReplyVO> _lastReply = new AtomicReference<>(null);
     final private NDMUserSpeech _ndmUserSpeech;
+    private final NDMSpeech2Intent _ndmSpeech2Intent;
+
+    @Value("${dialog.esl}")
+    private String _ndm_esl;
 
     private boolean _use_esl = false;
     private String _esl_partition = null;

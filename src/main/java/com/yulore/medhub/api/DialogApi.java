@@ -1,6 +1,5 @@
 package com.yulore.medhub.api;
 
-import com.yulore.znc.vo.RemovePhraseResult;
 import feign.Logger;
 import feign.Request;
 import lombok.Builder;
@@ -22,11 +21,10 @@ import java.util.concurrent.TimeUnit;
 )
 @ConditionalOnProperty(prefix = "dialog", name = "srv")
 public interface DialogApi {
-    @Builder
     @Data
     @ToString
     class UserSpeechResult {
-        public RemovePhraseResult result;
+        public String result;
     }
 
     @Builder
@@ -43,6 +41,28 @@ public interface DialogApi {
 
     @RequestMapping(value = "${dialog.api.user_speech}", method = RequestMethod.POST)
     ApiResponse<UserSpeechResult> user_speech(@RequestBody UserSpeechRequest request);
+
+    @Data
+    @ToString
+    class ClassifySpeechResult {
+        public String ins;
+    }
+
+    @Builder
+    @Data
+    @ToString
+    class ClassifySpeechRequest {
+        public String   esl;
+        public Integer  botId;
+        public Long     nodeId;
+        public String   speechText;
+    }
+
+    @RequestMapping(value = "${dialog.api.classify_speech}", method = RequestMethod.POST)
+    ApiResponse<ClassifySpeechResult> classify_speech(@RequestBody final ClassifySpeechRequest request);
+
+    @RequestMapping(value = "${dialog.api.speech2intent}", method = RequestMethod.POST)
+    ApiResponse<String> speech2intent(@RequestBody final ClassifySpeechRequest request);
 
     // 配置类定义
     class Config {
