@@ -629,9 +629,9 @@ public final class ApoActor {
 
                     if (ndm_intent != null) {
                         final_intent = ndm_intent;
-                    } else {
+                    } /*else {
                         final_intent = t2i_result.getIntentCode();
-                    }
+                    }*/
                     final var getReply = callIntent2Reply(t2i_result.getTraceId(), final_intent, speechText, content_index);
                     return interactAsync(getReply).exceptionallyCompose(handleRetryable(()->interactAsync(getReply)));
                 }, _executor);
