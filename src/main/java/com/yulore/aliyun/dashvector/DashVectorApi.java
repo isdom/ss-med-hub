@@ -239,13 +239,14 @@ public interface DashVectorApi {
 
     // REF: https://help.aliyun.com/document_detail/2510326.html
     @RequestMapping(
-            value = "/partitions",
+            value = "/{collection}/partitions",
             method = RequestMethod.POST,
             headers={"Content-Type=application/json",
                     "Accept=application/json",
                     "dashvector-auth-token=${dv.api.token}"
             })
-    DVResponse<Void> createPartition(@RequestBody CreatePartitionRequest request);
+    DVResponse<Void> createPartition(@PathVariable("collection") String collection,
+                                     @RequestBody CreatePartitionRequest request);
 
 
     // REF: https://help.aliyun.com/document_detail/2510327.html
