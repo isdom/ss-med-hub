@@ -783,6 +783,7 @@ public final class ApoActor {
             }
             reportUserContent(content_index, payload, sentenceEndInMs, userContentId);
             reportAsrTime(content_index, sentenceEndInMs, userContentId);
+            /*
             if (ai_resp != null && ai_resp.getData() != null) {
                 final var last = _lastReply.getAndSet(ai_resp.getData());
                 if (last != null) {
@@ -800,6 +801,7 @@ public final class ApoActor {
                     log.info("[{}]: ndmUserSpeech's: last_reply_is_null", _sessionId);
                 }
             }
+            */
         };
     }
 
