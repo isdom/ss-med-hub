@@ -618,23 +618,29 @@ public final class ApoActor {
                 .thenCombine(interactAsync(callNdmS2I(speechText, content_index, esl_cost)), Pair::of)
                 .thenComposeAsync(script_and_ndm->{
                     final var t2i_resp = script_and_ndm.getLeft();
-                    final var ndm_intent = script_and_ndm.getRight();
-                    log.info("[{}] scriptAndNdm script_and_esl done with {}\nai_t2i resp: {}\nndm_intent resp: {}",
-                            _sessionId, intentConfig, t2i_resp, ndm_intent);
-                    String final_intent = null;
-                    var t2i_result = new ScriptApi.Text2IntentResult();
-                    if (t2i_resp != null && t2i_resp.getData() != null) {
-                        t2i_result = t2i_resp.getData();
-                    }
-
-                    if (ndm_intent != null) {
-                        final_intent = ndm_intent;
-                    } /*else {
-                        final_intent = t2i_result.getIntentCode();
-                    }*/
-                    final var getReply = callIntent2Reply(t2i_result.getTraceId(), final_intent, speechText, content_index);
+                    log.info("[{}] scriptAndNdm done with intent_config:{} / ai_t2i resp: {} / ndm_intent resp: {}",
+                            _sessionId, intentConfig, t2i_resp, script_and_ndm.getRight());
+                    final String traceId = (t2i_resp != null && t2i_resp.getData() != null) ? t2i_resp.getData().getTraceId() : null;
+                    final String ndm_intent = decideNdmIntent(script_and_ndm.getRight(), t2i_resp);
+                    final var getReply = callIntent2Reply(traceId, ndm_intent, speechText, content_index);
                     return interactAsync(getReply).exceptionallyCompose(handleRetryable(()->interactAsync(getReply)));
                 }, _executor);
+    }
+
+    private String decideNdmIntent(final String raw_ndm_intent,
+                                   final ApiResponse<ScriptApi.Text2IntentResult> t2i_resp) {
+        if (t2i_resp != null && t2i_resp.getData() != null) {
+            final var t2i_result = t2i_resp.getData();
+            if (t2i_result.getIntentCode() != null
+                && (intentConfig.getRing0().contains(t2i_result.getIntentCode())
+                || t2i_result.getIntentCode().startsWith(intentConfig.getPrefix()))
+            ) {
+                // high priority intent, like phone's AI assistant
+                // using t2i's intent
+                return null;
+            }
+        }
+        return raw_ndm_intent;
     }
 
     private Supplier<String> callNdmS2I(
