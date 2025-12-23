@@ -63,8 +63,8 @@ public interface CallApi {
     class Config {
         @Bean
         public Request.Options options() {
-            // connect(200ms), read(500ms), followRedirects(true)
-            return new Request.Options(200, TimeUnit.MILLISECONDS, 500, TimeUnit.MILLISECONDS, true);
+            // connect(200ms), read(10 seconds), followRedirects(true)
+            return new Request.Options(200, TimeUnit.MILLISECONDS, 10, TimeUnit.SECONDS, true);
         }
 
         @Bean
