@@ -92,7 +92,7 @@ public final class ApoActor {
     public interface Reply2Playback extends BiFunction<String, AIReplyVO, Supplier<Runnable>> {}
     public interface MatchEsl extends BiFunction<String, String, EslApi.EslResponse<EslApi.Hit>> {}
     public interface NDMUserSpeech extends Function<DialogApi.UserSpeechRequest, ApiResponse<DialogApi.UserSpeechResult>> {}
-    public interface NDMSpeech2Intent extends Function<DialogApi.ClassifySpeechRequest, DialogApi.Speech2IntentResult> {}
+    public interface NDMSpeech2Intent extends Function<DialogApi.ClassifySpeechRequest, DialogApi.EslIntentContext> {}
 
     private Reply2Playback _reply2playback;
 
@@ -537,8 +537,9 @@ public final class ApoActor {
                 _userContentIndex.set(content_index);
                 final var iterationIdx = addIteration(speechText);
                 log.info("[{}] whenASRSentenceEnd: addIteration => {}", _sessionId, iterationIdx);
-                final AtomicReference<DialogApi.Speech2IntentResult> resultRef = new AtomicReference<>();
-                speech2reply(speechText, content_index, resultRef)
+                final AtomicReference<DialogApi.EslIntentContext> eicRef = new AtomicReference<>();
+                //speech2reply(speechText, content_index, eicRef)
+                scriptAndNdm(speechText, content_index, eicRef)
                 .whenCompleteAsync(handleAiReply(content_index, payload), _executor)
                 .whenComplete((ignored, ex) -> {
                     completeIteration(iterationIdx);
@@ -550,7 +551,7 @@ public final class ApoActor {
                     }
                 })
                 .whenComplete(reportUserSpeech(content_index, payload, sentenceEndInMs))
-                .whenComplete(reportToNdm(resultRef))
+                .whenComplete(reportToNdm(eicRef))
                 ;
             /*
             final String userContentId = interactWithScriptEngine(payload, content_index);
@@ -604,9 +605,8 @@ public final class ApoActor {
 
     private CompletionStage<ApiResponse<AIReplyVO>> speech2reply(final String speechText,
                                                                  final int content_index,
-                                                                 final AtomicReference<DialogApi.Speech2IntentResult> resultRef) {
-        //return _use_esl ? scriptAndEslMixed(speechText, content_index) : scriptOnly(speechText, content_index);
-        return scriptAndNdm(speechText, content_index, resultRef);
+                                                                 final AtomicReference<DialogApi.EslIntentContext> eicRef) {
+        return _use_esl ? scriptAndEslMixed(speechText, content_index) : scriptOnly(speechText, content_index);
     }
 
     private CompletionStage<ApiResponse<AIReplyVO>> scriptOnly(final String speechText, final int content_index) {
@@ -616,12 +616,12 @@ public final class ApoActor {
 
     private CompletionStage<ApiResponse<AIReplyVO>> scriptAndNdm(final String speechText,
                                                                  final int content_index,
-                                                                 final AtomicReference<DialogApi.Speech2IntentResult> resultRef) {
+                                                                 final AtomicReference<DialogApi.EslIntentContext> eicRef) {
         final var esl_cost = new AtomicLong(0);
         final var scriptS2I = callScriptS2I(speechText, content_index);
 
         return interactAsync(scriptS2I).exceptionallyCompose(handleRetryable(()->interactAsync(scriptS2I)))
-                .thenCombine(interactAsync(callNdmS2I(speechText, content_index, esl_cost, resultRef)), Pair::of)
+                .thenCombine(interactAsync(callNdmS2I(speechText, content_index, esl_cost, eicRef)), Pair::of)
                 .thenComposeAsync(script_and_ndm->{
                     final var t2i_resp = script_and_ndm.getLeft();
                     log.info("[{}] scriptAndNdm done with intent_config:{} / ai_t2i resp: {} / ndm_intent resp: {}",
@@ -653,21 +653,21 @@ public final class ApoActor {
             final String speechText,
             final int content_index,
             final AtomicLong cost,
-            final AtomicReference<DialogApi.Speech2IntentResult> resultRef) {
+            final AtomicReference<DialogApi.EslIntentContext> eicRef) {
         return ()-> {
             log.info("[{}]: [{}]-[{}]: before speech2intent: ({}) speech:{} esl:{}",
                     _clientIp, _sessionId, _uuid, content_index, speechText, _ndm_esl);
             final var startInMs = System.currentTimeMillis();
             try {
-                final var result = _ndmSpeech2Intent.apply(DialogApi.ClassifySpeechRequest.builder()
+                final var eic = _ndmSpeech2Intent.apply(DialogApi.ClassifySpeechRequest.builder()
                         .esl(_ndm_esl)
                         .sessionId(_sessionId)
                         .botId(0)
                         .nodeId(0L)
                         .speechText(speechText)
                         .build());
-                resultRef.set(result);
-                return result != null ? result.getOldIntent() : null;
+                eicRef.set(eic);
+                return eic != null ? eic.getOldIntent() : null;
             } finally {
                 cost.set(System.currentTimeMillis() - startInMs);
                 log.info("[{}]: [{}]-[{}]: after speech2intent: ({}) speech:{} esl:{} => cost {} ms",
@@ -797,9 +797,16 @@ public final class ApoActor {
     }
 
     private BiConsumer<ApiResponse<AIReplyVO>, Throwable>
-    reportToNdm(final AtomicReference<DialogApi.Speech2IntentResult> resultRef) {
+    reportToNdm(final AtomicReference<DialogApi.EslIntentContext> eicRef) {
         return (ai_resp, ex) -> {
-            log.info("[{}] reportToNdm: {}", _sessionId, resultRef.get());
+            eicRef.get().setSessionId(_sessionId);
+            eicRef.get().setContentId(
+                    (ai_resp != null && ai_resp.getData() != null)
+                    ? ai_resp.getData().getUser_content_id()
+                    : null);
+            log.info("[{}] reportToNdm: {}", _sessionId, eicRef.get());
+            final var resp = _dialogApi.report_s2i(eicRef.get());
+
             /*
             if (ai_resp != null && ai_resp.getData() != null) {
                 final var last = _lastReply.getAndSet(ai_resp.getData());
@@ -1421,6 +1428,9 @@ public final class ApoActor {
 
     @Autowired
     private ScriptApi _scriptApi;
+
+    @Autowired
+    private DialogApi _dialogApi;
 
     @Autowired
     private IntentConfig intentConfig;

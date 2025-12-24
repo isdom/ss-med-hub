@@ -65,17 +65,27 @@ public interface DialogApi {
 
     @Data
     @ToString
-    class Speech2IntentResult {
-        public String esl;
+    class EslIntentContext {
+        // speech info
+        public String sessionId;
+        public Long   contentId;
         public String speechText;
-        public String oldIntent;
-        public List<Integer> intents;
+
+        // esl info
+        public String esl;
         public String dvId;
         public Float score;
+
+        // classify info
+        public String oldIntent;
+        public List<Integer> intents;
     }
 
     @RequestMapping(value = "${dialog.api.speech2intent}", method = RequestMethod.POST)
-    ApiResponse<Speech2IntentResult> speech2intent(@RequestBody final ClassifySpeechRequest request);
+    ApiResponse<EslIntentContext> speech2intent(@RequestBody final ClassifySpeechRequest request);
+
+    @RequestMapping(value = "${dialog.api.report_s2i}", method = RequestMethod.POST)
+    ApiResponse<Void> report_s2i(@RequestBody final EslIntentContext request);
 
     // 配置类定义
     class Config {
