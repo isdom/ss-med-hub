@@ -53,6 +53,7 @@ public interface DialogApi {
     @ToString
     class ClassifySpeechRequest {
         public String   esl;
+        public String   sessionId;
         public Integer  botId;
         public Long     nodeId;
         public String   speechText;
@@ -69,7 +70,10 @@ public interface DialogApi {
         @Bean
         public Request.Options options() {
             // connect(200ms), read(500ms), followRedirects(true)
-            return new Request.Options(200, TimeUnit.MILLISECONDS,  30, TimeUnit.SECONDS,true);
+            return new Request.Options(
+                    _connectTimeout, TimeUnit.MILLISECONDS,
+                    _readTimeout, TimeUnit.MILLISECONDS,
+                    true);
         }
 
         @Bean
@@ -85,5 +89,11 @@ public interface DialogApi {
 
         @Value("${dialog.api.log-level:NONE}")
         private String _logLevel;
+
+        @Value("${dialog.api.connect-timeout-ms:200}")
+        private long _connectTimeout;
+
+        @Value("${dialog.api.read-timeout-ms:30000}")
+        private long _readTimeout;
     }
 }

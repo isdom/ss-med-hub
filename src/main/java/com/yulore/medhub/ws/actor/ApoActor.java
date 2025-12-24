@@ -654,6 +654,7 @@ public final class ApoActor {
             try {
                 return _ndmSpeech2Intent.apply(DialogApi.ClassifySpeechRequest.builder()
                         .esl(_ndm_esl)
+                        .sessionId(_sessionId)
                         .botId(0)
                         .nodeId(0L)
                         .speechText(speechText)
