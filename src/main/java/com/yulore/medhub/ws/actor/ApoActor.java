@@ -92,7 +92,7 @@ public final class ApoActor {
     public interface Reply2Playback extends BiFunction<String, AIReplyVO, Supplier<Runnable>> {}
     public interface MatchEsl extends BiFunction<String, String, EslApi.EslResponse<EslApi.Hit>> {}
     public interface NDMUserSpeech extends Function<DialogApi.UserSpeechRequest, ApiResponse<DialogApi.UserSpeechResult>> {}
-    public interface NDMSpeech2Intent extends Function<DialogApi.ClassifySpeechRequest, DialogApi.EslIntentContext> {}
+    public interface NDMSpeech2Intent extends Function<DialogApi.ClassifySpeechRequest, DialogApi.EsMatchContext> {}
 
     private Reply2Playback _reply2playback;
 
@@ -537,9 +537,9 @@ public final class ApoActor {
                 _userContentIndex.set(content_index);
                 final var iterationIdx = addIteration(speechText);
                 log.info("[{}] whenASRSentenceEnd: addIteration => {}", _sessionId, iterationIdx);
-                final AtomicReference<DialogApi.EslIntentContext> eicRef = new AtomicReference<>();
-                //speech2reply(speechText, content_index, eicRef)
-                scriptAndNdm(speechText, content_index, eicRef)
+                final AtomicReference<DialogApi.EsMatchContext> emcRef = new AtomicReference<>();
+                //speech2reply(speechText, content_index, emcRef)
+                scriptAndNdm(speechText, content_index, emcRef)
                 .whenCompleteAsync(handleAiReply(content_index, payload), _executor)
                 .whenComplete((ignored, ex) -> {
                     completeIteration(iterationIdx);
@@ -551,7 +551,7 @@ public final class ApoActor {
                     }
                 })
                 .whenComplete(reportUserSpeech(content_index, payload, sentenceEndInMs))
-                .whenComplete(reportToNdm(eicRef))
+                .whenComplete(reportToNdm(emcRef))
                 ;
             /*
             final String userContentId = interactWithScriptEngine(payload, content_index);
@@ -605,7 +605,7 @@ public final class ApoActor {
 
     private CompletionStage<ApiResponse<AIReplyVO>> speech2reply(final String speechText,
                                                                  final int content_index,
-                                                                 final AtomicReference<DialogApi.EslIntentContext> eicRef) {
+                                                                 final AtomicReference<DialogApi.EsMatchContext> emcRef) {
         return _use_esl ? scriptAndEslMixed(speechText, content_index) : scriptOnly(speechText, content_index);
     }
 
@@ -616,12 +616,12 @@ public final class ApoActor {
 
     private CompletionStage<ApiResponse<AIReplyVO>> scriptAndNdm(final String speechText,
                                                                  final int content_index,
-                                                                 final AtomicReference<DialogApi.EslIntentContext> eicRef) {
+                                                                 final AtomicReference<DialogApi.EsMatchContext> emcRef) {
         final var esl_cost = new AtomicLong(0);
         final var scriptS2I = callScriptS2I(speechText, content_index);
 
         return interactAsync(scriptS2I).exceptionallyCompose(handleRetryable(()->interactAsync(scriptS2I)))
-                .thenCombine(interactAsync(callNdmS2I(speechText, content_index, esl_cost, eicRef)), Pair::of)
+                .thenCombine(interactAsync(callNdmS2I(speechText, content_index, esl_cost, emcRef)), Pair::of)
                 .thenComposeAsync(script_and_ndm->{
                     final var t2i_resp = script_and_ndm.getLeft();
                     log.info("[{}] scriptAndNdm done with intent_config:{} / ai_t2i resp: {} / ndm_intent resp: {}",
@@ -653,21 +653,21 @@ public final class ApoActor {
             final String speechText,
             final int content_index,
             final AtomicLong cost,
-            final AtomicReference<DialogApi.EslIntentContext> eicRef) {
+            final AtomicReference<DialogApi.EsMatchContext> emcRef) {
         return ()-> {
             log.info("[{}]: [{}]-[{}]: before speech2intent: ({}) speech:{} esl:{}",
                     _clientIp, _sessionId, _uuid, content_index, speechText, _ndm_esl);
             final var startInMs = System.currentTimeMillis();
             try {
-                final var eic = _ndmSpeech2Intent.apply(DialogApi.ClassifySpeechRequest.builder()
+                final var ctx = _ndmSpeech2Intent.apply(DialogApi.ClassifySpeechRequest.builder()
                         .esl(_ndm_esl)
                         .sessionId(_sessionId)
                         .botId(0)
                         .nodeId(0L)
                         .speechText(speechText)
                         .build());
-                eicRef.set(eic);
-                return eic != null ? eic.getOldIntent() : null;
+                emcRef.set(ctx);
+                return ctx != null ? ctx.getOldIntent() : null;
             } finally {
                 cost.set(System.currentTimeMillis() - startInMs);
                 log.info("[{}]: [{}]-[{}]: after speech2intent: ({}) speech:{} esl:{} => cost {} ms",
@@ -797,15 +797,15 @@ public final class ApoActor {
     }
 
     private BiConsumer<ApiResponse<AIReplyVO>, Throwable>
-    reportToNdm(final AtomicReference<DialogApi.EslIntentContext> eicRef) {
+    reportToNdm(final AtomicReference<DialogApi.EsMatchContext> emcRef) {
         return (ai_resp, ex) -> {
-            eicRef.get().setSessionId(_sessionId);
-            eicRef.get().setContentId(
+            emcRef.get().setSessionId(_sessionId);
+            emcRef.get().setContentId(
                     (ai_resp != null && ai_resp.getData() != null)
                     ? ai_resp.getData().getUser_content_id()
                     : null);
-            log.info("[{}] reportToNdm: {}", _sessionId, eicRef.get());
-            final var resp = _dialogApi.report_s2i(eicRef.get());
+            log.info("[{}] reportToNdm: {}", _sessionId, emcRef.get());
+            final var resp = _dialogApi.report_s2i(emcRef.get());
 
             /*
             if (ai_resp != null && ai_resp.getData() != null) {

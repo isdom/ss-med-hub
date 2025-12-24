@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 @FeignClient(
@@ -65,7 +64,7 @@ public interface DialogApi {
 
     @Data
     @ToString
-    class EslIntentContext {
+    class EsMatchContext {
         // speech info
         public String sessionId;
         public Long   contentId;
@@ -78,14 +77,14 @@ public interface DialogApi {
 
         // classify info
         public String oldIntent;
-        public List<Integer> intents;
+        public Integer[] intents;
     }
 
     @RequestMapping(value = "${dialog.api.speech2intent}", method = RequestMethod.POST)
-    ApiResponse<EslIntentContext> speech2intent(@RequestBody final ClassifySpeechRequest request);
+    ApiResponse<EsMatchContext> speech2intent(@RequestBody final ClassifySpeechRequest request);
 
     @RequestMapping(value = "${dialog.api.report_s2i}", method = RequestMethod.POST)
-    ApiResponse<Void> report_s2i(@RequestBody final EslIntentContext request);
+    ApiResponse<Void> report_s2i(@RequestBody final EsMatchContext request);
 
     // 配置类定义
     class Config {
