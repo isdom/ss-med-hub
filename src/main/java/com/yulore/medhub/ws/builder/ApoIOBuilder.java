@@ -236,14 +236,11 @@ public class ApoIOBuilder implements WsHandlerBuilder {
             public ApoActor.NDMSpeech2Intent speech2intent() {
                 return request -> {
                     if (_dmApi != null) {
-                        final var resp = _dmApi.speech2intent(request);
-                        if (resp.getData() != null && !resp.getData().isEmpty()) {
-                            return resp.getData();
-                        }
+                        return _dmApi.speech2intent(request).getData();
                     } else {
                         log.warn("dmApi is null, skip speech2intent({})", request);
+                        return null;
                     }
-                    return null;
                 };
             }
         });

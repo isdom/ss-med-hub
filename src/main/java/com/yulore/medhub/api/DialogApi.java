@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 @FeignClient(
@@ -62,8 +63,19 @@ public interface DialogApi {
     @RequestMapping(value = "${dialog.api.classify_speech}", method = RequestMethod.POST)
     ApiResponse<ClassifySpeechResult> classify_speech(@RequestBody final ClassifySpeechRequest request);
 
+    @Data
+    @ToString
+    class Speech2IntentResult {
+        public String esl;
+        public String speechText;
+        public String oldIntent;
+        public List<Integer> intents;
+        public String dvId;
+        public Float score;
+    }
+
     @RequestMapping(value = "${dialog.api.speech2intent}", method = RequestMethod.POST)
-    ApiResponse<String> speech2intent(@RequestBody final ClassifySpeechRequest request);
+    ApiResponse<Speech2IntentResult> speech2intent(@RequestBody final ClassifySpeechRequest request);
 
     // 配置类定义
     class Config {
