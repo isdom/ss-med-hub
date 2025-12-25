@@ -1372,18 +1372,19 @@ public final class ApoActor {
     }
 
     private Supplier<ApiResponse<AIReplyVO>> callAiReplyWithIdleTime(final long idleTime) {
-        return _isNjd ? () -> _scriptApi.ai_reply(
-                _sessionId,
-                null,
-                null,
-                idleTime, 0, null, 0)
-                : () -> _callApi.ai_i2r(
+        return _isNjd
+            ?  () -> _callApi.ai_i2r(
                     Intent2ReplyRequest.builder()
                     .sessionId(_sessionId)
                     .isSpeaking(0)
                     .idleTime(idleTime)
                     .build())
-                ;
+            :() -> _scriptApi.ai_reply(
+                    _sessionId,
+                    null,
+                    null,
+                    idleTime, 0, null, 0)
+            ;
     }
 
     private Supplier<ApiResponse<AIReplyVO>> callAiReplyWithSpeech(final String speechText, final int content_index) {
