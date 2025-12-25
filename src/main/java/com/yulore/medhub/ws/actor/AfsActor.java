@@ -316,7 +316,7 @@ public final class AfsActor {
             log.info("[{}] before ai_i2r => ({}) speech:{}/traceId:{}/intent:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
                     sessionId, content_index, speechText, traceId, intent,
                     isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
-            return _scriptApi.ai_i2r(ScriptApi.Intent2ReplyRequest.builder()
+            return _scriptApi.ai_i2r(Intent2ReplyRequest.builder()
                     .sessionId(sessionId)
                     .traceId(traceId)
                     .intent(intent)

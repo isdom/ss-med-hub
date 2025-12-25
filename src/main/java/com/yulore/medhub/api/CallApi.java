@@ -59,6 +59,9 @@ public interface CallApi {
     @RequestMapping(value = "${call.api.user_answer}", method = RequestMethod.POST)
     ApiResponse<UserAnswerVO> user_answer(@RequestBody UserAnswerRequest request);
 
+    @RequestMapping(value = "${call.api.ai_i2r}", method = RequestMethod.POST)
+    ApiResponse<AIReplyVO> ai_i2r(@RequestBody Intent2ReplyRequest request);
+
     // 配置类定义
     class Config {
         @Bean

@@ -85,21 +85,6 @@ public interface ScriptApi {
     @RequestMapping(value = "${script.api.ai_t2i}", method = RequestMethod.POST)
     ApiResponse<Text2IntentResult> ai_t2i(@RequestBody Text2IntentRequest request);
 
-    @Data
-    @Builder
-    @ToString
-    class Intent2ReplyRequest {
-        private String  sessionId;
-        private Integer speechIdx;
-        private String  speechText;
-        private String  traceId;
-        private String  intent;
-        private Integer[] sysIntents;
-        private Integer isSpeaking;
-        private Long    speakingContentId;
-        private Integer speakingDurationMs;
-    }
-
     @RequestMapping(value = "${script.api.ai_i2r}", method = RequestMethod.POST)
     ApiResponse<AIReplyVO> ai_i2r(@RequestBody Intent2ReplyRequest request);
 

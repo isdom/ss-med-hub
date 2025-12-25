@@ -539,7 +539,8 @@ public final class ApoActor {
                 log.info("[{}] whenASRSentenceEnd: addIteration => {}", _sessionId, iterationIdx);
                 final AtomicReference<DialogApi.EsMatchContext> emcRef = new AtomicReference<>();
                 //speech2reply(speechText, content_index, emcRef)
-                scriptAndNdm(speechText, content_index, emcRef)
+                (_isNjd ? callAndNdm(speechText, content_index, emcRef)
+                        : scriptAndNdm(speechText, content_index, emcRef))
                 .whenCompleteAsync(handleAiReply(content_index, payload), _executor)
                 .whenComplete((ignored, ex) -> {
                     completeIteration(iterationIdx);
@@ -614,6 +615,47 @@ public final class ApoActor {
         return interactAsync(getReply).exceptionallyCompose(handleRetryable(()->interactAsync(getReply)));
     }
 
+    private CompletionStage<ApiResponse<AIReplyVO>> callAndNdm(
+            final String speechText,
+            final int content_index,
+            final AtomicReference<DialogApi.EsMatchContext> emcRef) {
+        final var esl_cost = new AtomicLong(0);
+
+        return interactAsync(callNdmS2I(speechText, content_index, esl_cost))
+                .thenComposeAsync(emc->{
+                    emcRef.set(emc);
+                    log.info("[{}] callAndNdm done with ndm_s2i resp: {}", _sessionId, emc);
+                    final var getReply = callIntent2Reply(
+                            emc.getIntents(),
+                            speechText,
+                            content_index);
+                    return interactAsync(getReply).exceptionallyCompose(handleRetryable(()->interactAsync(getReply)));
+                }, _executor);
+    }
+
+    private Supplier<ApiResponse<AIReplyVO>> callIntent2Reply(
+            final Integer[] sysIntents,
+            final String speechText,
+            final int content_index) {
+        return ()-> {
+            final boolean isAiSpeaking = isAiSpeaking();
+            final String aiContentId = currentAiContentId();
+            final int speakingDuration = currentSpeakingDuration();
+            log.info("[{}] before call_ai_i2r => ({}) speech:{}/intent:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
+                    _sessionId, content_index, speechText, sysIntents,
+                    isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
+            return _callApi.ai_i2r(Intent2ReplyRequest.builder()
+                    .sessionId(_sessionId)
+                    .sysIntents(sysIntents)
+                    .speechIdx(content_index)
+                    .speechText(speechText)
+                    .isSpeaking(isAiSpeaking ? 1 : 0)
+                    .speakingContentId(aiContentId != null ? Long.parseLong(aiContentId) : null)
+                    .speakingDurationMs(speakingDuration)
+                    .build());
+        };
+    }
+
     private CompletionStage<ApiResponse<AIReplyVO>> scriptAndNdm(
             final String speechText,
             final int content_index,
@@ -631,7 +673,7 @@ public final class ApoActor {
                     final String traceId = (t2i_resp != null && t2i_resp.getData() != null) ? t2i_resp.getData().getTraceId() : null;
                     final AtomicReference<Integer[]> sysIntentsRef = new AtomicReference<>(null);
                     final String ndm_intent = decideNdmIntent(script_and_ndm.getRight(), t2i_resp, sysIntentsRef);
-                    final var getReply = callIntent2Reply(traceId, ndm_intent, sysIntentsRef.get(), speechText, content_index);
+                    final var getReply = scriptIntent2Reply(traceId, ndm_intent, sysIntentsRef.get(), speechText, content_index);
                     return interactAsync(getReply).exceptionallyCompose(handleRetryable(()->interactAsync(getReply)));
                 }, _executor);
     }
@@ -718,7 +760,7 @@ public final class ApoActor {
                     } else {
                         final_intent = t2i_result.getIntentCode();
                     }
-                    final var getReply = callIntent2Reply(t2i_result.getTraceId(), final_intent, null, speechText, content_index);
+                    final var getReply = scriptIntent2Reply(t2i_result.getTraceId(), final_intent, null, speechText, content_index);
                     return interactAsync(getReply).exceptionallyCompose(handleRetryable(()->interactAsync(getReply)));
                 }, _executor)
                 .whenCompleteAsync(reportEsl(t2i_intent_ref, esl_resp_ref, content_index, esl_cost), executorStore.apply("feign"));
@@ -1330,7 +1372,18 @@ public final class ApoActor {
     }
 
     private Supplier<ApiResponse<AIReplyVO>> callAiReplyWithIdleTime(final long idleTime) {
-        return () -> _scriptApi.ai_reply(_sessionId, null, null, idleTime, 0, null, 0);
+        return _isNjd ? () -> _scriptApi.ai_reply(
+                _sessionId,
+                null,
+                null,
+                idleTime, 0, null, 0)
+                : () -> _callApi.ai_i2r(
+                    Intent2ReplyRequest.builder()
+                    .sessionId(_sessionId)
+                    .isSpeaking(0)
+                    .idleTime(idleTime)
+                    .build())
+                ;
     }
 
     private Supplier<ApiResponse<AIReplyVO>> callAiReplyWithSpeech(final String speechText, final int content_index) {
@@ -1354,7 +1407,7 @@ public final class ApoActor {
         };
     }
 
-    private Supplier<ApiResponse<AIReplyVO>> callIntent2Reply(
+    private Supplier<ApiResponse<AIReplyVO>> scriptIntent2Reply(
             final String traceId,
             final String intent,
             final Integer[] sysIntents,
@@ -1367,7 +1420,7 @@ public final class ApoActor {
             log.info("[{}] before ai_i2r => ({}) speech:{}/traceId:{}/intent:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
                     _sessionId, content_index, speechText, traceId, intent,
                     isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
-            return _scriptApi.ai_i2r(ScriptApi.Intent2ReplyRequest.builder()
+            return _scriptApi.ai_i2r(Intent2ReplyRequest.builder()
                     .sessionId(_sessionId)
                     .traceId(traceId)
                     .intent(intent)
@@ -1405,18 +1458,22 @@ public final class ApoActor {
             log.info("[{}]: [{}]-[{}]: doPlayback: unknown reply: {}, ignore", _clientIp, _sessionId, _uuid, replyVO);
             return false;
         } else {
-            final Runnable stopPlayback = _currentStopPlayback.getAndSet(null);
-            if (stopPlayback != null) {
-                stopPlayback.run();
+            try {
+                final Runnable stopPlayback = _currentStopPlayback.getAndSet(null);
+                if (stopPlayback != null) {
+                    stopPlayback.run();
+                }
+                _currentPlaybackId.set(newPlaybackId);
+                _currentPlaybackPaused.set(false);
+                _currentPlaybackDuration.set(() -> 0L);
+                createPlaybackMemo(newPlaybackId,
+                        replyVO.getAi_content_id(),
+                        replyVO.getCancel_on_speak() != null ? replyVO.getCancel_on_speak() : false,
+                        replyVO.getHangup() == 1);
+                _currentStopPlayback.set(playback.get());
+            } catch (Exception ex) {
+                log.warn("exception when doPlayback, detail: {}", ExceptionUtil.exception2detail(ex));
             }
-            _currentPlaybackId.set(newPlaybackId);
-            _currentPlaybackPaused.set(false);
-            _currentPlaybackDuration.set(()->0L);
-            createPlaybackMemo(newPlaybackId,
-                    replyVO.getAi_content_id(),
-                    replyVO.getCancel_on_speak(),
-                    replyVO.getHangup() == 1);
-            _currentStopPlayback.set(playback.get());
             return true;
         }
     }
@@ -1449,6 +1506,9 @@ public final class ApoActor {
 
     @Value("${dialog.esl}")
     private String _ndm_esl;
+
+    @Value("${dm.is_njd}")
+    private boolean _isNjd;
 
     private boolean _use_esl = false;
     private String _esl_partition = null;
