@@ -66,8 +66,10 @@ public interface CallApi {
     class Config {
         @Bean
         public Request.Options options() {
-            // connect(200ms), read(10 seconds), followRedirects(true)
-            return new Request.Options(200, TimeUnit.MILLISECONDS, 10, TimeUnit.SECONDS, true);
+            return new Request.Options(
+                    _connectTimeout, TimeUnit.MILLISECONDS,
+                    _readTimeout, TimeUnit.MILLISECONDS,
+                    true);
         }
 
         @Bean
@@ -83,5 +85,11 @@ public interface CallApi {
 
         @Value("${call.api.log-level:NONE}")
         private String _logLevel;
+
+        @Value("${call.api.connect-timeout-ms:200}")
+        private long _connectTimeout;
+
+        @Value("${call.api.read-timeout-ms:500}")
+        private long _readTimeout;
     }
 }

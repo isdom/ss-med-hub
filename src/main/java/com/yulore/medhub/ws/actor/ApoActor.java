@@ -850,8 +850,17 @@ public final class ApoActor {
                     (ai_resp != null && ai_resp.getData() != null)
                     ? ai_resp.getData().getUser_content_id()
                     : null);
-            log.info("[{}] reportToNdm: {}", _sessionId, emcRef.get());
-            final var resp = _dialogApi.report_s2i(emcRef.get());
+            if (emcRef.get().getContentId() != null) {
+                log.info("[{}] before reportToNdm: {}", _sessionId, emcRef.get());
+                final var begin  = System.currentTimeMillis();
+                try {
+                    final var resp = _dialogApi.report_s2i(emcRef.get());
+                } finally {
+                    log.info("[{}] after reportToNdm: cost {} ms", _sessionId, (System.currentTimeMillis() - begin));
+                }
+            } else {
+                log.info("[{}] skip reportToNdm with {}, for user_content_id_is_null", _sessionId, emcRef.get());
+            }
 
             /*
             if (ai_resp != null && ai_resp.getData() != null) {
