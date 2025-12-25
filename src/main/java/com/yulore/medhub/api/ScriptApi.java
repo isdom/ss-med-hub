@@ -69,7 +69,7 @@ public interface ScriptApi {
     @Data
     @Builder
     @ToString
-    public class Text2IntentRequest {
+    class Text2IntentRequest {
         private String  sessionId;
         private Integer speechIdx;
         private String  speechText;
@@ -77,7 +77,7 @@ public interface ScriptApi {
 
     @Data
     @ToString
-    public class Text2IntentResult {
+    class Text2IntentResult {
         private String intentCode;
         private String traceId;
     }
@@ -88,12 +88,13 @@ public interface ScriptApi {
     @Data
     @Builder
     @ToString
-    public class Intent2ReplyRequest {
+    class Intent2ReplyRequest {
         private String  sessionId;
         private Integer speechIdx;
         private String  speechText;
         private String  traceId;
         private String  intent;
+        private Integer[] sysIntents;
         private Integer isSpeaking;
         private Long    speakingContentId;
         private Integer speakingDurationMs;
@@ -136,7 +137,10 @@ public interface ScriptApi {
         @Bean
         public Request.Options options() {
             // connect(200ms), read(500ms), followRedirects(true)
-            return new Request.Options(200, TimeUnit.MILLISECONDS,  500, TimeUnit.MILLISECONDS,true);
+            return new Request.Options(
+                    _connectTimeout, TimeUnit.MILLISECONDS,
+                    _readTimeout, TimeUnit.MILLISECONDS,
+                    true);
         }
 
         @Bean
@@ -152,5 +156,11 @@ public interface ScriptApi {
 
         @Value("${script.api.log-level:NONE}")
         private String _logLevel;
+
+        @Value("${script.api.connect-timeout-ms:200}")
+        private long _connectTimeout;
+
+        @Value("${script.api.read-timeout-ms:500}")
+        private long _readTimeout;
     }
 }

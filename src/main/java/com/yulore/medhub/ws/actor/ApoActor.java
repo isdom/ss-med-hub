@@ -614,27 +614,31 @@ public final class ApoActor {
         return interactAsync(getReply).exceptionallyCompose(handleRetryable(()->interactAsync(getReply)));
     }
 
-    private CompletionStage<ApiResponse<AIReplyVO>> scriptAndNdm(final String speechText,
-                                                                 final int content_index,
-                                                                 final AtomicReference<DialogApi.EsMatchContext> emcRef) {
+    private CompletionStage<ApiResponse<AIReplyVO>> scriptAndNdm(
+            final String speechText,
+            final int content_index,
+            final AtomicReference<DialogApi.EsMatchContext> emcRef) {
         final var esl_cost = new AtomicLong(0);
         final var scriptS2I = callScriptS2I(speechText, content_index);
 
         return interactAsync(scriptS2I).exceptionallyCompose(handleRetryable(()->interactAsync(scriptS2I)))
-                .thenCombine(interactAsync(callNdmS2I(speechText, content_index, esl_cost, emcRef)), Pair::of)
+                .thenCombine(interactAsync(callNdmS2I(speechText, content_index, esl_cost)), Pair::of)
                 .thenComposeAsync(script_and_ndm->{
                     final var t2i_resp = script_and_ndm.getLeft();
-                    log.info("[{}] scriptAndNdm done with intent_config:{} / ai_t2i resp: {} / ndm_intent resp: {}",
+                    emcRef.set(script_and_ndm.getRight());
+                    log.info("[{}] scriptAndNdm done with intent_config:{} / ai_t2i resp: {} / ndm_s2i resp: {}",
                             _sessionId, intentConfig, t2i_resp, script_and_ndm.getRight());
                     final String traceId = (t2i_resp != null && t2i_resp.getData() != null) ? t2i_resp.getData().getTraceId() : null;
-                    final String ndm_intent = decideNdmIntent(script_and_ndm.getRight(), t2i_resp);
-                    final var getReply = callIntent2Reply(traceId, ndm_intent, speechText, content_index);
+                    final AtomicReference<Integer[]> sysIntentsRef = new AtomicReference<>(null);
+                    final String ndm_intent = decideNdmIntent(script_and_ndm.getRight(), t2i_resp, sysIntentsRef);
+                    final var getReply = callIntent2Reply(traceId, ndm_intent, sysIntentsRef.get(), speechText, content_index);
                     return interactAsync(getReply).exceptionallyCompose(handleRetryable(()->interactAsync(getReply)));
                 }, _executor);
     }
 
-    private String decideNdmIntent(final String raw_ndm_intent,
-                                   final ApiResponse<ScriptApi.Text2IntentResult> t2i_resp) {
+    private String decideNdmIntent(final DialogApi.EsMatchContext emc,
+                                   final ApiResponse<ScriptApi.Text2IntentResult> t2i_resp,
+                                   final AtomicReference<Integer[]> sysIntentsRef) {
         if (t2i_resp != null && t2i_resp.getData() != null) {
             final var t2i_result = t2i_resp.getData();
             if (t2i_result.getIntentCode() != null
@@ -646,28 +650,28 @@ public final class ApoActor {
                 return null;
             }
         }
-        return raw_ndm_intent;
+        if (emc.getIntents() != null) {
+            sysIntentsRef.set(emc.getIntents());
+        }
+        return emc.getOldIntent();
     }
 
-    private Supplier<String> callNdmS2I(
+    private Supplier<DialogApi.EsMatchContext> callNdmS2I(
             final String speechText,
             final int content_index,
-            final AtomicLong cost,
-            final AtomicReference<DialogApi.EsMatchContext> emcRef) {
+            final AtomicLong cost) {
         return ()-> {
             log.info("[{}]: [{}]-[{}]: before speech2intent: ({}) speech:{} esl:{}",
                     _clientIp, _sessionId, _uuid, content_index, speechText, _ndm_esl);
             final var startInMs = System.currentTimeMillis();
             try {
-                final var ctx = _ndmSpeech2Intent.apply(DialogApi.ClassifySpeechRequest.builder()
+                return _ndmSpeech2Intent.apply(DialogApi.ClassifySpeechRequest.builder()
                         .esl(_ndm_esl)
                         .sessionId(_sessionId)
                         .botId(0)
                         .nodeId(0L)
                         .speechText(speechText)
                         .build());
-                emcRef.set(ctx);
-                return ctx != null ? ctx.getOldIntent() : null;
             } finally {
                 cost.set(System.currentTimeMillis() - startInMs);
                 log.info("[{}]: [{}]-[{}]: after speech2intent: ({}) speech:{} esl:{} => cost {} ms",
@@ -714,7 +718,7 @@ public final class ApoActor {
                     } else {
                         final_intent = t2i_result.getIntentCode();
                     }
-                    final var getReply = callIntent2Reply(t2i_result.getTraceId(), final_intent, speechText, content_index);
+                    final var getReply = callIntent2Reply(t2i_result.getTraceId(), final_intent, null, speechText, content_index);
                     return interactAsync(getReply).exceptionallyCompose(handleRetryable(()->interactAsync(getReply)));
                 }, _executor)
                 .whenCompleteAsync(reportEsl(t2i_intent_ref, esl_resp_ref, content_index, esl_cost), executorStore.apply("feign"));
@@ -1353,6 +1357,7 @@ public final class ApoActor {
     private Supplier<ApiResponse<AIReplyVO>> callIntent2Reply(
             final String traceId,
             final String intent,
+            final Integer[] sysIntents,
             final String speechText,
             final int content_index) {
         return ()-> {
@@ -1366,6 +1371,7 @@ public final class ApoActor {
                     .sessionId(_sessionId)
                     .traceId(traceId)
                     .intent(intent)
+                    .sysIntents(sysIntents)
                     .speechIdx(content_index)
                     .speechText(speechText)
                     .isSpeaking(isAiSpeaking ? 1 : 0)
