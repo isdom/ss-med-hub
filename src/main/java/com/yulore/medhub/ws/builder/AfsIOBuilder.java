@@ -114,6 +114,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                 }
                 public AfsActor.MatchEsl matchEsl() {
                     return (speech, partition) -> {
+                        /*
                         if (_eslApi != null && speech.length() >=5) {
                             final var hdrs = new HashMap<>(_esl_headers);
                             if (partition != null) {
@@ -121,9 +122,10 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                             }
                             return _eslApi.search_text(hdrs, speech, 0.95f);
                         } else {
+                         */
                             // esl response with 0 hit
                             return EslApi.emptyResponse();
-                        }
+                        //}
                     };
                 }
                 public AfsActor.NDMUserSpeech userSpeech() {
@@ -447,14 +449,14 @@ public class AfsIOBuilder implements WsHandlerBuilder {
         }
     }
 
-    @Value("#{${esl.api.headers}}")
-    private Map<String,String> _esl_headers;
+    //@Value("#{${esl.api.headers}}")
+    //private Map<String,String> _esl_headers;
 
-    @Value("${esl.api.header.partition}")
-    private String _esl_hdr_partition;
+    //@Value("${esl.api.header.partition}")
+    //private String _esl_hdr_partition;
 
-    @Autowired(required = false)
-    private EslApi _eslApi;
+    //@Autowired(required = false)
+    //private EslApi _eslApi;
 
     @Autowired(required = false)
     private DialogApi _dmApi;
