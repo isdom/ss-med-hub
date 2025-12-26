@@ -64,6 +64,16 @@ public interface DialogApi {
 
     @Data
     @ToString
+    class EsMatchResult {
+        // classify info
+        public String oldIntent;
+        public Integer[] intents;
+
+        public EsMatchContext[]  contexts;
+    }
+
+    @Data
+    @ToString
     class EsMatchContext {
         // speech info
         public String sessionId;
@@ -76,15 +86,14 @@ public interface DialogApi {
         public Float score;
 
         // classify info
-        public String oldIntent;
         public Integer[] intents;
     }
 
     @RequestMapping(value = "${dialog.api.speech2intent}", method = RequestMethod.POST)
-    ApiResponse<EsMatchContext> speech2intent(@RequestBody final ClassifySpeechRequest request);
+    ApiResponse<EsMatchResult> speech2intent(@RequestBody final ClassifySpeechRequest request);
 
     @RequestMapping(value = "${dialog.api.report_s2i}", method = RequestMethod.POST)
-    ApiResponse<Void> report_s2i(@RequestBody final EsMatchContext request);
+    ApiResponse<Void> report_s2i(@RequestBody final EsMatchContext[] request);
 
     // 配置类定义
     class Config {
