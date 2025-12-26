@@ -6,7 +6,6 @@ import com.mgnt.utils.StringUnicodeEncoderDecoder;
 import com.yulore.bst.BuildStreamTask;
 import com.yulore.medhub.api.AIReplyVO;
 import com.yulore.medhub.api.DialogApi;
-import com.yulore.medhub.api.EslApi;
 import com.yulore.medhub.service.BSTService;
 import com.yulore.medhub.task.PlayStreamPCMTask2;
 import com.yulore.medhub.task.SampleInfo;
@@ -37,7 +36,6 @@ import org.springframework.stereotype.Component;
 import javax.annotation.PostConstruct;
 import java.nio.ByteBuffer;
 import java.time.Duration;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
@@ -203,20 +201,6 @@ public class ApoIOBuilder implements WsHandlerBuilder {
                 return actor_ -> {
                     _actors.put(actor_.sessionId(), actor_);
                     WSEventVO.sendEvent(webSocket, "CallStarted", new PayloadCallStarted(actor_.sessionId()));
-                };
-            }
-            public ApoActor.MatchEsl matchEsl() {
-                return (speech, partition) -> {
-                    if (_eslApi != null && speech.length() >=5) {
-                        final var hdrs = new HashMap<>(_esl_headers);
-                        if (partition != null) {
-                            hdrs.put(_esl_hdr_partition, partition);
-                        }
-                        return _eslApi.search_text(hdrs, speech, 0.95f);
-                    } else {
-                        // esl response with 0 hit
-                        return EslApi.emptyResponse();
-                    }
                 };
             }
 
@@ -421,8 +405,8 @@ public class ApoIOBuilder implements WsHandlerBuilder {
     @Value("${esl.api.header.partition}")
     private String _esl_hdr_partition;
 
-    @Autowired(required = false)
-    private EslApi _eslApi;
+    //@Autowired(required = false)
+    //private EslApi _eslApi;
 
     @Autowired(required = false)
     private DialogApi _dmApi;

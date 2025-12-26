@@ -90,7 +90,6 @@ public final class ApoActor {
     private final Executor _executor;
 
     public interface Reply2Playback extends BiFunction<String, AIReplyVO, Supplier<Runnable>> {}
-    public interface MatchEsl extends BiFunction<String, String, EslApi.EslResponse<EslApi.Hit>> {}
     public interface NDMUserSpeech extends Function<DialogApi.UserSpeechRequest, ApiResponse<DialogApi.UserSpeechResult>> {}
     public interface NDMSpeech2Intent extends Function<DialogApi.ClassifySpeechRequest, DialogApi.EsMatchResult> {}
 
@@ -106,7 +105,6 @@ public final class ApoActor {
         Consumer<ApoActor> doHangup();
         Consumer<RecordContext> saveRecord();
         Consumer<ApoActor> callStarted();
-        MatchEsl matchEsl();
         NDMUserSpeech userSpeech();
         NDMSpeech2Intent speech2intent();
     }
@@ -122,7 +120,6 @@ public final class ApoActor {
         _doHangup = ctx.doHangup();
         _doSaveRecord = ctx.saveRecord();
         _callStarted = ctx.callStarted();
-        _matchEsl = ctx.matchEsl();
         _ndmUserSpeech = ctx.userSpeech();
         _ndmSpeech2Intent = ctx.speech2intent();
         if (Strings.isNullOrEmpty(_uuid) || Strings.isNullOrEmpty(_tid)) {
@@ -604,6 +601,7 @@ public final class ApoActor {
         return userContentId;
     }
 
+    /*
     private CompletionStage<ApiResponse<AIReplyVO>> speech2reply(
             final String speechText,
             final int content_index) {
@@ -614,6 +612,7 @@ public final class ApoActor {
         final var getReply = callAiReplyWithSpeech(speechText, content_index);
         return interactAsync(getReply).exceptionallyCompose(handleRetryable(()->interactAsync(getReply)));
     }
+    */
 
     private CompletionStage<ApiResponse<AIReplyVO>> callAndNdm(
             final String speechText,
@@ -722,6 +721,7 @@ public final class ApoActor {
         };
     }
 
+    /*
     private CompletionStage<ApiResponse<AIReplyVO>> scriptAndEslMixed(final String speechText, final int content_index) {
         final var esl_cost = new AtomicLong(0);
         final AtomicReference<EslApi.EslResponse<EslApi.Hit>> esl_resp_ref = new AtomicReference<>(null);
@@ -790,6 +790,7 @@ public final class ApoActor {
             }
         };
     }
+    */
 
     private BiConsumer<ApiResponse<AIReplyVO>, Throwable>
     handleAiReply(final int content_index,
@@ -1512,7 +1513,7 @@ public final class ApoActor {
     @Autowired
     private IntentConfig intentConfig;
 
-    final private MatchEsl _matchEsl;
+    //final private MatchEsl _matchEsl;
 
     final private AtomicReference<AIReplyVO> _lastReply = new AtomicReference<>(null);
     final private NDMUserSpeech _ndmUserSpeech;
