@@ -449,15 +449,6 @@ public class AfsIOBuilder implements WsHandlerBuilder {
         }
     }
 
-    //@Value("#{${esl.api.headers}}")
-    //private Map<String,String> _esl_headers;
-
-    //@Value("${esl.api.header.partition}")
-    //private String _esl_hdr_partition;
-
-    //@Autowired(required = false)
-    //private EslApi _eslApi;
-
     @Autowired(required = false)
     private DialogApi _dmApi;
 
