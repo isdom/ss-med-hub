@@ -204,6 +204,7 @@ public class ApoIOBuilder implements WsHandlerBuilder {
                 };
             }
 
+            /*
             @Override
             public ApoActor.NDMUserSpeech userSpeech() {
                 return request -> {
@@ -215,6 +216,7 @@ public class ApoIOBuilder implements WsHandlerBuilder {
                     return null;
                 };
             }
+            */
 
             @Override
             public ApoActor.NDMSpeech2Intent speech2intent() {

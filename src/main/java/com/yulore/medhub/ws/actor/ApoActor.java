@@ -90,7 +90,7 @@ public final class ApoActor {
     private final Executor _executor;
 
     public interface Reply2Playback extends BiFunction<String, AIReplyVO, Supplier<Runnable>> {}
-    public interface NDMUserSpeech extends Function<DialogApi.UserSpeechRequest, ApiResponse<DialogApi.UserSpeechResult>> {}
+    // public interface NDMUserSpeech extends Function<DialogApi.UserSpeechRequest, ApiResponse<DialogApi.UserSpeechResult>> {}
     public interface NDMSpeech2Intent extends Function<DialogApi.ClassifySpeechRequest, DialogApi.EsMatchResult> {}
 
     private Reply2Playback _reply2playback;
@@ -105,7 +105,7 @@ public final class ApoActor {
         Consumer<ApoActor> doHangup();
         Consumer<RecordContext> saveRecord();
         Consumer<ApoActor> callStarted();
-        NDMUserSpeech userSpeech();
+        // NDMUserSpeech userSpeech();
         NDMSpeech2Intent speech2intent();
     }
 
@@ -120,7 +120,7 @@ public final class ApoActor {
         _doHangup = ctx.doHangup();
         _doSaveRecord = ctx.saveRecord();
         _callStarted = ctx.callStarted();
-        _ndmUserSpeech = ctx.userSpeech();
+        // _ndmUserSpeech = ctx.userSpeech();
         _ndmSpeech2Intent = ctx.speech2intent();
         if (Strings.isNullOrEmpty(_uuid) || Strings.isNullOrEmpty(_tid)) {
             log.warn("[{}]: ApoActor_ctor error for uuid:{}/tid:{}, abort apply_session.", _clientIp, _sessionId, _uuid);
@@ -1516,7 +1516,7 @@ public final class ApoActor {
     //final private MatchEsl _matchEsl;
 
     final private AtomicReference<AIReplyVO> _lastReply = new AtomicReference<>(null);
-    final private NDMUserSpeech _ndmUserSpeech;
+    // final private NDMUserSpeech _ndmUserSpeech;
     private final NDMSpeech2Intent _ndmSpeech2Intent;
 
     @Value("${dialog.esl}")
