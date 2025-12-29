@@ -92,7 +92,7 @@ public interface DashVectorApi {
                     "Accept=application/json",
                     "dashvector-auth-token=${dv.api.token}"
             })
-    DVResponse<DocOpResult[]> updateDoc(@RequestBody InsertDocRequest request);
+    DVResponse<DocOpResult> updateDoc(@RequestBody InsertDocRequest request);
 
     @Builder
     @Data
@@ -111,7 +111,7 @@ public interface DashVectorApi {
                     "Accept=application/json",
                     "dashvector-auth-token=${dv.api.token}"
             })
-    DVResponse<DocOpResult[]> deleteDoc(@RequestBody DeleteDocRequest request);
+    DVResponse<DocOpResult> deleteDoc(@RequestBody DeleteDocRequest request);
 
     @Builder
     @Data
