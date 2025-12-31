@@ -281,13 +281,13 @@ public interface DashVectorApi {
 
     // REF: https://help.aliyun.com/document_detail/2510304.html
     @RequestMapping(
-            value = "/stats",
+            value = "/{collection}/stats",
             method = RequestMethod.GET,
             headers={"Content-Type=application/json",
                     "Accept=application/json",
                     "dashvector-auth-token=${dv.api.token}"
             })
-    DVResponse<CollectionStats> statsCollection();
+    DVResponse<CollectionStats> statsCollection(@PathVariable("collection") String collection);
 
     // 配置类定义
     class Config {
