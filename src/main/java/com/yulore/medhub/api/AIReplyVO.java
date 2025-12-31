@@ -70,4 +70,9 @@ public class AIReplyVO {
     // current session's botId
     @SerializedName("bot_id")
     private Integer bot_id;
+
+    // in seconds
+    @SerializedName("min_playback_duration")
+    private Integer min_playback_duration;
+
 }
