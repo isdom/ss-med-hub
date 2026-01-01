@@ -294,7 +294,10 @@ public interface DashVectorApi {
         @Bean
         public Request.Options options() {
             // connect(200 ms), read(60 minutes), followRedirects(true)
-            return new Request.Options(200, TimeUnit.MILLISECONDS,  60, TimeUnit.MINUTES,true);
+            return new Request.Options(
+                    _connectTimeout, TimeUnit.MILLISECONDS,
+                    _readTimeout, TimeUnit.MILLISECONDS,
+                    true);
         }
 
         @Bean
@@ -310,5 +313,11 @@ public interface DashVectorApi {
 
         @Value("${dv.api.log-level:NONE}")
         private String _logLevel;
+
+        @Value("${dv.api.connect-timeout-ms:200}")
+        private long _connectTimeout;
+
+        @Value("${dv.api.read-timeout-ms:500}")
+        private long _readTimeout;
     }
 }
