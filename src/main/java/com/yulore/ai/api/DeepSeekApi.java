@@ -145,10 +145,20 @@ public interface DeepSeekApi {
         @Bean
         public Request.Options options() {
             // connect(200ms), read(500ms), followRedirects(true)
-            return new Request.Options(200, TimeUnit.MILLISECONDS,
-                    500, TimeUnit.MILLISECONDS,
+//            return new Request.Options(200, TimeUnit.MILLISECONDS,
+//                    500, TimeUnit.MILLISECONDS,
+//                    true);
+            return new Request.Options(
+                    _connectTimeout, TimeUnit.MILLISECONDS,
+                    _readTimeout, TimeUnit.MILLISECONDS,
                     true);
         }
+
+        @Value("${ds.cfg.connect-timeout-ms:200}")
+        private long _connectTimeout;
+
+        @Value("${ds.cfg.read-timeout-ms:500}")
+        private long _readTimeout;
 
         @Bean
         Logger.Level feignLevel() {
@@ -161,7 +171,7 @@ public interface DeepSeekApi {
             };
         }
 
-        @Value("${ds.api.log-level:NONE}")
+        @Value("${ds.cfg.log-level:NONE}")
         private String _logLevel;
     }
 }
