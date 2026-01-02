@@ -716,7 +716,7 @@ public final class ApoActor {
             } finally {
                 cost.set(System.currentTimeMillis() - startInMs);
                 log.info("[{}]: [{}]-[{}]: after speech2intent: ({}) speech:{} esl:{} => cost {} ms",
-                        _clientIp, _sessionId, _uuid, content_index, speechText, _esl_partition, cost.longValue());
+                        _clientIp, _sessionId, _uuid, content_index, speechText, _ndm_esl, cost.longValue());
             }
         };
     }
