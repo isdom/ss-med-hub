@@ -12,10 +12,10 @@ import org.springframework.web.bind.annotation.*;
 import java.util.concurrent.TimeUnit;
 
 @FeignClient(
-        value = "${ds.api}",
+        value = "${deepseek.api}",
         configuration = DeepSeekApi.Config.class
 )
-@ConditionalOnProperty(prefix = "ds", name = "api")
+@ConditionalOnProperty(prefix = "deepseek", name = "api")
 public interface DeepSeekApi {
     String AUTHORIZATION = "Authorization";
     String CONTENT_TYPE = "Content-Type";
@@ -154,10 +154,10 @@ public interface DeepSeekApi {
                     true);
         }
 
-        @Value("${ds.cfg.connect-timeout-ms:200}")
+        @Value("${deepseek.cfg.connect-timeout-ms:200}")
         private long _connectTimeout;
 
-        @Value("${ds.cfg.read-timeout-ms:500}")
+        @Value("${deepseek.cfg.read-timeout-ms:500}")
         private long _readTimeout;
 
         @Bean
@@ -171,7 +171,7 @@ public interface DeepSeekApi {
             };
         }
 
-        @Value("${ds.cfg.log-level:NONE}")
+        @Value("${deepseek.cfg.log-level:NONE}")
         private String _logLevel;
     }
 }
