@@ -7,21 +7,21 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.context.annotation.Bean;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 @FeignClient(
-        value = "${deepseek.api}",
+        value = "${deepseek.name}",
+        url = "${deepseek.api.url}",
         configuration = DeepSeekApi.Config.class
 )
-@ConditionalOnProperty(prefix = "deepseek", name = "api")
+@ConditionalOnProperty(prefix = "deepseek.api", name = "url")
 public interface DeepSeekApi {
-    String AUTHORIZATION = "Authorization";
-    String CONTENT_TYPE = "Content-Type";
-    String ACCEPT = "Accept";
-
-    String APP_JSON = "application/json";
 
     /*
     OkHttpClient client = new OkHttpClient().newBuilder()
@@ -133,13 +133,39 @@ public interface DeepSeekApi {
     Response response = client.newCall(request).execute();
     */
     @RequestMapping(value = "/chat/completions",
-            method = RequestMethod.POST)
-    CompletionResponse completions(
-            @RequestHeader(AUTHORIZATION) String authorization,
-            @RequestHeader(CONTENT_TYPE) String contentType,
-            @RequestHeader(ACCEPT) String acceptType,
-            @RequestBody CompletionsRequest request
-    );
+            method = RequestMethod.POST,
+            headers={"Content-Type=application/json",
+                    "Accept=application/json",
+                    "Authorization=Bearer ${deepseek.auth.token}"
+            })
+    CompletionResponse completions(@RequestBody CompletionsRequest request);
+
+    static Function<String, String> defaultChat(final DeepSeekApi api, final String model, final Consumer<Usage> onUsage) {
+        return content -> {
+            final var response = api.completions(
+                    CompletionsRequest.builder()
+                            .model(model)
+                            .temperature(0.0f)
+                            .messages(new Message[]{
+                                    Message.builder()
+                                            .role("system")
+                                            .content("You are a helpful assistant.")
+                                            .build(),
+                                    Message.builder()
+                                            .role("user")
+                                            .content(content)
+                                            .build()
+                            })
+                            .response_format(JSON_OBJ)
+                            .build());
+            final var usage = response.getUsage();
+            if (usage != null && onUsage != null) {
+                onUsage.accept(usage);
+            }
+            return response.getChoices()[0].getMessage().getContent();
+        };
+    }
+
     // 配置类定义
     class Config {
         @Bean
