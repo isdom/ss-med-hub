@@ -1,5 +1,6 @@
 package com.yulore.aliyun.dashvector;
 
+import com.yulore.aliyun.api.DashVectorApi;
 import feign.Feign;
 import feign.Logger;
 import feign.jackson.JacksonDecoder;

@@ -1,4 +1,4 @@
-package com.yulore.aliyun.dashvector;
+package com.yulore.aliyun.api;
 
 import feign.Logger;
 import feign.Request;
