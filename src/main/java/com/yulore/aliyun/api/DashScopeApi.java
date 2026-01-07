@@ -156,8 +156,11 @@ public interface DashScopeApi {
     class Config {
          @Bean
         public Request.Options options() {
-            // connect(200 ms), read(60 minutes), followRedirects(true)
-            return new Request.Options(200, TimeUnit.MILLISECONDS,  60, TimeUnit.MINUTES,true);
+             return new Request.Options(
+                     _connectTimeout, TimeUnit.MILLISECONDS,
+                     _readTimeout, TimeUnit.MILLISECONDS,
+                     // followRedirects(true)
+                     true);
         }
 
         @Bean
@@ -173,5 +176,13 @@ public interface DashScopeApi {
 
         @Value("${dashscope.cfg.log-level:NONE}")
         private String _logLevel;
+
+        // connect(200 ms)
+        @Value("${dashscope.cfg.connect-timeout-ms:200}")
+        private long _connectTimeout;
+
+        // read(60 minutes)
+        @Value("${dashscope.cfg.read-timeout-ms:3600000}")
+        private long _readTimeout;
     }
 }
