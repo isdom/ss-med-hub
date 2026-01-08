@@ -1,10 +1,9 @@
 package com.yulore.aliyun.api;
 
+import com.yulore.ai.api.DeepSeekApi;
 import feign.Logger;
 import feign.Request;
-import lombok.Builder;
-import lombok.Data;
-import lombok.ToString;
+import lombok.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.cloud.openfeign.FeignClient;
@@ -13,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 @FeignClient(
@@ -26,6 +26,8 @@ public interface DashScopeApi {
     @Data
     @ToString
     class Usage {
+        public Integer  input_tokens;
+        public Integer  output_tokens;
         public int  total_tokens;
     }
 
@@ -151,6 +153,72 @@ public interface DashScopeApi {
                     "Authorization=Bearer ${dashscope.auth.token}"
             })
     DashScopeResponse<TextEmbeddings> textEmbedding(@RequestBody TextEmbeddingRequest request);
+
+    @Builder
+    @Data
+    @ToString
+    @NoArgsConstructor
+    @AllArgsConstructor
+    class Message {
+        private String content;
+        private String role;
+    }
+
+    @Builder
+    @Data
+    @ToString
+    class Input {
+        private List<Message> messages;
+    }
+
+    @Builder
+    @Data
+    @ToString
+    class ResponseFormat {
+        // default: "text"
+        // optional: json_object, json_schema
+        public String type;
+    }
+
+    @Builder
+    @Data
+    @ToString
+    class TextGenerationParameters {
+        // default: {"type": "text"}
+        public ResponseFormat response_format;
+    }
+
+    @Builder
+    @Data
+    @ToString
+    class TextGenerationRequest {
+        private String model;
+        private Input input;
+        private TextGenerationParameters parameters;
+    }
+
+    @Data
+    @ToString
+    class TextGenerationChoice {
+        private String finish_reason;
+        private Message message;
+    }
+
+    @Data
+    @ToString
+    class TextGenerationResult {
+        private TextGenerationChoice[]  choices;
+    }
+
+    // REF: https://help.aliyun.com/zh/model-studio/qwen-api-reference
+    @RequestMapping(
+            value = "/aigc/text-generation/generation",
+            method = RequestMethod.POST,
+            headers={"Content-Type=application/json",
+                    "Accept=application/json",
+                    "Authorization=Bearer ${dashscope.auth.token}"
+            })
+    DashScopeResponse<TextGenerationResult> textGeneration(@RequestBody TextGenerationRequest request);
 
     // 配置类定义
     class Config {
