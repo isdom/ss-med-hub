@@ -1,6 +1,5 @@
 package com.yulore.aliyun.api;
 
-import com.yulore.ai.api.DeepSeekApi;
 import feign.Logger;
 import feign.Request;
 import lombok.*;
@@ -167,7 +166,7 @@ public interface DashScopeApi {
     @Builder
     @Data
     @ToString
-    class Input {
+    class TextGenerationInput {
         private List<Message> messages;
     }
 
@@ -193,7 +192,7 @@ public interface DashScopeApi {
     @ToString
     class TextGenerationRequest {
         private String model;
-        private Input input;
+        private TextGenerationInput input;
         private TextGenerationParameters parameters;
     }
 
