@@ -183,6 +183,8 @@ public interface DashScopeApi {
     @Data
     @ToString
     class TextGenerationParameters {
+        public Float temperature;
+        public Float top_p;
         // default: {"type": "text"}
         public ResponseFormat response_format;
     }
