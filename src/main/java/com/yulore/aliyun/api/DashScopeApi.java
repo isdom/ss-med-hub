@@ -183,8 +183,29 @@ public interface DashScopeApi {
     @Data
     @ToString
     class TextGenerationParameters {
+        // （可选）
+        // 采样温度，控制模型生成文本的多样性。
+        // temperature越高，生成的文本更多样，反之，生成的文本更确定。
+        // 取值范围： [0, 2)
         public Float temperature;
+        // （可选）
+        // 核采样的概率阈值，控制模型生成文本的多样性。
+        // top_p越高，生成的文本更多样。反之，生成的文本更确定。
+        // 取值范围：（0,1.0]。
         public Float top_p;
+        // （可选）
+        // 生成过程中采样候选集的大小。例如，取值为50时，仅将单次生成中得分最高的50个Token组成随机采样的候选集。
+        // 取值越大，生成的随机性越高；取值越小，生成的确定性越高。
+        // 取值为None或当top_k大于100时，表示不启用top_k策略，此时仅有top_p策略生效。
+        // 取值需要大于或等于0。
+        public Integer top_k;
+        // （可选）
+        // 使用混合思考模型时，是否开启思考模式，适用于 Qwen3 、Qwen3-VL模型。相关文档：深度思考
+        // 可选值：
+        // true：开启
+        // 开启后，思考内容将通过reasoning_content字段返回。
+        // false：不开启
+        public Boolean enable_thinking;
         // default: {"type": "text"}
         public ResponseFormat response_format;
     }
