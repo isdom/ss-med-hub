@@ -210,6 +210,12 @@ public interface DashScopeApi {
         // 思考过程的最大长度。适用于Qwen3-VL、Qwen3 的商业版与开源版模型。相关文档：限制思考长度。
         // 默认值为模型最大思维链长度，请参见：模型列表(https://help.aliyun.com/zh/model-studio/models)
         public Integer thinking_budget;
+        // （可选）默认值为 false
+        // 是否开启代码解释器功能。仅适用于思考模式下的 qwen3-max-preview。相关文档：代码解释器
+        // 可选值：
+        // true：开启
+        // false：不开启
+        public Boolean enable_code_interpreter;
         // default: {"type": "text"}
         public ResponseFormat response_format;
     }
