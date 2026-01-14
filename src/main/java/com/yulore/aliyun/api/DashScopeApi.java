@@ -216,6 +216,10 @@ public interface DashScopeApi {
         // true：开启
         // false：不开启
         public Boolean enable_code_interpreter;
+        // （可选）
+        // 模型生成时连续序列中的重复度。提高repetition_penalty时可以降低模型生成的重复度，1.0表示不做惩罚。
+        // 没有严格的取值范围，只要大于0即可。
+        public Float repetition_penalty;
         // default: {"type": "text"}
         public ResponseFormat response_format;
     }
