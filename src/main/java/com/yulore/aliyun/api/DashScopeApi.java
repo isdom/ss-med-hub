@@ -220,6 +220,12 @@ public interface DashScopeApi {
         // 模型生成时连续序列中的重复度。提高repetition_penalty时可以降低模型生成的重复度，1.0表示不做惩罚。
         // 没有严格的取值范围，只要大于0即可。
         public Float repetition_penalty;
+        // （可选）
+        // 控制模型生成文本时的内容重复度。
+        // 取值范围：[-2.0, 2.0]。正值降低重复度，负值增加重复度。
+        // 在创意写作或头脑风暴等需要多样性、趣味性或创造力的场景中，建议调高该值；
+        // 在技术文档或正式文本等强调一致性与术语准确性的场景中，建议调低该值。
+        public Float presence_penalty;
         // default: {"type": "text"}
         public ResponseFormat response_format;
     }
