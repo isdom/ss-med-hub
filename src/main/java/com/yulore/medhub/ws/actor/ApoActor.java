@@ -222,7 +222,7 @@ public final class ApoActor {
             _use_esl = response.getData().getUse_esl() != null ? response.getData().getUse_esl() : false;
             _esl_partition = response.getData().getEsl_partition();
             _welcome.set(response.getData());
-            _lastReply.set(response.getData());
+            // _lastReply.set(response.getData());
             log.info("[{}]: [{}]-[{}]: saveAndPlayWelcome: _use_esl:{}/_esl_partition:{}/_welcome:{}",
                     _clientIp, _sessionId, _uuid, _use_esl, _esl_partition, _welcome.get());
             if (null != response.getData()) {
@@ -706,11 +706,13 @@ public final class ApoActor {
                     _clientIp, _sessionId, _uuid, content_index, speechText, _ndm_esl);
             final var startInMs = System.currentTimeMillis();
             try {
+                final var lastReply = _lastReply.get();
                 return _ndmSpeech2Intent.apply(DialogApi.ClassifySpeechRequest.builder()
                         .esl(_ndm_esl)
                         .sessionId(_sessionId)
                         .botId(0)
                         .nodeId(0L)
+                        .scriptText(lastReply != null ? lastReply.getScript_text() : null)
                         .speechText(speechText)
                         .build());
             } finally {
@@ -1478,6 +1480,7 @@ public final class ApoActor {
                 if (stopPlayback != null) {
                     stopPlayback.run();
                 }
+                _lastReply.set(replyVO);
                 _currentPlaybackId.set(newPlaybackId);
                 _currentPlaybackPaused.set(false);
                 _currentPlaybackDuration.set(() -> 0L);

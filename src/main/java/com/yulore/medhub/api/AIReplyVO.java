@@ -75,4 +75,7 @@ public class AIReplyVO {
     @SerializedName("min_playback_duration")
     private Integer min_playback_duration;
 
+    // 变量替换前的原始话术文本
+    @SerializedName("script_text")
+    private String script_text;
 }
