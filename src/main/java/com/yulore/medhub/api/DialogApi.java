@@ -56,6 +56,7 @@ public interface DialogApi {
         public String   sessionId;
         public Integer  botId;
         public Long     nodeId;
+        public String   scriptText;
         public String   speechText;
     }
 
