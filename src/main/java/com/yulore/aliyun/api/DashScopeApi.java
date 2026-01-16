@@ -226,6 +226,12 @@ public interface DashScopeApi {
         // 在创意写作或头脑风暴等需要多样性、趣味性或创造力的场景中，建议调高该值；
         // 在技术文档或正式文本等强调一致性与术语准确性的场景中，建议调低该值。
         public Float presence_penalty;
+        // （可选）
+        // 用于限制模型输出的最大 Token 数。若生成内容超过此值，生成将提前停止，且返回的finish_reason为length。
+        // 默认值与最大值均为模型的最大输出长度，请参见文本生成-通义千问。
+        // 适用于需控制输出长度的场景，如生成摘要、关键词，或用于降低成本、缩短响应时间。
+        // 触发 max_tokens 时，响应的 finish_reason 字段为 length。
+        public Integer max_tokens;
         // default: {"type": "text"}
         public ResponseFormat response_format;
     }
