@@ -702,17 +702,22 @@ public final class ApoActor {
             final int content_index,
             final AtomicLong cost) {
         return ()-> {
-            log.info("[{}]: [{}]-[{}]: before speech2intent: ({}) speech:{} esl:{}",
-                    _clientIp, _sessionId, _uuid, content_index, speechText, _ndm_esl);
             final var startInMs = System.currentTimeMillis();
             try {
                 final var lastReply = _lastReply.get();
+                final var scriptText = lastReply != null
+                        ? (lastReply.getScript_text() != null
+                            ? lastReply.getScript_text()
+                            : lastReply.getReply_content())
+                        : null;
+                log.info("[{}]: [{}]-[{}]: before speech2intent: ({}) speech:{} script:{} esl:{}",
+                        _clientIp, _sessionId, _uuid, content_index, speechText, scriptText, _ndm_esl);
                 return _ndmSpeech2Intent.apply(DialogApi.ClassifySpeechRequest.builder()
                         .esl(_ndm_esl)
                         .sessionId(_sessionId)
                         .botId(0)
                         .nodeId(0L)
-                        .scriptText(lastReply != null ? lastReply.getScript_text() : null)
+                        .scriptText(scriptText)
                         .speechText(speechText)
                         .build());
             } finally {
