@@ -232,6 +232,10 @@ public interface DashScopeApi {
         // 适用于需控制输出长度的场景，如生成摘要、关键词，或用于降低成本、缩短响应时间。
         // 触发 max_tokens 时，响应的 finish_reason 字段为 length。
         public Integer max_tokens;
+        //（可选）
+        // 随机数种子。用于确保在相同输入和参数下生成结果可复现。若调用时传入相同的 seed 且其他参数不变，模型将尽可能返回相同结果。
+        // 取值范围：[0,2^31−1]。
+        public Integer seed;
         // default: {"type": "text"}
         public ResponseFormat response_format;
     }
