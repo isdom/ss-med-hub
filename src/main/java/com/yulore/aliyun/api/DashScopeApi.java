@@ -241,6 +241,17 @@ public interface DashScopeApi {
         //（可选） 默认为text（Qwen3-Max、Qwen3-VL、QwQ 模型、Qwen3 开源模型（除了qwen3-next-80b-a3b-instruct）与 Qwen-Long 模型默认值为 message）
         // 返回数据的格式。推荐您优先设置为message，可以更方便地进行多轮对话。
         public String result_format;
+        // boolean （可选）默认值为 false
+        // 是否返回输出 Token 的对数概率，可选值：
+        // true
+        // 返回
+        // false
+        // 不返回
+        // 支持以下模型：
+        // qwen-plus系列的快照模型（不包含主线模型）
+        // qwen-turbo 系列的快照模型（不包含主线模型）
+        // Qwen3 开源模型
+        public Boolean logprobs;
     }
 
     @Builder
