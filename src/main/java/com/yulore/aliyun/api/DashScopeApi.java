@@ -252,6 +252,11 @@ public interface DashScopeApi {
         // qwen-turbo 系列的快照模型（不包含主线模型）
         // Qwen3 开源模型
         public Boolean logprobs;
+        //（可选）默认值为0
+        // 指定在每一步生成时，返回模型最大概率的候选 Token 个数。
+        // 取值范围：[0,5]
+        // 仅当 logprobs 为 true 时生效。
+        public Integer top_logprobs;
     }
 
     @Builder
