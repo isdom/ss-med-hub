@@ -257,6 +257,11 @@ public interface DashScopeApi {
         // 取值范围：[0,5]
         // 仅当 logprobs 为 true 时生效。
         public Integer top_logprobs;
+        //（可选） 默认值为1
+        // 生成响应的个数，取值范围是1-4。对于需要生成多个响应的场景（如创意写作、广告文案等），可以设置较大的 n 值。
+        // 当前仅支持 qwen-plus、 Qwen3（非思考模式）、qwen-plus-character 模型，且在传入 tools 参数时固定为1。
+        // 设置较大的 n 值不会增加输入 Token 消耗，会增加输出 Token 的消耗。
+        public Integer n;
     }
 
     @Builder
