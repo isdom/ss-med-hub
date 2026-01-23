@@ -262,6 +262,11 @@ public interface DashScopeApi {
         // 当前仅支持 qwen-plus、 Qwen3（非思考模式）、qwen-plus-character 模型，且在传入 tools 参数时固定为1。
         // 设置较大的 n 值不会增加输入 Token 消耗，会增加输出 Token 的消耗。
         public Integer n;
+        //（可选）
+        // 用于指定停止词。当模型生成的文本中出现stop 指定的字符串或token_id时，生成将立即终止。
+        // 可传入敏感词以控制模型的输出。
+        // stop为数组时，不可将token_id和字符串同时作为元素输入，比如不可以指定为["你好",104307]。
+        public String stop;
     }
 
     @Builder
