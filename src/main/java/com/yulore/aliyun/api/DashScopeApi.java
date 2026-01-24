@@ -267,6 +267,12 @@ public interface DashScopeApi {
         // 可传入敏感词以控制模型的输出。
         // stop为数组时，不可将token_id和字符串同时作为元素输入，比如不可以指定为["你好",104307]。
         public String stop;
+        //（可选） 默认值为false
+        // 模型在生成文本时是否使用互联网搜索结果进行参考。取值如下：
+        // true：启用互联网搜索，模型会将搜索结果作为文本生成过程中的参考信息，但模型会基于其内部逻辑判断是否使用互联网搜索结果。
+        // 若开启后未联网搜索，可优化提示词，或设置search_options中的forced_search参数开启强制搜索。
+        // false：关闭互联网搜索。
+        public Boolean enable_search;
     }
 
     @Builder
