@@ -273,6 +273,9 @@ public interface DashScopeApi {
         // 若开启后未联网搜索，可优化提示词，或设置search_options中的forced_search参数开启强制搜索。
         // false：关闭互联网搜索。
         public Boolean enable_search;
+        //（可选）
+        //c联网搜索的策略。仅当enable_search为true时生效。详情参见联网搜索(https://help.aliyun.com/zh/model-studio/web-search)。
+        public String search_options;
     }
 
     @Builder
