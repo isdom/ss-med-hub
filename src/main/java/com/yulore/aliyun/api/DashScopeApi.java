@@ -281,8 +281,8 @@ public interface DashScopeApi {
     @Builder
     @Data
     @ToString
-    @NoArgsConstructor
-    @AllArgsConstructor
+    //@NoArgsConstructor
+    //@AllArgsConstructor
     class SearchOptions {
     }
 

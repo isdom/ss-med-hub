@@ -90,7 +90,6 @@ public final class ApoActor {
     private final Executor _executor;
 
     public interface Reply2Playback extends BiFunction<String, AIReplyVO, Supplier<Runnable>> {}
-    // public interface NDMUserSpeech extends Function<DialogApi.UserSpeechRequest, ApiResponse<DialogApi.UserSpeechResult>> {}
     public interface NDMSpeech2Intent extends Function<DialogApi.ClassifySpeechRequest, DialogApi.EsMatchResult> {}
 
     private Reply2Playback _reply2playback;
@@ -105,7 +104,6 @@ public final class ApoActor {
         Consumer<ApoActor> doHangup();
         Consumer<RecordContext> saveRecord();
         Consumer<ApoActor> callStarted();
-        // NDMUserSpeech userSpeech();
         NDMSpeech2Intent speech2intent();
     }
 
@@ -221,6 +219,7 @@ public final class ApoActor {
         if (null != response.getData()) {
             _use_esl = response.getData().getUse_esl() != null ? response.getData().getUse_esl() : false;
             _esl_partition = response.getData().getEsl_partition();
+            _use_bert = response.getData().getUse_bert() != null ? response.getData().getUse_bert() : false;
             _welcome.set(response.getData());
             // _lastReply.set(response.getData());
             log.info("[{}]: [{}]-[{}]: saveAndPlayWelcome: _use_esl:{}/_esl_partition:{}/_welcome:{}",
@@ -714,6 +713,7 @@ public final class ApoActor {
                         _clientIp, _sessionId, _uuid, content_index, speechText, scriptText, _ndm_esl);
                 return _ndmSpeech2Intent.apply(DialogApi.ClassifySpeechRequest.builder()
                         .esl(_ndm_esl)
+                        .useBert(_use_bert)
                         .sessionId(_sessionId)
                         .botId(lastReply != null ? lastReply.getBot_id() : 0)
                         .nodeId(0L)
@@ -1535,6 +1535,7 @@ public final class ApoActor {
 
     private boolean _use_esl = false;
     private String _esl_partition = null;
+    private boolean _use_bert = false;
 
     private final Consumer<ApoActor> _doHangup;
     private final AtomicReference<AIReplyVO> _welcome = new AtomicReference<>(null);

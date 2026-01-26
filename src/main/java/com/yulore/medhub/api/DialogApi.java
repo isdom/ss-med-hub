@@ -53,6 +53,7 @@ public interface DialogApi {
     @ToString
     class ClassifySpeechRequest {
         public String   esl;
+        public Boolean  useBert;
         public String   sessionId;
         public Integer  botId;
         public Long     nodeId;

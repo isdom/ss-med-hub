@@ -78,4 +78,7 @@ public class AIReplyVO {
     // 变量替换前的原始话术文本
     @SerializedName("script_text")
     private String script_text;
+
+    @SerializedName("use_bert")
+    private Boolean use_bert;
 }
