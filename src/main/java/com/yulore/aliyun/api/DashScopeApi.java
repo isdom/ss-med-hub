@@ -275,7 +275,15 @@ public interface DashScopeApi {
         public Boolean enable_search;
         //（可选）
         //c联网搜索的策略。仅当enable_search为true时生效。详情参见联网搜索(https://help.aliyun.com/zh/model-studio/web-search)。
-        public String search_options;
+        public SearchOptions search_options;
+    }
+
+    @Builder
+    @Data
+    @ToString
+    @NoArgsConstructor
+    @AllArgsConstructor
+    class SearchOptions {
     }
 
     @Builder
