@@ -1439,8 +1439,8 @@ public final class ApoActor {
             final boolean isAiSpeaking = isAiSpeaking();
             final String aiContentId = currentAiContentId();
             final int speakingDuration = currentSpeakingDuration();
-            log.info("[{}] before ai_i2r => ({}) speech:{}/traceId:{}/intent:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
-                    _sessionId, content_index, speechText, traceId, intent,
+            log.info("[{}] before ai_i2r => ({}) speech:{}/traceId:{}/intent:{}/sysIntents:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
+                    _sessionId, content_index, speechText, traceId, intent, sysIntents != null ? Arrays.toString(sysIntents) : null,
                     isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
             return _scriptApi.ai_i2r(Intent2ReplyRequest.builder()
                     .sessionId(_sessionId)
