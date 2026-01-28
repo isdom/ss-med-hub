@@ -59,6 +59,7 @@ public interface DialogApi {
         public Long     nodeId;
         public String   scriptText;
         public String   speechText;
+        public Integer  speechIdx;
     }
 
     @RequestMapping(value = "${dialog.api.classify_speech}", method = RequestMethod.POST)

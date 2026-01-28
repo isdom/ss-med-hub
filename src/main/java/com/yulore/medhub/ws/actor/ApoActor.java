@@ -718,6 +718,7 @@ public final class ApoActor {
                         .nodeId(0L)
                         .scriptText(scriptText)
                         .speechText(speechText)
+                        .speechIdx(content_index)
                         .build());
             } finally {
                 cost.set(System.currentTimeMillis() - startInMs);
