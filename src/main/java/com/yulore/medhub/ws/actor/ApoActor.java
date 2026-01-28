@@ -90,7 +90,7 @@ public final class ApoActor {
     private final Executor _executor;
 
     public interface Reply2Playback extends BiFunction<String, AIReplyVO, Supplier<Runnable>> {}
-    public interface NDMSpeech2Intent extends Function<DialogApi.ClassifySpeechRequest, DialogApi.EsMatchResult> {}
+    public interface NDMSpeech2Intent extends Function<DialogApi.ClassifySpeechRequest, DialogApi.MatchIntentResult> {}
 
     private Reply2Playback _reply2playback;
 
@@ -118,7 +118,6 @@ public final class ApoActor {
         _doHangup = ctx.doHangup();
         _doSaveRecord = ctx.saveRecord();
         _callStarted = ctx.callStarted();
-        // _ndmUserSpeech = ctx.userSpeech();
         _ndmSpeech2Intent = ctx.speech2intent();
         if (Strings.isNullOrEmpty(_uuid) || Strings.isNullOrEmpty(_tid)) {
             log.warn("[{}]: ApoActor_ctor error for uuid:{}/tid:{}, abort apply_session.", _clientIp, _sessionId, _uuid);
@@ -533,7 +532,7 @@ public final class ApoActor {
                 _userContentIndex.set(content_index);
                 final var iterationIdx = addIteration(speechText);
                 log.info("[{}] whenASRSentenceEnd: addIteration => {}", _sessionId, iterationIdx);
-                final AtomicReference<DialogApi.EsMatchResult> emrRef = new AtomicReference<>();
+                final AtomicReference<DialogApi.MatchIntentResult> emrRef = new AtomicReference<>();
                 //speech2reply(speechText, content_index)
                 (_isNjd ? callAndNdm(speechText, content_index, emrRef)
                         : scriptAndNdm(speechText, content_index, emrRef))
@@ -616,7 +615,7 @@ public final class ApoActor {
     private CompletionStage<ApiResponse<AIReplyVO>> callAndNdm(
             final String speechText,
             final int content_index,
-            final AtomicReference<DialogApi.EsMatchResult> emrRef) {
+            final AtomicReference<DialogApi.MatchIntentResult> emrRef) {
         final var esl_cost = new AtomicLong(0);
 
         return interactAsync(callNdmS2I(speechText, content_index, esl_cost))
@@ -657,7 +656,7 @@ public final class ApoActor {
     private CompletionStage<ApiResponse<AIReplyVO>> scriptAndNdm(
             final String speechText,
             final int content_index,
-            final AtomicReference<DialogApi.EsMatchResult> emrRef) {
+            final AtomicReference<DialogApi.MatchIntentResult> emrRef) {
         final var esl_cost = new AtomicLong(0);
         final var scriptS2I = callScriptS2I(speechText, content_index);
 
@@ -676,7 +675,7 @@ public final class ApoActor {
                 }, _executor);
     }
 
-    private String decideNdmIntent(final DialogApi.EsMatchResult emr,
+    private String decideNdmIntent(final DialogApi.MatchIntentResult emr,
                                    final ApiResponse<ScriptApi.Text2IntentResult> t2i_resp,
                                    final AtomicReference<Integer[]> sysIntentsRef) {
         if (t2i_resp != null && t2i_resp.getData() != null) {
@@ -696,7 +695,7 @@ public final class ApoActor {
         return emr.getOldIntent();
     }
 
-    private Supplier<DialogApi.EsMatchResult> callNdmS2I(
+    private Supplier<DialogApi.MatchIntentResult> callNdmS2I(
             final String speechText,
             final int content_index,
             final AtomicLong cost) {
@@ -851,7 +850,7 @@ public final class ApoActor {
     }
 
     private BiConsumer<ApiResponse<AIReplyVO>, Throwable>
-    reportToNdm(final AtomicReference<DialogApi.EsMatchResult> emrRef) {
+    reportToNdm(final AtomicReference<DialogApi.MatchIntentResult> emrRef) {
         return (ai_resp, ex) -> {
             final var contentId =
                     (ai_resp != null && ai_resp.getData() != null)
@@ -1521,10 +1520,7 @@ public final class ApoActor {
     @Autowired
     private IntentConfig intentConfig;
 
-    //final private MatchEsl _matchEsl;
-
     final private AtomicReference<AIReplyVO> _lastReply = new AtomicReference<>(null);
-    // final private NDMUserSpeech _ndmUserSpeech;
     private final NDMSpeech2Intent _ndmSpeech2Intent;
 
     @Value("${dialog.esl}")

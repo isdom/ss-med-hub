@@ -66,7 +66,7 @@ public interface DialogApi {
 
     @Data
     @ToString
-    class EsMatchResult {
+    class MatchIntentResult {
         // classify info
         public String oldIntent;
         public Integer[] intents;
@@ -92,7 +92,7 @@ public interface DialogApi {
     }
 
     @RequestMapping(value = "${dialog.api.speech2intent}", method = RequestMethod.POST)
-    ApiResponse<EsMatchResult> speech2intent(@RequestBody final ClassifySpeechRequest request);
+    ApiResponse<MatchIntentResult> speech2intent(@RequestBody final ClassifySpeechRequest request);
 
     @RequestMapping(value = "${dialog.api.report_s2i}", method = RequestMethod.POST)
     ApiResponse<Void> report_s2i(@RequestBody final EsMatchContext[] request);
