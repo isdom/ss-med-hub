@@ -203,22 +203,6 @@ public class ApoIOBuilder implements WsHandlerBuilder {
                     WSEventVO.sendEvent(webSocket, "CallStarted", new PayloadCallStarted(actor_.sessionId()));
                 };
             }
-
-            /*
-            @Override
-            public ApoActor.NDMUserSpeech userSpeech() {
-                return request -> {
-                    if (_dmApi != null) {
-                        return _dmApi.user_speech(request);
-                    } else {
-                        log.warn("dmApi is null, skip userSpeech({})", request);
-                    }
-                    return null;
-                };
-            }
-            */
-
-            @Override
             public ApoActor.NDMSpeech2Intent speech2intent() {
                 return request -> {
                     if (_dmApi != null) {
