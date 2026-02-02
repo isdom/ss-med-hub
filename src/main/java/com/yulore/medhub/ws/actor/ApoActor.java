@@ -803,25 +803,6 @@ public final class ApoActor {
             if (contentId == null) {
                 log.info("[{}] skip reportToNdm with {}, for user_content_id_is_null", _sessionId, emrRef.get());
             }
-            /*
-            if (ai_resp != null && ai_resp.getData() != null) {
-                final var last = _lastReply.getAndSet(ai_resp.getData());
-                if (last != null) {
-                    final var request = DialogApi.UserSpeechRequest.builder()
-                            .sessionId(_sessionId)
-                            .botId(last.getBot_id())
-                            .nodeId(last.getNode_id())
-                            .qa_id(last.getQa_id())
-                            .userContentId(ai_resp.getData().getUser_content_id())
-                            .speechText(payload.getResult())
-                            .build();
-                    final var resp = _ndmUserSpeech.apply(request);
-                    log.info("ndmUserSpeech's: req:{} => resp:{}", request, resp);
-                } else {
-                    log.info("[{}]: ndmUserSpeech's: last_reply_is_null", _sessionId);
-                }
-            }
-            */
         };
     }
 
