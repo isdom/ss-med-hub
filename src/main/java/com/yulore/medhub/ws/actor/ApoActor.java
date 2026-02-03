@@ -806,48 +806,6 @@ public final class ApoActor {
         };
     }
 
-    private BiConsumer<ApiResponse<AIReplyVO>, Throwable>
-    reportEsl(final AtomicReference<String> t2i_intent_ref,
-              final AtomicReference<EslApi.EslResponse<EslApi.Hit>> esl_resp_ref,
-              final int content_index,
-              final AtomicLong cost) {
-        return (ai_resp, ex) -> {
-            final var userContentId = (ai_resp != null && ai_resp.getData() != null && ai_resp.getData().getUser_content_id() != null)
-                    ? ai_resp.getData().getUser_content_id().toString() : null;
-
-            final var t2i_intent = t2i_intent_ref.get();
-            final var esl_resp = esl_resp_ref.get();
-            log.info("[{}]: ESL Response: {}, cost {} ms", _sessionId, esl_resp, cost.longValue());
-            if (esl_resp.getResult() != null && esl_resp.getResult().length > 0) {
-                final var ess = new ScriptApi.ExampleSentence[esl_resp.getResult().length];
-                int idx = 0;
-                for (var hit : esl_resp.getResult()) {
-                    ess[idx] = ScriptApi.ExampleSentence.builder()
-                            .index(idx+1)
-                            .id(hit.es.id)
-                            .confidence(hit.confidence)
-                            .intentionCode(hit.es.intentionCode)
-                            .intentionName(hit.es.intentionName)
-                            .text(hit.es.text)
-                            .build();
-                    idx++;
-                }
-                final var req = ScriptApi.ESRequest.builder()
-                        .session_id(_sessionId)
-                        .content_id(userContentId)
-                        .content_index(content_index)
-                        .qa_id(t2i_intent)
-                        .es(ess)
-                        .embedding_cost(esl_resp.dev.embeddingDuration)
-                        .db_cost(esl_resp.dev.dbExecutionDuration)
-                        .total_cost(cost.intValue())
-                        .build();
-                final var resp2 = _scriptApi.report_es(req);
-                log.info("[{}]: report_es => req: {}/resp: {}", _sessionId, req, resp2);
-            }
-        };
-    }
-
     public void notifyPlaybackStart(final String playbackId) {
         log.info("[{}]: [{}]-[{}]: notifyPlaybackStart => playbackId: {} while currentPlaybackId: {}",
                 _clientIp, _sessionId, _uuid, playbackId, _currentPlaybackId.get());
