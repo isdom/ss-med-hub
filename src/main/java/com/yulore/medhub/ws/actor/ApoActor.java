@@ -441,26 +441,8 @@ public final class ApoActor {
         }
     }
 
-    /*
-    @Override
-    public void notifySentenceBegin(final PayloadSentenceBegin payload) {
-        super.notifySentenceBegin(payload);
-        log.info("[{}]: [{}]-[{}]: notifySentenceBegin: {}", _clientIp, _sessionId, _uuid, payload);
-        _isUserSpeak.set(true);
-        _currentSentenceBeginInMs.set(System.currentTimeMillis());
-        if (isAICancelOnSpeak()) {
-            final Runnable stopPlayback = _currentStopPlayback.getAndSet(null);
-            if (stopPlayback != null) {
-                stopPlayback.run();
-            }
-            _sendEvent.accept("PCMStopPlayback", new PayloadPCMEvent(_currentPlaybackId.get(), ""));
-            log.info("[{}]: [{}]-[{}]: stop current playing ({}) for cancel_on_speak is true", _clientIp, _sessionId, _uuid, _currentPlaybackId.get());
-        }
-    }
-    */
-
     private void whenASRSentenceBegin(final PayloadSentenceBegin payload) {
-        log.info("[{}]: [{}]-[{}]: notifySentenceBegin: {}", _clientIp, _sessionId, _uuid, payload);
+        log.info("[{}]: [{}]-[{}]: whenASRSentenceBegin: {}", _clientIp, _sessionId, _uuid, payload);
         _isUserSpeak.set(true);
         _currentSentenceBeginInMs.set(System.currentTimeMillis());
         if (isAICancelOnSpeak()) {
