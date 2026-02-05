@@ -264,6 +264,18 @@ public final class ApoActor {
             @Override
             public void onTranscriptionResultChanged(PayloadTranscriptionResultChanged payload) {
                 log.info("apo_io => onTranscriptionResultChanged: {}", payload);
+                /*
+                if (isAiSpeaking()) {
+                    final int length = payload.getResult().length();
+                    if (length >= 10) {
+                        if ( (length - countChinesePunctuations(payload.getResult())) >= 10  && _currentPlaybackPaused.compareAndSet(false, true)) {
+                            _sendEvent.accept("PCMPausePlayback", new PayloadPCMEvent(_currentPlaybackId.get(), ""));
+                            log.info("[{}]: [{}]-[{}]: notifyTranscriptionResultChanged: pause_current ({}) for result {} text >= 10",
+                                    _clientIp, _sessionId, _uuid, _currentPlaybackId.get(), payload.getResult());
+                        }
+                    }
+                }
+                */
             }
 
             @Override
@@ -479,23 +491,6 @@ public final class ApoActor {
             return false;
         }
     }
-
-    /*
-    @Override
-    public void notifyTranscriptionResultChanged(final PayloadTranscriptionResultChanged payload) {
-        super.notifyTranscriptionResultChanged(payload);
-        if (isAiSpeaking()) {
-            final int length = payload.getResult().length();
-            if (length >= 10) {
-                if ( (length - countChinesePunctuations(payload.getResult())) >= 10  && _currentPlaybackPaused.compareAndSet(false, true)) {
-                    _sendEvent.accept("PCMPausePlayback", new PayloadPCMEvent(_currentPlaybackId.get(), ""));
-                    log.info("[{}]: [{}]-[{}]: notifyTranscriptionResultChanged: pause_current ({}) for result {} text >= 10",
-                            _clientIp, _sessionId, _uuid, _currentPlaybackId.get(), payload.getResult());
-                }
-            }
-        }
-    }
-    */
 
     private void whenASRSentenceEnd(final PayloadSentenceEnd payload, final long sentenceEndInMs) {
         log.info("[{}]: [{}]-[{}]: whenASRSentenceEnd: {}", _clientIp, _sessionId, _uuid, payload);
