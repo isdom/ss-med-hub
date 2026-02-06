@@ -126,7 +126,8 @@ public final class ApoActor {
     }
 
     public boolean start(final ScheduledFuture<?> checkFuture) {
-        log.info("[{}]: [{}]-[{}] ApoActor start with CallApi({})/ScriptApi({})", _clientIp, _sessionId, _uuid, _callApi, _scriptApi);
+        log.info("[{}]: [{}]-[{}] ApoActor start with CallApi({})/njdApi({})/ScriptApi({})",
+                _clientIp, _sessionId, _uuid, _callApi, _njdApi, _scriptApi);
         _checkFuture = checkFuture;
         try {
             final ApiResponse<ApplySessionVO> response = _callApi.apply_session(CallApi.ApplySessionRequest.builder()
@@ -134,6 +135,7 @@ public final class ApoActor {
                     .tid(_tid)
                     .build());
             _sessionId = response.getData().getSessionId();
+            _isNjd = response.getData().isNjd();
             log.info("[{}]: [{}]-[{}]: apply_session => response: {}", _clientIp, _sessionId, _uuid, response);
             _callStarted.accept(this);
             startTranscription();
@@ -160,12 +162,20 @@ public final class ApoActor {
                 final var answerTime = System.currentTimeMillis();
                 interactAsync(()->{
                     log.info("[{}]: [{}]-[{}]: before_mockAnswer for tid:{}", _clientIp, _sessionId, _uuid, _tid);
-                    return _callApi.mock_answer(CallApi.MockAnswerRequest.builder()
+                    return _isNjd
+                    ? _njdApi.mock_answer(NjdApi.MockAnswerRequest.builder()
                         .sessionId(_sessionId)
                         .uuid(_uuid)
                         .tid(_tid)
                         .answerTime(answerTime)
-                        .build());
+                        .build())
+                    : _callApi.mock_answer(CallApi.MockAnswerRequest.builder()
+                        .sessionId(_sessionId)
+                        .uuid(_uuid)
+                        .tid(_tid)
+                        .answerTime(answerTime)
+                        .build())
+                    ;
                 })
                 .whenCompleteAsync((response, ex) -> {
                     if (ex != null) {
@@ -193,15 +203,26 @@ public final class ApoActor {
         final var answerTime = System.currentTimeMillis();
         interactAsync(()->{
             log.info("[{}]: [{}]-[{}]: before_userAnswer: {}", _clientIp, _sessionId, _uuid, vo);
-            return _callApi.user_answer(CallApi.UserAnswerRequest.builder()
-                .sessionId(_sessionId)
-                .kid(vo.kid)
-                .tid(vo.tid)
-                .realName(vo.realName)
-                .genderStr(vo.genderStr)
-                .aesMobile(vo.aesMobile)
-                .answerTime(answerTime)
-                .build());
+            return _isNjd
+                ? _njdApi.user_answer(NjdApi.UserAnswerRequest.builder()
+                    .sessionId(_sessionId)
+                    .kid(vo.kid)
+                    .tid(vo.tid)
+                    .realName(vo.realName)
+                    .genderStr(vo.genderStr)
+                    .aesMobile(vo.aesMobile)
+                    .answerTime(answerTime)
+                    .build())
+                : _callApi.user_answer(CallApi.UserAnswerRequest.builder()
+                    .sessionId(_sessionId)
+                    .kid(vo.kid)
+                    .tid(vo.tid)
+                    .realName(vo.realName)
+                    .genderStr(vo.genderStr)
+                    .aesMobile(vo.aesMobile)
+                    .answerTime(answerTime)
+                    .build())
+                ;
         })
         .whenCompleteAsync((response, ex) -> {
             if (ex != null) {
@@ -516,7 +537,7 @@ public final class ApoActor {
                 usingNdm(speechText, content_index, emrRef,
                     _isNjd
                     ? (traceId, oldAndSysIntent) ->
-                        callIntent2Reply(traceId, oldAndSysIntent.getRight(), speechText, content_index)
+                        njdIntent2Reply(traceId, oldAndSysIntent.getRight(), speechText, content_index)
                     : (traceId, oldAndSysIntent) ->
                         scriptIntent2Reply(traceId, oldAndSysIntent.getLeft(), oldAndSysIntent.getRight(), speechText, content_index)
                 )
@@ -583,6 +604,7 @@ public final class ApoActor {
         return userContentId;
     }
 
+    /*
     private CompletionStage<ApiResponse<AIReplyVO>> ndmWithNjd(
             final String speechText,
             final int content_index,
@@ -593,7 +615,7 @@ public final class ApoActor {
                 .thenComposeAsync(emr->{
                     emrRef.set(emr);
                     log.info("[{}] callAndNdm done with ndm_s2i resp: {}", _sessionId, emr);
-                    final var getReply = callIntent2Reply(
+                    final var getReply = njdIntent2Reply(
                             null,
                             emr.getIntents(),
                             speechText,
@@ -601,8 +623,9 @@ public final class ApoActor {
                     return interactAsync(getReply).exceptionallyCompose(handleRetryable(()->interactAsync(getReply)));
                 }, _executor);
     }
+    */
 
-    private Supplier<ApiResponse<AIReplyVO>> callIntent2Reply(
+    private Supplier<ApiResponse<AIReplyVO>> njdIntent2Reply(
             final String traceId,
             final Integer[] sysIntents,
             final String speechText,
@@ -614,7 +637,7 @@ public final class ApoActor {
             log.info("[{}] before call_ai_i2r => ({}) speech:{}/intent:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
                     _sessionId, content_index, speechText, sysIntents,
                     isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
-            return _callApi.ai_i2r(Intent2ReplyRequest.builder()
+            return _njdApi.ai_i2r(Intent2ReplyRequest.builder()
                     .sessionId(_sessionId)
                     .traceId(traceId)
                     .sysIntents(sysIntents)
@@ -627,6 +650,7 @@ public final class ApoActor {
         };
     }
 
+    /*
     private CompletionStage<ApiResponse<AIReplyVO>> scriptAndNdm(
             final String speechText,
             final int content_index,
@@ -648,6 +672,7 @@ public final class ApoActor {
                     return interactAsync(getReply).exceptionallyCompose(handleRetryable(()->interactAsync(getReply)));
                 }, _executor);
     }
+    */
 
     private CompletionStage<ApiResponse<AIReplyVO>> usingNdm(
             final String speechText,
@@ -1259,7 +1284,7 @@ public final class ApoActor {
 
     private Supplier<ApiResponse<AIReplyVO>> callAiReplyWithIdleTime(final long idleTime) {
         return _isNjd
-            ?  () -> _callApi.ai_i2r(
+            ?  () -> _njdApi.ai_i2r(
                     Intent2ReplyRequest.builder()
                     .sessionId(_sessionId)
                     .isSpeaking(0)
@@ -1379,6 +1404,9 @@ public final class ApoActor {
     private CallApi _callApi;
 
     @Autowired
+    private NjdApi _njdApi;
+
+    @Autowired
     private ScriptApi _scriptApi;
 
     @Autowired
@@ -1393,7 +1421,7 @@ public final class ApoActor {
     @Value("${dialog.esl}")
     private String _ndm_esl;
 
-    @Value("${dm.is_njd}")
+    //@Value("${dm.is_njd}")
     private boolean _isNjd;
 
     private boolean _use_esl = false;
