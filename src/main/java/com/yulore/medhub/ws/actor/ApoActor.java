@@ -583,19 +583,6 @@ public final class ApoActor {
         return userContentId;
     }
 
-    /*
-    private CompletionStage<ApiResponse<AIReplyVO>> speech2reply(
-            final String speechText,
-            final int content_index) {
-        return _use_esl ? scriptAndEslMixed(speechText, content_index) : scriptOnly(speechText, content_index);
-    }
-
-    private CompletionStage<ApiResponse<AIReplyVO>> scriptOnly(final String speechText, final int content_index) {
-        final var getReply = callAiReplyWithSpeech(speechText, content_index);
-        return interactAsync(getReply).exceptionallyCompose(handleRetryable(()->interactAsync(getReply)));
-    }
-    */
-
     private CompletionStage<ApiResponse<AIReplyVO>> ndmWithNjd(
             final String speechText,
             final int content_index,
