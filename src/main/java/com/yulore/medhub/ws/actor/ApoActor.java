@@ -650,30 +650,6 @@ public final class ApoActor {
         };
     }
 
-    /*
-    private CompletionStage<ApiResponse<AIReplyVO>> scriptAndNdm(
-            final String speechText,
-            final int content_index,
-            final AtomicReference<DialogApi.MatchIntentResult> emrRef) {
-        final var esl_cost = new AtomicLong(0);
-        final var scriptS2I = callScriptS2I(speechText, content_index);
-
-        return interactAsync(scriptS2I).exceptionallyCompose(handleRetryable(()->interactAsync(scriptS2I)))
-                .thenCombine(interactAsync(callNdmS2I(speechText, content_index, esl_cost)), Pair::of)
-                .thenComposeAsync(script_and_ndm->{
-                    final var t2i_resp = script_and_ndm.getLeft();
-                    emrRef.set(script_and_ndm.getRight());
-                    log.info("[{}] scriptAndNdm done with intent_config:{} / ai_t2i resp: {} / ndm_s2i resp: {}",
-                            _sessionId, intentConfig, t2i_resp, script_and_ndm.getRight());
-                    final String traceId = (t2i_resp != null && t2i_resp.getData() != null) ? t2i_resp.getData().getTraceId() : null;
-                    final AtomicReference<Integer[]> sysIntentsRef = new AtomicReference<>(null);
-                    final String ndm_intent = decideNdmIntent(script_and_ndm.getRight(), t2i_resp, sysIntentsRef);
-                    final var getReply = scriptIntent2Reply(traceId, ndm_intent, sysIntentsRef.get(), speechText, content_index);
-                    return interactAsync(getReply).exceptionallyCompose(handleRetryable(()->interactAsync(getReply)));
-                }, _executor);
-    }
-    */
-
     private CompletionStage<ApiResponse<AIReplyVO>> usingNdm(
             final String speechText,
             final int content_index,
