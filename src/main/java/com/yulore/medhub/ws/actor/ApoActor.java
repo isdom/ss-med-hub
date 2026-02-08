@@ -604,27 +604,6 @@ public final class ApoActor {
         return userContentId;
     }
 
-    /*
-    private CompletionStage<ApiResponse<AIReplyVO>> ndmWithNjd(
-            final String speechText,
-            final int content_index,
-            final AtomicReference<DialogApi.MatchIntentResult> emrRef) {
-        final var esl_cost = new AtomicLong(0);
-
-        return interactAsync(callNdmS2I(speechText, content_index, esl_cost))
-                .thenComposeAsync(emr->{
-                    emrRef.set(emr);
-                    log.info("[{}] callAndNdm done with ndm_s2i resp: {}", _sessionId, emr);
-                    final var getReply = njdIntent2Reply(
-                            null,
-                            emr.getIntents(),
-                            speechText,
-                            content_index);
-                    return interactAsync(getReply).exceptionallyCompose(handleRetryable(()->interactAsync(getReply)));
-                }, _executor);
-    }
-    */
-
     private Supplier<ApiResponse<AIReplyVO>> njdIntent2Reply(
             final String traceId,
             final Integer[] sysIntents,
