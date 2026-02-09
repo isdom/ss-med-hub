@@ -684,7 +684,7 @@ public final class ApoActor {
                         : null;
                 log.info("[{}]: [{}]-[{}]: before speech2intent: ({}) speech:{} script:{} esl:{}",
                         _clientIp, _sessionId, _uuid, content_index, speechText, scriptText, _ndm_esl);
-                return _ndmSpeech2Intent.apply(DialogApi.ClassifySpeechRequest.builder()
+                final var result = _ndmSpeech2Intent.apply(DialogApi.ClassifySpeechRequest.builder()
                         .esl(_ndm_esl)
                         .useBert(_use_bert)
                         .sessionId(_sessionId)
@@ -694,6 +694,12 @@ public final class ApoActor {
                         .speechText(speechText)
                         .speechIdx(content_index)
                         .build());
+                if (result != null && result.contexts != null) {
+                    for (final var context : result.contexts) {
+                        context.setScriptText(scriptText);
+                    }
+                }
+                return result;
             } finally {
                 cost.set(System.currentTimeMillis() - startInMs);
                 log.info("[{}]: [{}]-[{}]: after speech2intent: ({}) speech:{} esl:{} => cost {} ms",

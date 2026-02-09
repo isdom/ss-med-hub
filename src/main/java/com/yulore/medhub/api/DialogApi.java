@@ -81,6 +81,7 @@ public interface DialogApi {
         // speech info
         public String sessionId;
         public Long   contentId;
+        public String scriptText;
         public String speechText;
 
         // esl info
