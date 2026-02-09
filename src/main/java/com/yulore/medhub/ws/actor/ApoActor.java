@@ -531,9 +531,6 @@ public final class ApoActor {
                 final var iterationIdx = addIteration(speechText);
                 log.info("[{}] whenASRSentenceEnd: addIteration => {}", _sessionId, iterationIdx);
                 final AtomicReference<DialogApi.MatchIntentResult> emrRef = new AtomicReference<>();
-                //speech2reply(speechText, content_index)
-                //(_isNjd ? ndmWithNjd(speechText, content_index, emrRef)
-                //        : scriptAndNdm(speechText, content_index, emrRef))
                 usingNdm(speechText, content_index, emrRef,
                     _isNjd
                     ? (traceId, oldAndSysIntent) ->
