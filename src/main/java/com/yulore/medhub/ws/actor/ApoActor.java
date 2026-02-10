@@ -533,10 +533,8 @@ public final class ApoActor {
                 final AtomicReference<DialogApi.MatchIntentResult> emrRef = new AtomicReference<>();
                 usingNdm(speechText, content_index, emrRef,
                     _isNjd
-                    ? (traceId, oldAndSysIntent) ->
-                        njdIntent2Reply(traceId, oldAndSysIntent.getRight(), speechText, content_index)
-                    : (traceId, oldAndSysIntent) ->
-                        scriptIntent2Reply(traceId, oldAndSysIntent.getLeft(), oldAndSysIntent.getRight(), speechText, content_index)
+                    ? (traceId, oldAndSysIntent) -> njdIntent2Reply(oldAndSysIntent.getLeft(), oldAndSysIntent.getRight(), speechText, content_index)
+                    : (traceId, oldAndSysIntent) -> scriptIntent2Reply(traceId, oldAndSysIntent.getLeft(), oldAndSysIntent.getRight(), speechText, content_index)
                 )
                 .whenCompleteAsync(handleAiReply(content_index, payload), _executor)
                 .whenComplete((ignored, ex) -> {
@@ -602,7 +600,7 @@ public final class ApoActor {
     }
 
     private Supplier<ApiResponse<AIReplyVO>> njdIntent2Reply(
-            final String traceId,
+            final String intentCode,
             final Integer[] sysIntents,
             final String speechText,
             final int content_index) {
@@ -615,7 +613,7 @@ public final class ApoActor {
                     isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
             return _njdApi.ai_i2r(Intent2ReplyRequest.builder()
                     .sessionId(_sessionId)
-                    .traceId(traceId)
+                    .intent(intentCode)
                     .sysIntents(sysIntents)
                     .speechIdx(content_index)
                     .speechText(speechText)
@@ -660,7 +658,7 @@ public final class ApoActor {
             ) {
                 // high priority intent, like phone's AI assistant
                 // using t2i's intent
-                return null;
+                return t2i_result.getIntentCode();
             }
         }
         if (emr.getIntents() != null) {
