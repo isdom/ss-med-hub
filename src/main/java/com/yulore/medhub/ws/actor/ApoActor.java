@@ -1254,6 +1254,7 @@ public final class ApoActor {
             ;
     }
 
+    /*
     private Supplier<ApiResponse<AIReplyVO>> callAiReplyWithSpeech(final String speechText, final int content_index) {
         return ()-> {
             final boolean isAiSpeaking = isAiSpeaking();
@@ -1264,6 +1265,7 @@ public final class ApoActor {
             return _scriptApi.ai_reply(_sessionId, content_index, speechText, null, isAiSpeaking ? 1 : 0, aiContentId, speakingDuration);
         };
     }
+    */
 
     private Supplier<ApiResponse<ScriptApi.Text2IntentResult>> callScriptS2I(final String speechText, final int content_index) {
         return ()-> {
