@@ -650,6 +650,9 @@ public final class ApoActor {
     private String decideNdmIntent(final DialogApi.MatchIntentResult emr,
                                    final ApiResponse<ScriptApi.Text2IntentResult> t2i_resp,
                                    final AtomicReference<Integer[]> sysIntentsRef) {
+        if (emr.getIntents() != null) {
+            sysIntentsRef.set(emr.getIntents());
+        }
         if (t2i_resp != null && t2i_resp.getData() != null) {
             final var t2i_result = t2i_resp.getData();
             if (t2i_result.getIntentCode() != null
@@ -660,9 +663,6 @@ public final class ApoActor {
                 // using t2i's intent
                 return t2i_result.getIntentCode();
             }
-        }
-        if (emr.getIntents() != null) {
-            sysIntentsRef.set(emr.getIntents());
         }
         return emr.getOldIntent();
     }
