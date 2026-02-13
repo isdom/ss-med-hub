@@ -1286,7 +1286,10 @@ public final class ApoActor {
             final int content_index) {
         return ()-> {
             final boolean isAiSpeaking = isAiSpeaking();
+
+            // when close() called before, bcs of _id2memo has been clear(), will throw java.lang.NullPointerException, TODO fix
             final String aiContentId = currentAiContentId();
+
             final int speakingDuration = currentSpeakingDuration();
             log.info("[{}] before ai_i2r => ({}) speech:{}/traceId:{}/intent:{}/sysIntents:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
                     _sessionId, content_index, speechText, traceId, intent, sysIntents != null ? Arrays.toString(sysIntents) : null,
