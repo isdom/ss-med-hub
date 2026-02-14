@@ -46,7 +46,6 @@ public final class AfsActor {
     }
     public interface Reply2Rms extends BiFunction<AIReplyVO, Supplier<String>, RmsSource> {}
     public interface MatchEsl extends BiFunction<String, String, EslApi.EslResponse<EslApi.Hit>> {}
-    public interface NDMUserSpeech extends Function<DialogApi.UserSpeechRequest, ApiResponse<DialogApi.UserSpeechResult>> {}
 
     public interface Context {
         int localIdx();
@@ -59,7 +58,6 @@ public final class AfsActor {
         Reply2Rms reply2rms();
         BiConsumer<String, Object> sendEvent();
         MatchEsl matchEsl();
-        NDMUserSpeech userSpeech();
     }
 
     public AfsActor(final Context ctx) {
@@ -73,7 +71,6 @@ public final class AfsActor {
         this.reply2rms = ctx.reply2rms();
         this.sendEvent = ctx.sendEvent();
         this._matchEsl = ctx.matchEsl();
-        this._ndmUserSpeech = ctx.userSpeech();
     }
 
     public int localIdx() {
@@ -105,7 +102,6 @@ public final class AfsActor {
     private IntentConfig intentConfig;
 
     final private MatchEsl _matchEsl;
-    final private NDMUserSpeech _ndmUserSpeech;
 
     private final AtomicReference<ASROperator> asrRef = new AtomicReference<>(null);
     private final AtomicBoolean isClosed = new AtomicBoolean(false);

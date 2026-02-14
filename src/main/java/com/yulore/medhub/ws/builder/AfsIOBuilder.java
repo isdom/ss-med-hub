@@ -128,16 +128,6 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                         //}
                     };
                 }
-                public AfsActor.NDMUserSpeech userSpeech() {
-                    return request -> {
-                        if (_dmApi != null) {
-                            return _dmApi.user_speech(request);
-                        } else {
-                            log.warn("AfsActor: dmApi is null, skip userSpeech({})", request);
-                        }
-                        return null;
-                    };
-                }
             });
             addActor(vo.localIdx, actor);
             actorCount.incrementAndGet();
