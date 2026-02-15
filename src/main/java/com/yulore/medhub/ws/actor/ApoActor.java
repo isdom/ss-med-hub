@@ -1382,7 +1382,6 @@ public final class ApoActor {
     @Value("${dialog.esl}")
     private String _ndm_esl;
 
-    //@Value("${dm.is_njd}")
     private boolean _isNjd;
 
     private boolean _use_esl = false;
