@@ -481,8 +481,6 @@ public class AfsIOBuilder implements WsHandlerBuilder {
 
     // private Executor ltxExecutor;
 
-    // private final Function<String, Executor> executorProvider;
-
     private final ObjectProvider<AfsActor> afsProvider;
     private final ObjectProvider<HandlerUrlBuilder> urlProvider;
     private final OrderedExecutor orderedExecutor;
