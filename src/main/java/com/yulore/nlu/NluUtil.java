@@ -16,6 +16,10 @@ public class NluUtil {
         return String.valueOf(_MD5.hashString(corpusText, StandardCharsets.UTF_8));
     }
 
+    public static String removeAllHints(final String text) {
+        return text.replaceAll("[（(][^）)]+[）)]", "").replace("\r", "").replace("\n", "");
+    }
+
     public static RemovePhraseResult extractAndRemoveDM(final Map<Integer, DiscourseMarkerVO> dms, final String text) {
         final AtomicReference<String> ref = new AtomicReference<>(text);
         final Set<Integer> ids = new HashSet<>();
