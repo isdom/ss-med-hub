@@ -278,10 +278,16 @@ public interface DashScopeApi {
         public SearchOptions search_options;
     }
 
+    // REF: https://help.aliyun.com/zh/model-studio/qwen-api-via-dashscope
     @Builder
     @Data
     @ToString
     class SearchOptions {
+        //（可选）默认值为false
+        //在返回结果中是否展示搜索到的信息。参数值：
+        //true：展示；
+        //false：不展示。
+        public boolean enable_source;
     }
 
     @Builder
