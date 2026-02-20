@@ -288,6 +288,11 @@ public interface DashScopeApi {
         //true：展示；
         //false：不展示。
         public boolean enable_source;
+        //（可选）默认值为false
+        //是否开启[1]或[ref_1]样式的角标标注功能。在enable_source为true时生效。参数值：
+        //true：开启；
+        //false：不开启。
+        public boolean enable_citation;
     }
 
     @Builder
