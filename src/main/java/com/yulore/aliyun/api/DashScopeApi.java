@@ -293,6 +293,11 @@ public interface DashScopeApi {
         //true：开启；
         //false：不开启。
         public boolean enable_citation;
+        //（可选）默认值为"[<number>]"
+        //角标样式。在enable_citation为true时生效。参数值：
+        //[<number>]：角标形式为[1]；
+        //[ref_<number>]：角标形式为[ref_1]。
+        public String citation_format;
     }
 
     @Builder
