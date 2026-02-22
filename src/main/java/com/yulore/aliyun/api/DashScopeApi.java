@@ -287,17 +287,22 @@ public interface DashScopeApi {
         //在返回结果中是否展示搜索到的信息。参数值：
         //true：展示；
         //false：不展示。
-        public boolean enable_source;
+        public Boolean enable_source;
         //（可选）默认值为false
         //是否开启[1]或[ref_1]样式的角标标注功能。在enable_source为true时生效。参数值：
         //true：开启；
         //false：不开启。
-        public boolean enable_citation;
+        public Boolean enable_citation;
         //（可选）默认值为"[<number>]"
         //角标样式。在enable_citation为true时生效。参数值：
         //[<number>]：角标形式为[1]；
         //[ref_<number>]：角标形式为[ref_1]。
         public String citation_format;
+        //（可选）默认值为false
+        //是否强制开启搜索。参数值：
+        //true：强制开启；
+        //false：不强制开启。
+        public Boolean forced_search;
     }
 
     @Builder
