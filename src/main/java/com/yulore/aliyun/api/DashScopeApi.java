@@ -1,5 +1,6 @@
 package com.yulore.aliyun.api;
 
+import com.fasterxml.jackson.annotation.JsonSetter;
 import feign.Logger;
 import feign.Request;
 import lombok.*;
@@ -7,11 +8,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.context.annotation.Bean;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 @FeignClient(
@@ -161,6 +164,25 @@ public interface DashScopeApi {
     class Message {
         private String content;
         private String role;
+
+        // 自定义 setter：兼容 "" 和 [{"text": "...."}]
+        @JsonSetter("content")
+        public void setContent(final Object value) {
+            if (value == null) {
+                this.content = null;
+            } else if (value instanceof List<?> list) {
+                final Object inner = list.get(0);
+                if (inner instanceof Map<?, ?> map) {
+                    this.content = map.get("text").toString();
+                } else {
+                    throw new IllegalArgumentException("Unsupported type for inner content: " + inner.getClass());
+                }
+            } else if (value instanceof String str) {
+                this.content = str;
+            } else {
+                throw new IllegalArgumentException("Unsupported type for content: " + value.getClass());
+            }
+        }
     }
 
     @Builder
@@ -174,6 +196,10 @@ public interface DashScopeApi {
     @Data
     @ToString
     class ResponseFormat {
+        public static ResponseFormat from(final String type) {
+            return ResponseFormat.builder().type(type).build();
+        }
+        public static final ResponseFormat JSON_OBJECT = from("json_object");
         // default: "text"
         // optional: json_object, json_schema
         public String type;
@@ -324,28 +350,32 @@ public interface DashScopeApi {
     @Data
     @ToString
     class TextGenerationResult {
+        private String text;
+        private String finish_reason;
         private TextGenerationChoice[]  choices;
     }
 
-    // REF: https://help.aliyun.com/zh/model-studio/qwen-api-reference
+    // REF: https://help.aliyun.com/zh/model-studio/qwen-api-via-dashscope
     @RequestMapping(
-            value = "/aigc/text-generation/generation",
+            value = "/aigc/{type}-generation/generation",
             method = RequestMethod.POST,
             headers={"Content-Type=application/json",
                     "Accept=application/json",
                     "Authorization=Bearer ${dashscope.auth.token}"
             })
-    DashScopeResponse<TextGenerationResult> textGeneration(@RequestBody TextGenerationRequest request);
+    DashScopeResponse<TextGenerationResult> textGeneration(
+            @PathVariable("type") String modelType,
+            @RequestBody TextGenerationRequest request);
 
     // 配置类定义
     class Config {
-         @Bean
+        @Bean
         public Request.Options options() {
-             return new Request.Options(
-                     _connectTimeout, TimeUnit.MILLISECONDS,
-                     _readTimeout, TimeUnit.MILLISECONDS,
-                     // followRedirects(true)
-                     true);
+            return new Request.Options(
+                    _connectTimeout, TimeUnit.MILLISECONDS,
+                    _readTimeout, TimeUnit.MILLISECONDS,
+                    // followRedirects(true)
+                    true);
         }
 
         @Bean
