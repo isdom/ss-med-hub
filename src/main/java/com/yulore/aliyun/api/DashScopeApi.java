@@ -329,6 +329,18 @@ public interface DashScopeApi {
         //true：强制开启；
         //false：不强制开启。
         public Boolean forced_search;
+        //（可选）默认值为turbo
+        //搜索互联网信息的策略。
+        //可选值：
+        //turbo （默认）: 兼顾响应速度与搜索效果，适用于大多数场景。
+        //max: 采用更全面的搜索策略，可调用多源搜索引擎，以获取更详尽的搜索结果，但响应时间可能更长。
+        //agent：可多次调用联网搜索工具与大模型，实现多轮信息检索与内容整合。
+        //该策略仅适用于 qwen3.5-plus、qwen3.5-plus-2026-02-15、qwen3-max与 qwen3-max-2026-01-23 的思考模式（仅支持流式）、qwen3-max-2026-01-23的非思考模式、qwen3-max-2025-09-23。
+        //启用该策略时，仅支持返回搜索来源（enable_source: true），其他联网搜索功能不可用。
+        //agent_max：在agent策略基础上支持网页抓取，参见：网页抓取。
+        //该策略仅适用于qwen3.5-plus、qwen3.5-plus-2026-02-15，以及 qwen3-max与 qwen3-max-2026-01-23 的思考模式。
+        //启用该策略时，仅支持返回搜索来源（enable_source: true），其他联网搜索功能不可用。
+        public String search_strategy;
     }
 
     @Builder
