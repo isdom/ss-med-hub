@@ -341,6 +341,11 @@ public interface DashScopeApi {
         //该策略仅适用于qwen3.5-plus、qwen3.5-plus-2026-02-15，以及 qwen3-max与 qwen3-max-2026-01-23 的思考模式。
         //启用该策略时，仅支持返回搜索来源（enable_source: true），其他联网搜索功能不可用。
         public String search_strategy;
+        //（可选）默认值为false
+        //是否开启特定领域增强。参数值：
+        //true 开启。
+        //false（默认值） 不开启。
+        public Boolean enable_search_extension;
     }
 
     @Builder
