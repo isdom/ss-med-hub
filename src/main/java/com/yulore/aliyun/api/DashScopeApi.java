@@ -346,6 +346,11 @@ public interface DashScopeApi {
         //true 开启。
         //false（默认值） 不开启。
         public Boolean enable_search_extension;
+        //（可选）默认值为false
+        //在流式输出且enable_source为true时，可通过prepend_search_result配置第一个返回的数据包是否只包含搜索来源信息。可选值：
+        //true: 只包含搜索来源信息。
+        //false（默认值）:包含搜索来源信息与大模型回复信息。
+        public Boolean prepend_search_result;
     }
 
     @Builder
