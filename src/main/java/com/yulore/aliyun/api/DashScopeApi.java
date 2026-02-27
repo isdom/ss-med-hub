@@ -27,10 +27,16 @@ import java.util.concurrent.TimeUnit;
 public interface DashScopeApi {
     @Data
     @ToString
+    class PromptTokensDetails {
+    }
+
+    @Data
+    @ToString
     class Usage {
         public Integer  input_tokens;
         public Integer  output_tokens;
         public int  total_tokens;
+        public PromptTokensDetails prompt_tokens_details;
     }
 
     @Data
