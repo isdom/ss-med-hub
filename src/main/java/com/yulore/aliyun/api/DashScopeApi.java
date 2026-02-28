@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+//REF: https://help.aliyun.com/zh/model-studio/qwen-api-via-dashscope
 @FeignClient(
         value = "${dashscope.name}",
         url = "${dashscope.api.url}",
@@ -28,6 +29,9 @@ public interface DashScopeApi {
     @Data
     @ToString
     class PromptTokensDetails {
+        public int cached_tokens;
+        public int cache_creation_input_tokens;
+        public String cache_type;
     }
 
     @Data
