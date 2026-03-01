@@ -30,6 +30,7 @@ public interface DashScopeApi {
     @ToString
     class PromptTokensDetails {
         public int cached_tokens;
+        public Object cache_creation;
         public int cache_creation_input_tokens;
         public String cache_type;
     }
