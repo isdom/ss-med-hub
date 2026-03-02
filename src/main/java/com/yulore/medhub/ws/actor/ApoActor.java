@@ -240,6 +240,7 @@ public final class ApoActor {
             _use_esl = response.getData().getUse_esl() != null ? response.getData().getUse_esl() : false;
             _esl_partition = response.getData().getEsl_partition();
             _use_bert = response.getData().getUse_bert() != null ? response.getData().getUse_bert() : false;
+            _bert_version = response.getData().getBert_version();
             _welcome.set(response.getData());
             // _lastReply.set(response.getData());
             log.info("[{}]: [{}]-[{}]: saveAndPlayWelcome: _use_esl:{}/_esl_partition:{}/_welcome:{}",
@@ -685,6 +686,7 @@ public final class ApoActor {
                 final var result = _ndmSpeech2Intent.apply(DialogApi.ClassifySpeechRequest.builder()
                         .esl(_ndm_esl)
                         .useBert(_use_bert)
+                        .bertVersion(_bert_version)
                         .sessionId(_sessionId)
                         .botId(lastReply != null ? lastReply.getBot_id() : 0)
                         .nodeId(0L)
@@ -1387,6 +1389,7 @@ public final class ApoActor {
     private boolean _use_esl = false;
     private String _esl_partition = null;
     private boolean _use_bert = false;
+    private String _bert_version = null;
 
     private final Consumer<ApoActor> _doHangup;
     private final AtomicReference<AIReplyVO> _welcome = new AtomicReference<>(null);

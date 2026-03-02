@@ -81,4 +81,7 @@ public class AIReplyVO {
 
     @SerializedName("use_bert")
     private Boolean use_bert;
+
+    @SerializedName("bert_version")
+    private String bert_version;
 }

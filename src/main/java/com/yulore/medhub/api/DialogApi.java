@@ -54,6 +54,7 @@ public interface DialogApi {
     class ClassifySpeechRequest {
         public String   esl;
         public Boolean  useBert;
+        public String   bertVersion;
         public String   sessionId;
         public Integer  botId;
         public Long     nodeId;
