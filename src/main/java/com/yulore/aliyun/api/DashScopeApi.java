@@ -28,9 +28,14 @@ import java.util.concurrent.TimeUnit;
 public interface DashScopeApi {
     @Data
     @ToString
+    class CacheCreation {
+    }
+
+    @Data
+    @ToString
     class PromptTokensDetails {
         public int cached_tokens;
-        public Object cache_creation;
+        public CacheCreation cache_creation;
         public int cache_creation_input_tokens;
         public String cache_type;
     }
