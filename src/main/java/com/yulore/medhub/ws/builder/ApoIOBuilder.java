@@ -191,7 +191,7 @@ public class ApoIOBuilder implements WsHandlerBuilder {
                     executor.execute(() -> {
                         ossProvider.getObject().putObject(ctx.bucketName(), ctx.objectName(), ctx.content());
                         oss_sample.stop(oss_timer);
-                        log.info("[{}]: upload_record_to_oss => bucket:{}/object:{}, cost {} ms",
+                        log.info("[{}]: apo_upload_record_to_oss => bucket:{}/object:{}, cost {} ms",
                                 ctx.sessionId(), ctx.bucketName(), ctx.objectName(), System.currentTimeMillis() - startUploadInMs);
                     });
                 };
