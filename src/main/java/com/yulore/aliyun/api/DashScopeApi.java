@@ -29,6 +29,8 @@ public interface DashScopeApi {
     @Data
     @ToString
     class CacheCreation {
+        // 用于创建5分钟有效期显式缓存的 Token 长度。
+        public int ephemeral_5m_input_tokens;
     }
 
     @Data
