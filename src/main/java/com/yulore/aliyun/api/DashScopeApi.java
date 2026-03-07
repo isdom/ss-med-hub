@@ -393,6 +393,8 @@ public interface DashScopeApi {
         private String text;
         private String finish_reason;
         private TextGenerationChoice[]  choices;
+        // 联网搜索到的信息，在设置search_options参数后会返回该参数。
+        private Object search_info;
     }
 
     // REF: https://help.aliyun.com/zh/model-studio/qwen-api-via-dashscope
