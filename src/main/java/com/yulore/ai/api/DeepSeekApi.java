@@ -140,7 +140,9 @@ public interface DeepSeekApi {
             })
     CompletionResponse completions(@RequestBody CompletionsRequest request);
 
-    static Function<String, String> defaultChat(final DeepSeekApi api, final String model, final Consumer<Usage> onUsage) {
+    static Function<String, String> defaultChat(final DeepSeekApi api,
+                                                final String model,
+                                                final Consumer<Usage> onUsage) {
         return content -> {
             final var response = api.completions(
                     CompletionsRequest.builder()
