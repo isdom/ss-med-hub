@@ -390,6 +390,7 @@ public interface DashScopeApi {
     @Data
     @ToString
     class SearchInfo {
+        private Object search_results;
     }
 
     @Data
