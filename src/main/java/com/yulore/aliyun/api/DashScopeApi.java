@@ -389,8 +389,13 @@ public interface DashScopeApi {
 
     @Data
     @ToString
+    class SearchResult {
+    }
+
+    @Data
+    @ToString
     class SearchInfo {
-        private Object search_results;
+        private List<SearchResult> search_results;
     }
 
     @Data
