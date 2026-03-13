@@ -390,6 +390,8 @@ public interface DashScopeApi {
     @Data
     @ToString
     class SearchResult {
+        // 搜索结果来源的网站名称。
+        private String site_name;
     }
 
     @Data
