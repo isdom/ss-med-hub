@@ -200,6 +200,7 @@ public final class ApoActor {
             return;
         }
 
+        log.info("[{}]: [{}]-[{}]: receive_userAnswer: {}", _clientIp, _sessionId, _uuid, vo);
         final var answerTime = System.currentTimeMillis();
         interactAsync(()->{
             log.info("[{}]: [{}]-[{}]: before_userAnswer: {}", _clientIp, _sessionId, _uuid, vo);
@@ -223,7 +224,7 @@ public final class ApoActor {
                     .answerTime(answerTime)
                     .build())
                 ;
-        })
+        }, "user_answer")
         .whenCompleteAsync((response, ex) -> {
             if (ex != null) {
                 log.warn("[{}]: [{}]-[{}]: failed for callApi.user_answer, detail: {}",
@@ -1312,6 +1313,10 @@ public final class ApoActor {
 
     private  <T> CompletionStage<T> interactAsync(final Supplier<T> getResponse) {
         return CompletableFuture.supplyAsync(getResponse, executorStore.apply("feign"));
+    }
+
+    private  <T> CompletionStage<T> interactAsync(final Supplier<T> getResponse, final String executorName) {
+        return CompletableFuture.supplyAsync(getResponse, executorStore.apply(executorName));
     }
 
     private <T> Function<Throwable, CompletionStage<T>> handleRetryable(final Supplier<CompletionStage<T>> buildExecution) {
