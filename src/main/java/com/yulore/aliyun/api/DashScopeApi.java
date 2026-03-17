@@ -394,6 +394,8 @@ public interface DashScopeApi {
         private String site_name;
         // 来源网站的图标URL，如果没有图标则为空字符串。
         private String icon;
+        // 搜索结果的序号，表示该搜索结果在search_results中的索引。
+        private int index;
     }
 
     @Data
