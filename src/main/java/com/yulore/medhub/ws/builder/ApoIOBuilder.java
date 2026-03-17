@@ -283,10 +283,19 @@ public class ApoIOBuilder implements WsHandlerBuilder {
     private Supplier<Runnable> reply2playback(final String playbackId, final AIReplyVO replyVO, final ApoActor actor, WebSocket webSocket) {
         final String aiContentId = replyVO.getAi_content_id() != null ? Long.toString(replyVO.getAi_content_id()) : null;
         if ("cp".equals(replyVO.getVoiceMode())) {
-            return ()->playbackOn(new PlaybackContext(
-                    playbackId,
-                    String.format("type=cp,%s", JSON.toJSONString(replyVO.getCps())),
-                    aiContentId), actor, webSocket);
+            if (replyVO.getCps() == null || replyVO.getCps().length == 0) {
+                // fix bug for invalid cp mode: AIReplyVO(ai_speech_file=, hangup=1, reply_content=, voiceMode=cp, cps=[],
+                // tts_fixed_content=null, ai_content_id=null, user_content_id=null, cancel_on_speak=null, pause_on_speak=null,
+                // user_attrs=null, node_id=null, qa_id=null, use_esl=null, esl_partition=null, bot_id=null, min_playback_duration=null,
+                // script_text=, use_bert=null, bert_version=null)
+                log.warn("[{}]: [{}]-[{}]: reply2playback => invalid_cp_reply: {}, ignore", actor.clientIp(), actor.sessionId(), actor.uuid(), replyVO);
+                return null;
+            } else {
+                return () -> playbackOn(new PlaybackContext(
+                        playbackId,
+                        String.format("type=cp,%s", JSON.toJSONString(replyVO.getCps())),
+                        aiContentId), actor, webSocket);
+            }
         } else if ("wav".equals(replyVO.getVoiceMode())) {
             return ()->playbackOn(new PlaybackContext(
                     playbackId,

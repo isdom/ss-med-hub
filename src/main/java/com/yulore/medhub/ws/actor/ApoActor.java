@@ -953,7 +953,7 @@ public final class ApoActor {
         // report AI speak timing
         final PlaybackMemo memo = memoFor(playbackId);
         if (memo == null) {
-            log.warn("[{}]: [{}]-[{}]: notifyPlaybackStop: can't find PlaybackMemo by {}", _clientIp, _sessionId, _uuid, playbackId);
+            log.warn("[{}]: [{}]-[{}]: reportAIContent: can't find PlaybackMemo by {}", _clientIp, _sessionId, _uuid, playbackId);
             return;
         }
         final long start_speak_timestamp = playback_begin_timestamp != null ? Long.parseLong(playback_begin_timestamp) : memo.beginInMs;
