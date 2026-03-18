@@ -396,6 +396,8 @@ public interface DashScopeApi {
         private String icon;
         // 搜索结果的序号，表示该搜索结果在search_results中的索引。
         private int index;
+        // 搜索结果的标题。
+        private String title;
     }
 
     @Data
