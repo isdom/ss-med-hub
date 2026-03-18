@@ -159,6 +159,7 @@ public final class ApoActor {
                     return;
                 }
 
+                log.info("[{}]: [{}]-[{}]: prepare_mockAnswer for tid:{}", _clientIp, _sessionId, _uuid, _tid);
                 final var answerTime = System.currentTimeMillis();
                 interactAsync(()->{
                     log.info("[{}]: [{}]-[{}]: before_mockAnswer for tid:{}", _clientIp, _sessionId, _uuid, _tid);
