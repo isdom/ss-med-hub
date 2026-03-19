@@ -177,7 +177,7 @@ public final class ApoActor {
                         .answerTime(answerTime)
                         .build())
                     ;
-                }, "user_answer")
+                }, "mock_answer")
                 .whenCompleteAsync((response, ex) -> {
                     if (ex != null) {
                         log.warn("[{}]: [{}]-[{}]: failed for callApi.mock_answer, detail: {}",
@@ -360,7 +360,7 @@ public final class ApoActor {
                         final var iterationIdx = addIteration("checkIdle");
                         log.info("[{}]: [{}]-[{}]: checkIdle: iteration: {} / idle duration: {} ms >=: [{}] ms",
                                 _clientIp, _sessionId, _uuid, iterationIdx, idleTime, _aiSetting.getIdle_timeout());
-                        interactAsync(callAiReplyWithIdleTime(idleTime))
+                        interactAsync(callAiReplyWithIdleTime(idleTime), "checkIdle")
                         .whenCompleteAsync((response, ex) -> {
                             completeIteration(iterationIdx);
                             if (ex != null) {
