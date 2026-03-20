@@ -398,6 +398,8 @@ public interface DashScopeApi {
         private int index;
         // 搜索结果的标题。
         private String title;
+        // 搜索结果的链接地址。
+        private String url;
     }
 
     @Data
