@@ -402,6 +402,10 @@ public interface DashScopeApi {
         private String url;
     }
 
+    class ExtraToolInfo {
+
+    }
+
     @Data
     @ToString
     class SearchInfo {
