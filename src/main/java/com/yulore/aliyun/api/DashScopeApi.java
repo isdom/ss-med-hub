@@ -412,7 +412,7 @@ public interface DashScopeApi {
         // 联网搜索到的结果。
         private List<SearchResult> search_results;
         // 开启enable_search_extension参数后返回的领域增强信息。
-        private List<Object> extra_tool_info;
+        private List<ExtraToolInfo> extra_tool_info;
     }
 
     @Data
