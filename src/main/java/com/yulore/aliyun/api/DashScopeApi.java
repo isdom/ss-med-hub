@@ -402,8 +402,11 @@ public interface DashScopeApi {
         private String url;
     }
 
+    @Data
+    @ToString
     class ExtraToolInfo {
-
+        // 领域增强工具输出信息。
+        private String result;
     }
 
     @Data
