@@ -407,6 +407,8 @@ public interface DashScopeApi {
     class ExtraToolInfo {
         // 领域增强工具输出信息。
         private String result;
+        // 领域增强使用的工具。
+        private String tool;
     }
 
     @Data
