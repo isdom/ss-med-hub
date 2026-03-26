@@ -2,26 +2,17 @@ package com.yulore.aliyun.api;
 
 import feign.Logger;
 import feign.Request;
-import lombok.Builder;
-import lombok.Data;
-import lombok.ToString;
+import feign.RequestInterceptor;
+import lombok.*;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.context.annotation.Bean;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-@FeignClient(
-        value = "${dv.name}",
-        url = "${dv.api.url}",
-        path="/v1/collections",
-        configuration = DashVectorApi.Config.class
-)
-@ConditionalOnProperty(prefix = "dv.api", name = "url")
 public interface DashVectorApi {
+
     /*
     DashVector支持的数据类型
     当前DashVector支持Python的5种基础数据类型：
@@ -32,7 +23,9 @@ public interface DashVectorApi {
     long
     */
 
-    //@Builder
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     @Data
     @ToString
     class Doc {
@@ -76,23 +69,19 @@ public interface DashVectorApi {
 
     // REF: https://help.aliyun.com/document_detail/2510317.html
     @RequestMapping(
-            value = "/docs",
-            method = RequestMethod.POST,
-            headers={"Content-Type=application/json",
-                    "Accept=application/json",
-                    "dashvector-auth-token=${dv.api.token}"
-            })
-    DVResponse<DocOpResult> insertDoc(@RequestBody InsertDocRequest request);
+            value = "/{collection}/docs",
+            method = RequestMethod.POST)
+    DVResponse<DocOpResult> insertDoc(
+            @PathVariable("collection") String collection,
+            @RequestBody InsertDocRequest request);
 
     // REF: https://help.aliyun.com/document_detail/2510321.html
     @RequestMapping(
-            value = "/docs",
-            method = RequestMethod.PUT,
-            headers={"Content-Type=application/json",
-                    "Accept=application/json",
-                    "dashvector-auth-token=${dv.api.token}"
-            })
-    DVResponse<DocOpResult> updateDoc(@RequestBody InsertDocRequest request);
+            value = "/{collection}/docs",
+            method = RequestMethod.PUT)
+    DVResponse<DocOpResult> updateDoc(
+            @PathVariable("collection") String collection,
+            @RequestBody InsertDocRequest request);
 
     @Builder
     @Data
@@ -105,13 +94,11 @@ public interface DashVectorApi {
 
     // REF: https://help.aliyun.com/document_detail/2510325.html
     @RequestMapping(
-            value = "/docs",
-            method = RequestMethod.DELETE,
-            headers={"Content-Type=application/json",
-                    "Accept=application/json",
-                    "dashvector-auth-token=${dv.api.token}"
-            })
-    DVResponse<DocOpResult> deleteDoc(@RequestBody DeleteDocRequest request);
+            value = "/{collection}/docs",
+            method = RequestMethod.DELETE)
+    DVResponse<DocOpResult> deleteDoc(
+            @PathVariable("collection") String collection,
+            @RequestBody DeleteDocRequest request);
 
     @Builder
     @Data
@@ -119,7 +106,9 @@ public interface DashVectorApi {
     class QueryDocRequest {
         public String id;
         public float[] vector;
+        public Integer topk;
         public String filter;
+        public Boolean include_vector;
         public String partition;
     }
 
@@ -127,11 +116,7 @@ public interface DashVectorApi {
     //      https://help.aliyun.com/document_detail/2513006.html
     @RequestMapping(
             value = "/{collection}/query",
-            method = RequestMethod.POST,
-            headers={"Content-Type=application/json",
-                    "Accept=application/json",
-                    "dashvector-auth-token=${dv.api.token}"
-            })
+            method = RequestMethod.POST)
     DVResponse<Doc> queryDoc(
             @PathVariable("collection") String collection,
             @RequestBody QueryDocRequest request);
@@ -160,11 +145,7 @@ public interface DashVectorApi {
     // REF: https://help.aliyun.com/document_detail/2715274.html
     @RequestMapping(
             value = "/{collection}/query_group_by",
-            method = RequestMethod.POST,
-            headers={"Content-Type=application/json",
-                    "Accept=application/json",
-                    "dashvector-auth-token=${dv.api.token}"
-            })
+            method = RequestMethod.POST)
     DVResponse<Group> queryDocGroupBy(
             @PathVariable("collection") String collection,
             @RequestBody QueryDocGroupByRequest request);
@@ -172,11 +153,7 @@ public interface DashVectorApi {
     // REF: https://help.aliyun.com/document_detail/2510324.html
     @RequestMapping(
             value = "/{collection}/docs",
-            method = RequestMethod.GET,
-            headers={"Content-Type=application/json",
-                    "Accept=application/json",
-                    "dashvector-auth-token=${dv.api.token}"
-            })
+            method = RequestMethod.GET)
     DVResponse<Map<String, Doc>> fetchDoc(
             @PathVariable("collection") String collection,
             @RequestParam("ids") String ids,
@@ -185,11 +162,7 @@ public interface DashVectorApi {
     // REF: https://help.aliyun.com/document_detail/2510328.html
     @RequestMapping(
             value = "/{collection}/partitions",
-            method = RequestMethod.GET,
-            headers={"Content-Type=application/json",
-                    "Accept=application/json",
-                    "dashvector-auth-token=${dv.api.token}"
-            })
+            method = RequestMethod.GET)
     DVResponse<String> listPartitions(@PathVariable("collection") String collection);
 
     /*
@@ -217,11 +190,7 @@ public interface DashVectorApi {
     // REF: https://help.aliyun.com/document_detail/2510294.html
     @RequestMapping(
             value = "/{collection}",
-            method = RequestMethod.GET,
-            headers={"Content-Type=application/json",
-                    "Accept=application/json",
-                    "dashvector-auth-token=${dv.api.token}"
-            })
+            method = RequestMethod.GET)
     DVResponse<CollectionMeta> descCollection(@PathVariable("collection") String collection);
 
     @Data
@@ -240,36 +209,30 @@ public interface DashVectorApi {
     // REF: https://help.aliyun.com/document_detail/2510326.html
     @RequestMapping(
             value = "/{collection}/partitions",
-            method = RequestMethod.POST,
-            headers={"Content-Type=application/json",
-                    "Accept=application/json",
-                    "dashvector-auth-token=${dv.api.token}"
-            })
-    DVResponse<Void> createPartition(@PathVariable("collection") String collection,
-                                     @RequestBody CreatePartitionRequest request);
+            method = RequestMethod.POST)
+    DVResponse<Void> createPartition(
+            @PathVariable("collection") String collection,
+            @RequestBody CreatePartitionRequest request
+    );
 
 
     // REF: https://help.aliyun.com/document_detail/2510327.html
     @RequestMapping(
             value = "/{collection}/partitions/{partition}",
-            method = RequestMethod.GET,
-            headers={"Content-Type=application/json",
-                    "Accept=application/json",
-                    "dashvector-auth-token=${dv.api.token}"
-            })
-    DVResponse<String> describePartition(@PathVariable("collection") String collection,
-                                         @PathVariable("partition") String partition);
+            method = RequestMethod.GET)
+    DVResponse<String> describePartition(
+            @PathVariable("collection") String collection,
+            @PathVariable("partition") String partition
+    );
 
     // REF: https://help.aliyun.com/document_detail/2510329.html
     @RequestMapping(
             value = "/{collection}/partitions/{partition}/stats",
-            method = RequestMethod.GET,
-            headers={"Content-Type=application/json",
-                    "Accept=application/json",
-                    "dashvector-auth-token=${dv.api.token}"
-            })
-    DVResponse<PartitionStats> statsPartition(@PathVariable("collection") String collection,
-                                              @PathVariable("partition") String partition);
+            method = RequestMethod.GET)
+    DVResponse<PartitionStats> statsPartition(
+            @PathVariable("collection") String collection,
+            @PathVariable("partition") String partition
+    );
 
     @Data
     @ToString
@@ -282,21 +245,29 @@ public interface DashVectorApi {
     // REF: https://help.aliyun.com/document_detail/2510304.html
     @RequestMapping(
             value = "/{collection}/stats",
-            method = RequestMethod.GET,
-            headers={"Content-Type=application/json",
-                    "Accept=application/json",
-                    "dashvector-auth-token=${dv.api.token}"
-            })
+            method = RequestMethod.GET)
     DVResponse<CollectionStats> statsCollection(@PathVariable("collection") String collection);
 
     // 配置类定义
     class Config {
+        @Value("${dashvector.cfg.log-level:NONE}")
+        private String _logLevel;
+
+        // connect(200 ms)
+        @Value("${dashvector.cfg.connect-timeout-ms:200}")
+        private long _connectTimeout;
+
+        // read(60 minutes)
+        @Value("${dashvector.cfg.read-timeout-ms:3600000}")
+        private long _readTimeout;
+
         @Bean
         public Request.Options options() {
             // connect(200 ms), read(60 minutes), followRedirects(true)
             return new Request.Options(
                     _connectTimeout, TimeUnit.MILLISECONDS,
                     _readTimeout, TimeUnit.MILLISECONDS,
+                    // followRedirects(true)
                     true);
         }
 
@@ -311,13 +282,16 @@ public interface DashVectorApi {
             };
         }
 
-        @Value("${dv.api.log-level:NONE}")
-        private String _logLevel;
+        @Value("${dashvector.api.token}")
+        private String token;
 
-        @Value("${dv.api.connect-timeout-ms:200}")
-        private long _connectTimeout;
-
-        @Value("${dv.api.read-timeout-ms:500}")
-        private long _readTimeout;
+        @Bean
+        public RequestInterceptor tokenInterceptor() {
+            return template -> template
+                    .header("Content-Type", "application/json")
+                    .header("Accept", "application/json")
+                    .header("dashvector-auth-token", token)
+                    ;
+        }
     }
 }
