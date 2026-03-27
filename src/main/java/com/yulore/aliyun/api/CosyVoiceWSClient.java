@@ -149,14 +149,14 @@ public class CosyVoiceWSClient {
         connect().whenComplete((channel, ex)-> {
             if (ex != null) {
                 // TODO:
-                log.warn("funasr_connect_to {} failed: {}", url, ExceptionUtil.exception2detail(ex));
+                log.warn("cosyvoice_connect_to {} failed: {}", url, ExceptionUtil.exception2detail(ex));
             } else {
                 this.channel = channel;
                 final long cost = System.currentTimeMillis() - _startInMs;
                 if (null != connect_timer) {
                     connect_timer.record(cost, TimeUnit.MILLISECONDS);
                 }
-                log.info("funasr_connect_to {} cost: {} ms", url, cost);
+                log.info("cosyvoice_connect_to {} cost: {} ms", url, cost);
             }
         });
     }
@@ -311,7 +311,10 @@ public class CosyVoiceWSClient {
                     WebSocketVersion.V13,
                     null,
                     false,
-                    new DefaultHttpHeaders(),
+                    new DefaultHttpHeaders()
+                        .add("Authorization", "Bearer <your_api_key>")
+                        .add("user-agent", "xxx")
+                        .add("X-DashScope-WorkSpace", "xxx"),
                     1024 * 1024 // 最大内容长度 1MBytes
             );
             pipeline.addLast(
@@ -331,12 +334,12 @@ public class CosyVoiceWSClient {
             if (handler != null) {
                 handler.accept(evt);
             }
-            log.info("userEventTriggered: {}", evt);
+            log.info("cosyvoice userEventTriggered: {}", evt);
         }
 
         @Override
         public void channelActive(ChannelHandlerContext ctx) {
-            log.info("funasr connected");
+            log.info("cosyvoice connected");
         }
 
         @Override
@@ -368,7 +371,7 @@ public class CosyVoiceWSClient {
 
         @Override
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-            log.warn("funasr_exception: {}", ExceptionUtil.exception2detail(cause));
+            log.warn("cosyvoice_exception: {}", ExceptionUtil.exception2detail(cause));
             ctx.close();
         }
 
@@ -383,7 +386,7 @@ public class CosyVoiceWSClient {
                     _onStop.accept(_text.toString());
                 }
             } finally {
-                log.info("funasr disconnect");
+                log.info("cosyvoice disconnect");
             }
             // shutdown();
         }
