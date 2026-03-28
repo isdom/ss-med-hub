@@ -20,11 +20,12 @@ import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.websocketx.*;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
-import lombok.RequiredArgsConstructor;
+import lombok.*;
 import lombok.extern.slf4j.Slf4j;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
@@ -34,6 +35,41 @@ import java.util.function.Consumer;
 // REF: https://help.aliyun.com/zh/model-studio/cosyvoice-websocket-api
 @Slf4j
 public class CosyVoiceWSClient {
+    @Builder
+    @Data
+    @ToString
+    public static class Header {
+        public String action;
+        public String task_id;
+        public String streaming;
+    }
+
+    @Builder
+    @Data
+    @ToString
+    public static class RunParameters {
+    }
+
+    @Builder
+    @Data
+    @ToString
+    public static class Input {
+        public String text;
+    }
+
+    @Builder
+    @Data
+    @ToString
+    public static class RunPayload {
+        public String task_group;
+        public String task;
+        public String function;
+        public String model;
+        public RunParameters parameters;
+        public Input input;
+    }
+    // https://help.aliyun.com/zh/model-studio/cosyvoice-websocket-api?#12d8a57443dmz
+
     public interface AsrOp {
         void send(byte[] pcm);
         void stop();
