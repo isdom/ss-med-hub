@@ -48,6 +48,9 @@ public class CosyVoiceWSClient {
     @Data
     @ToString
     public static class RunParameters {
+        @Builder.Default
+        // 固定字符串：“PlainText”。
+        public String text_type = "PlainText";
     }
 
     @Builder
