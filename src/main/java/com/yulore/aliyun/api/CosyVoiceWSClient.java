@@ -166,6 +166,12 @@ public class CosyVoiceWSClient {
         //用广播剧博客主的语气讲话。
         //系统音色：指令必须使用固定格式和内容，详情请参见音色列表
         public String instruction;
+        // 是否启用 Markdown 过滤。启用该功能后，系统在合成语音前自动过滤输入文本中的 Markdown 标记符号，避免将其朗读为文字内容。仅cosyvoice-v3-flash复刻音色支持该功能。
+        //默认值：false。
+        //取值范围：
+        //true：启用Markdown过滤
+        //false：禁用Markdown过滤
+        public Boolean enable_markdown_filter;
     }
 
     @Builder
