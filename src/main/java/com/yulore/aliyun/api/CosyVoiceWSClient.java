@@ -166,6 +166,11 @@ public class CosyVoiceWSClient {
         //用广播剧博客主的语气讲话。
         //系统音色：指令必须使用固定格式和内容，详情请参见音色列表
         public String instruction;
+        // 文本热修复配置，用于自定义指定词语的发音或对待合成文本进行替换。仅cosyvoice-v3-flash复刻音色支持该功能。
+        //参数介绍：
+        //pronunciation：自定义发音。指定词语的拼音标注，用于纠正默认发音不准确的情况。
+        //replace：文本替换。在语音合成前将指定词语替换为目标文本，替换后的文本将作为实际合成内容。
+        public Object hot_fix;
         // 是否启用 Markdown 过滤。启用该功能后，系统在合成语音前自动过滤输入文本中的 Markdown 标记符号，避免将其朗读为文字内容。仅cosyvoice-v3-flash复刻音色支持该功能。
         //默认值：false。
         //取值范围：
