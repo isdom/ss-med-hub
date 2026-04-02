@@ -25,7 +25,6 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
@@ -38,10 +37,13 @@ public class CosyVoiceWSClient {
     @Builder
     @Data
     @ToString
-    public static class Header {
+    public static class TaskHeader {
         public String action;
         public String task_id;
-        public String streaming;
+        // 是否必选: 是
+        // 固定字符串："duplex"
+        @Builder.Default
+        public String streaming = "duplex";
     }
 
     @Builder
