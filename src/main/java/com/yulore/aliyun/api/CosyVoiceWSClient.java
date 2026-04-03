@@ -50,10 +50,12 @@ public class CosyVoiceWSClient {
     @Data
     @ToString
     public static class RunParameters {
+        // 是否必选: 是
         // 固定字符串：“PlainText”。
         @Builder.Default
         public String text_type = "PlainText";
 
+        // 是否必选: 是
         // 语音合成所使用的音色。
         //支持系统音色和复刻音色：
         //系统音色：参见音色列表。
@@ -61,13 +63,16 @@ public class CosyVoiceWSClient {
         //使用声音复刻生成的复刻音色时，本请求的model参数值，必须与创建该音色时所用的模型版本（即target_model参数）完全一致。
         //声音设计音色：通过声音设计功能定制。使用声音设计音色时，请确保声音设计与语音合成使用同一账号。
         //使用声音设计生成的音色时，本请求的model参数值，必须与创建该音色时所用的模型版本（即target_model参数）完全一致。
-        public String voice;
+        // REF-DOC: https://help.aliyun.com/zh/model-studio/cosyvoice-voice-list
+        @Builder.Default
+        public String voice = "longanhuan"; // 名称：龙安欢 / voice参数：longanhuan / 特质：欢脱元气女 / 年龄：20~30岁 / 语言：中文（普通话）、英文
 
         //音频编码格式。
         //所有模型均支持的编码格式：pcm、wav和mp3（默认）
         //除cosyvoice-v1外，其他模型支持的编码格式：opus
         //音频格式为opus时，支持通过bit_rate参数调整码率。
-        public String format;
+        @Builder.Default
+        public String format = "mp3";
         //音频采样率（单位：Hz）。
         //默认值：22050。
         //取值范围：8000, 16000, 22050, 24000, 44100, 48000。
