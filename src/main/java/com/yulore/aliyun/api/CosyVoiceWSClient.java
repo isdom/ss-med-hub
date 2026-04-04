@@ -193,6 +193,11 @@ public class CosyVoiceWSClient {
         public String text;
     }
 
+    @Data
+    @ToString
+    public static class EmptyInput {
+    }
+
     @Builder
     @Data
     @ToString
