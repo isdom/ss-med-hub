@@ -45,10 +45,87 @@ public class QwenTTSWSClient {
     // https://help.aliyun.com/zh/model-studio/qwen-tts-realtime-server-events
     @Data
     @ToString
-    public static class SessionCreated {
+    public static class Event {
+        // 服务端事件ID。
         public String event_id;
+        // 事件类型。
         public String type;
-        public Object session;
+    }
+
+    @Data
+    @ToString
+    public static class ErrorDetail {
+        // 服务端事件ID。
+        public String code;
+        // 事件类型。
+        public String message;
+    }
+
+    // 不论是遇到客户端错误还是服务端错误，服务端都会响应该事件。
+    @Data
+    @ToString
+    public static class ErrorEvent {
+        // 服务端事件ID。
+        public String event_id;
+        // 事件类型。
+        public String type;
+        // 错误详情。
+        public ErrorDetail error;
+    }
+
+    @Data
+    @ToString
+    public static class SessionMeta {
+        // 会话ID。
+        public String id;
+        // 会话服务名。
+        public String object;
+        // 交互模式，server_commit或commit。
+        public String mode;
+        // 使用的模型。
+        public String model;
+        // 使用的音色。
+        public String voice;
+        // 音频格式。
+        public String response_format;
+        // 音频采样率。
+        public int sample_rate;
+        // 音频语种。
+        public String language_type;
+    }
+
+    @Data
+    @ToString
+    public static class SessionCreated {
+        // 服务端事件ID。
+        public String event_id;
+        // 事件类型，固定为session.created。
+        public String type;
+        // 会话配置。
+        public SessionMeta session;
+    }
+
+    // 接收到客户端的session.update请求并正确处理后返回。如果出现错误，则直接返回error事件。
+    @Data
+    @ToString
+    public static class SessionUpdated {
+        // 服务端事件ID。
+        public String event_id;
+        // 事件类型，固定为session.updated。
+        public String type;
+        // 会话配置。
+        public SessionMeta session;
+    }
+
+    @Data
+    @ToString
+    public static class InputTextBufferCommitted {
+        // 服务端事件ID。
+        public String event_id;
+        // 事件类型，固定为input_text_buffer.committed。
+        public String type;
+        // 将创建的用户消息项的 ID。
+        public String item_id;
     }
 
     @Builder
@@ -397,7 +474,7 @@ public class QwenTTSWSClient {
                             _onStop.accept(_taskId);
                         }
                     }
-                    }
+                }
             } catch (JsonProcessingException ex) {
                 log.warn("{} with exception: {}", _taskId, ExceptionUtil.exception2detail(ex));
             }
@@ -456,7 +533,7 @@ public class QwenTTSWSClient {
                            final OnStart onStart,
                            final OnBinary onBinary,
                            final OnStop onStop
-        ) {
+    ) {
         this.uri = buildUri(url);
         this.group = group;
         this._apiKey = apiKey;
@@ -507,7 +584,7 @@ public class QwenTTSWSClient {
                     .payload(payload)
                     .build();
             sendMessage(vo2string(runTask)).whenComplete((ok, ex)-> {
-                        if (ex == null) {
+                if (ex == null) {
                             /*
                             _onStart.accept(new AsrOp() {
                                 @Override
@@ -524,28 +601,28 @@ public class QwenTTSWSClient {
                                 }
                             });
                             */
-                        }
+                }
             });
         }));
 
         final var result = new CompletableFuture<Channel>();
 
         new Bootstrap()
-            .group(group)
-            .channel(NioSocketChannel.class)
-            .option(ChannelOption.SO_KEEPALIVE, true)
-            .option(ChannelOption.TCP_NODELAY, true) // 禁用Nagle算法
-            .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5000)
-            .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT) // 使用内存池
-            .handler(new LoggingHandler(LogLevel.DEBUG)) // 生产环境可关闭
-            .handler(new ClientInitializer())
-            .connect(uri.getHost(), getPort()).addListener(future -> {
-                if (!future.isSuccess()) {
-                    result.completeExceptionally(future.cause());
-                } else {
-                    result.complete(((ChannelFuture)future).channel());
-                }
-            });
+                .group(group)
+                .channel(NioSocketChannel.class)
+                .option(ChannelOption.SO_KEEPALIVE, true)
+                .option(ChannelOption.TCP_NODELAY, true) // 禁用Nagle算法
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5000)
+                .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT) // 使用内存池
+                .handler(new LoggingHandler(LogLevel.DEBUG)) // 生产环境可关闭
+                .handler(new ClientInitializer())
+                .connect(uri.getHost(), getPort()).addListener(future -> {
+                    if (!future.isSuccess()) {
+                        result.completeExceptionally(future.cause());
+                    } else {
+                        result.complete(((ChannelFuture)future).channel());
+                    }
+                });
 
         return result;
     }
@@ -627,9 +704,9 @@ public class QwenTTSWSClient {
                     null,
                     false,
                     new DefaultHttpHeaders()
-                        .add("Authorization", "Bearer " + _apiKey)
-                        .add("user-agent", "CosyVoiceWSClient")
-                        //.add("X-DashScope-WorkSpace", "xxx")
+                            .add("Authorization", "Bearer " + _apiKey)
+                            .add("user-agent", "QwenTTSWSClient")
+                    //.add("X-DashScope-WorkSpace", "xxx")
                     ,
                     1024 * 1024 // 最大内容长度 1MBytes
             );
