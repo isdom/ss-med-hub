@@ -14,6 +14,7 @@ import io.netty.buffer.search.SearchProcessorFactory;
 import io.netty.channel.*;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.codec.base64.Base64;
 import io.netty.handler.codec.http.DefaultHttpHeaders;
 import io.netty.handler.codec.http.HttpClientCodec;
 import io.netty.handler.codec.http.HttpObjectAggregator;
@@ -31,7 +32,6 @@ import javax.net.ssl.SSLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -503,9 +503,14 @@ public class QwenTTSWSClient {
     }
 
     private static final byte[] EVENT_ID_BYTES = "\"event_id\"".getBytes(StandardCharsets.UTF_8);
-    private static final byte[] TYPE_BYTES = "\"type\"".getBytes(StandardCharsets.UTF_8);
     private static final SearchProcessorFactory SEARCH_EVENT_ID = BitapSearchProcessorFactory.newBitapSearchProcessorFactory(EVENT_ID_BYTES);
+
+    private static final byte[] TYPE_BYTES = "\"type\"".getBytes(StandardCharsets.UTF_8);
     private static final SearchProcessorFactory SEARCH_TYPE = BitapSearchProcessorFactory.newBitapSearchProcessorFactory(TYPE_BYTES);
+
+    private static final byte[] DELTA_BYTES = "\"delta\"".getBytes(StandardCharsets.UTF_8);
+    private static final SearchProcessorFactory SEARCH_DELTA = BitapSearchProcessorFactory.newBitapSearchProcessorFactory(DELTA_BYTES);
+
     private static final ByteProcessor.IndexOfProcessor INDEX_OF_QUOTES = new ByteProcessor.IndexOfProcessor((byte)'"');
 
     private static String extractValue(final ByteBuf content, final ByteProcessor findKey) {
@@ -519,6 +524,21 @@ public class QwenTTSWSClient {
                     final var bytes = new byte[quotesEnd - quotesBegin - 1];
                     content.getBytes(quotesBegin+1, bytes);
                     return new String(bytes, StandardCharsets.UTF_8);
+                }
+            }
+        }
+        return null;
+    }
+
+    private static ByteBuf extractRaw(final ByteBuf content, final ByteProcessor findKey) {
+        int keyEnd = content.forEachByte(findKey);
+        if (keyEnd != -1) {
+            final var idx = keyEnd + 1;
+            final var quotesBegin = content.forEachByte(idx, content.readableBytes() - idx, INDEX_OF_QUOTES);
+            if (quotesBegin != -1) {
+                final var quotesEnd = content.forEachByte( quotesBegin + 1, content.readableBytes() - quotesBegin - 1, INDEX_OF_QUOTES);
+                if (quotesEnd != -1) {
+                    return content.slice(quotesBegin+1, quotesEnd - quotesBegin - 1);
                 }
             }
         }
@@ -603,6 +623,31 @@ public class QwenTTSWSClient {
 
                 }
                 case "response.audio.delta" -> {
+                    final var content_delta = extractRaw(frame.content(), SEARCH_DELTA.newSearchProcessor());
+                    if (content_delta != null) {
+                        log.info("response.audio.delta => audio_base64_length:{}", content_delta.readableBytes());
+                        if (_firstTextInMs != -1) {
+                            log.info("first audio slice cost: {} ms", System.currentTimeMillis() - _firstTextInMs);
+                            _firstTextInMs = -1;
+                        }
+
+                        ByteBuf decoded = null;
+                        try {
+                            decoded = Base64.decode(content_delta);
+                            if (_onBinary != null && decoded != null) {
+                                final var bytes = new byte[decoded.readableBytes()];
+                                decoded.readBytes(bytes);
+                                _onBinary.accept(bytes);
+                            }
+                        } finally {
+                            if (decoded != null) {
+                                decoded.release(); // 在 finally 块中确保释放
+                            }
+                        }
+                    } else {
+                        log.warn("response.audio.delta missing key delta, ignore");
+                    }
+                    /*
                     try {
                         final String msg = frame.text();
                         final var event = (ResponseAudioDelta)new ObjectMapper().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).readValue(msg, cls);
@@ -618,6 +663,7 @@ public class QwenTTSWSClient {
                     } catch (JsonProcessingException ex) {
                         log.warn("response.audio.delta with exception: {}", ExceptionUtil.exception2detail(ex));
                     }
+                    */
                 }
                 case "session.finished" -> {
                     if (_onStop != null) {
