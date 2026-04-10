@@ -126,6 +126,16 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                         //}
                     };
                 }
+                public AfsActor.NDMSpeech2Intent speech2intent() {
+                    return request -> {
+                        if (_dmApi != null) {
+                            return _dmApi.speech2intent(request).getData();
+                        } else {
+                            log.warn("AfsIO: dm-api is null, skip speech2intent({})", request);
+                            return null;
+                        }
+                    };
+                }
             });
             addActor(vo.localIdx, actor);
             actorCount.incrementAndGet();
