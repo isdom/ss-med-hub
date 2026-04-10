@@ -334,6 +334,10 @@ public final class AfsActor {
         return CompletableFuture.supplyAsync(getResponse, executorStore.apply("feign"));
     }
 
+    private  <T> CompletionStage<T> interactAsync(final Supplier<T> getResponse, final String executorName) {
+        return CompletableFuture.supplyAsync(getResponse, executorStore.apply(executorName));
+    }
+
     private <T> Function<Throwable, CompletionStage<T>> handleRetryable(final Supplier<CompletionStage<T>> buildExecution) {
         return ex -> {
             if ((ex instanceof CompletionException)
@@ -347,10 +351,10 @@ public final class AfsActor {
     }
 
     private void playWelcome() {
-        final var getReply = callAiReplyWithWelcome(welcome);
-        interactAsync(getReply)
-                .exceptionallyCompose(handleRetryable(()->interactAsync(getReply)))
-                .whenCompleteAsync(handleWelcomeReply(), executor)
+        final var getWelcomeScript = callAiReplyWithWelcome(welcome);
+        interactAsync(getWelcomeScript, "welcome")
+        .exceptionallyCompose(handleRetryable(()->interactAsync(getWelcomeScript, "welcome")))
+        .whenCompleteAsync(handleWelcomeReply(), executor)
         ;
     }
 
@@ -367,27 +371,27 @@ public final class AfsActor {
                 } else {
                     final var iterationIdx = addIteration("checkIdle");
                     log.info("[{}] checkIdle: iteration: {} / idle duration: {} ms >=: [{}] ms", sessionId, iterationIdx, idleTime, _idleTimeout);
-                    interactAsync(callAiReplyWithIdleTime(idleTime))
-                            .whenCompleteAsync((response, ex) -> {
-                                completeIteration(iterationIdx);
-                                if (ex != null) {
-                                    log.warn("[{}] checkIdle: ai_reply error, detail: {}", sessionId, ExceptionUtil.exception2detail(ex));
-                                } else if (!isCurrentIteration(iterationIdx)) {
-                                    log.warn("[{}] checkIdle: iteration mismatch({} != {}), skip", sessionId, iterationIdx, _lastIterationIdx);
-                                } else {
-                                    log.info("[{}] checkIdle: ai_reply {}", sessionId, response);
-                                    if (response.getData() != null) {
-                                        if (!doPlayback(response.getData())) {
-                                            if (response.getData().getHangup() == 1) {
-                                                doHangup();
-                                                log.info("[{}] checkIdle: hangup ({}) for ai_reply ({})", sessionId, sessionId, response.getData());
-                                            }
-                                        }
-                                    } else {
-                                        log.info("[{}] checkIdle: ai_reply's data is null, do_nothing", sessionId);
+                    interactAsync(callAiReplyWithIdleTime(idleTime), "checkIdle")
+                    .whenCompleteAsync((response, ex) -> {
+                        completeIteration(iterationIdx);
+                        if (ex != null) {
+                            log.warn("[{}] checkIdle: ai_reply error, detail: {}", sessionId, ExceptionUtil.exception2detail(ex));
+                        } else if (!isCurrentIteration(iterationIdx)) {
+                            log.warn("[{}] checkIdle: iteration mismatch({} != {}), skip", sessionId, iterationIdx, _lastIterationIdx);
+                        } else {
+                            log.info("[{}] checkIdle: ai_reply {}", sessionId, response);
+                            if (response.getData() != null) {
+                                if (!doPlayback(response.getData())) {
+                                    if (response.getData().getHangup() == 1) {
+                                        doHangup();
+                                        log.info("[{}] checkIdle: hangup ({}) for ai_reply ({})", sessionId, sessionId, response.getData());
                                     }
                                 }
-                            }, executor)
+                            } else {
+                                log.info("[{}] checkIdle: ai_reply's data is null, do_nothing", sessionId);
+                            }
+                        }
+                    }, executor)
                     ;
                 }
             }
@@ -396,8 +400,7 @@ public final class AfsActor {
                 sessionId, isWelcomePlayed.get(), _isUserSpeak.get(), isAiSpeaking(), idleTime, _idleTimeout);
     }
 
-    private BiConsumer<ApiResponse<AIReplyVO>, Throwable>
-    handleWelcomeReply() {
+    private BiConsumer<ApiResponse<AIReplyVO>, Throwable> handleWelcomeReply() {
         return (response, ex) -> {
             isWelcomePlayed.set(true);
             if (ex != null) {
@@ -407,8 +410,10 @@ public final class AfsActor {
                 log.info("[{}] handleWelcomeReply: call ai_reply with {} => response: {}", sessionId, welcome, response);
                 if (response.getData() != null) {
                     _use_esl = response.getData().getUse_esl() != null ? response.getData().getUse_esl() : false;
-                    _esl_partition = response.getData().getEsl_partition();
-                    log.info("[{}] handleWelcomeReply: using_esl_status {}", sessionId, _use_esl);
+                    if (_use_esl) {
+                        _esl_partition = response.getData().getEsl_partition();
+                    }
+                    log.info("[{}] handleWelcomeReply: _use_esl:{} / _esl_partition:{}", sessionId, _use_esl, _esl_partition);
                     if (!doPlayback(response.getData())) {
                         if (response.getData().getHangup() == 1) {
                             doHangup();
