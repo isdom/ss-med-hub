@@ -2,15 +2,14 @@ package com.yulore.aliyun.api;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.yulore.funasr.vo.ASRResult;
-import com.yulore.funasr.vo.StartASR;
-import com.yulore.funasr.vo.StopASR;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.yulore.util.ExceptionUtil;
-import io.micrometer.core.instrument.Timer;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.buffer.Unpooled;
+import io.netty.buffer.search.BitapSearchProcessorFactory;
+import io.netty.buffer.search.SearchProcessorFactory;
 import io.netty.channel.*;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
@@ -20,14 +19,23 @@ import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.websocketx.*;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
-import lombok.*;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
+import io.netty.util.ByteProcessor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.RequiredArgsConstructor;
+import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 
+import javax.net.ssl.SSLException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -198,40 +206,117 @@ public class CosyVoiceWSClient {
     public static class EmptyInput {
     }
 
+    // https://help.aliyun.com/zh/model-studio/cosyvoice-websocket-api?#12d8a57443dmz
     @Builder
     @Data
     @ToString
     public static class RunPayload {
-        public String task_group;
-        public String task;
-        public String function;
-        public String model;
+        // 是否必选: 是
+        // 固定字符串："audio"
+        @Builder.Default
+        public String task_group = "audio";
+
+        // 是否必选: 是
+        // 固定字符串："tts"
+        @Builder.Default
+        public String task = "tts";
+
+        // 是否必选: 是
+        // 固定字符串："SpeechSynthesizer"
+        @Builder.Default
+        public String function = "SpeechSynthesizer";
+
+        // 是否必选: 是
+        // 语音合成模型。
+        //不同模型版本需要使用对应版本的音色：
+        //cosyvoice-v3.5-flash/cosyvoice-v3.5-plus：无系统音色，仅支持使用声音设计/复刻音色。
+        //cosyvoice-v3-flash/cosyvoice-v3-plus：使用longanyang等音色。
+        //cosyvoice-v2：使用longxiaochun_v2等音色。
+        //cosyvoice-v1：使用longwan等音色。
+        @Builder.Default
+        public String model = "cosyvoice-v3-flash";
+
+        // 是否必选: 是
+        //run-task 指令中必须包含 input 字段（不可省略），但不应在此发送待合成文本（因此应使用空对象 {}）。待合成文本应通过后续的continue-task指令发送，以便于问题排查和流式合成。
+        //input格式为：
+        //"input": {}
+        // 重要 - 常见错误：省略 input 字段或在 input 中包含非预期字段（如 mode、content 等）会导致服务端拒绝请求并返回“InvalidParameter: task can not be null”或连接关闭（WebSocket code 1007）错误。
+        @Builder.Default
+        public EmptyInput input = new EmptyInput();
+
         public RunParameters parameters;
+    }
+
+    // https://help.aliyun.com/zh/model-studio/cosyvoice-websocket-api?#12d8a57443dmz
+    @Builder
+    @Data
+    @ToString
+    public static class ContinuePayload {
+        // 是否必选: 是
+        // 待合成文本
         public Input input;
     }
-    // https://help.aliyun.com/zh/model-studio/cosyvoice-websocket-api?#12d8a57443dmz
 
-    public interface AsrOp {
-        void send(byte[] pcm);
-        void stop();
+    // https://help.aliyun.com/zh/model-studio/cosyvoice-websocket-api?#2e967d2d349es
+    @Builder
+    @Data
+    @ToString
+    public static class FinishPayload {
+        // 是否必选: 是
+        // 固定格式：{}。
+        @Builder.Default
+        public EmptyInput input = new EmptyInput();
     }
 
-    public interface BeforeStart extends Consumer<StartASR> {}
-    public interface OnStart extends Consumer<AsrOp> {}
-    public interface OnText extends Consumer<String> {}
+    @Builder
+    @Data
+    @ToString
+    public static class TaskInstruction<PAYLOAD> {
+        private TaskHeader header;
+        private PAYLOAD payload;
+    }
+
+    // https://help.aliyun.com/zh/model-studio/cosyvoice-websocket-api?#2942cede42z9e
+    @Data
+    @ToString
+    public static class EventHeader {
+        public String event;
+        public String task_id;
+    }
+
+    @Data
+    @ToString
+    public static class TaskEvent<PAYLOAD> {
+        private EventHeader header;
+        private PAYLOAD payload;
+    }
+
+    // https://help.aliyun.com/zh/model-studio/cosyvoice-websocket-api?#12d8a57443dmz
+
+    public interface SynthesizerOp {
+        void text(String text);
+        void finish();
+    }
+
+    public interface BeforeRunTask extends Consumer<RunPayload> {}
+    public interface OnStart extends Consumer<SynthesizerOp> {}
+    public interface OnBinary extends Consumer<byte[]> {}
     public interface OnStop extends Consumer<String> {}
 
-    private final BeforeStart _beforeStart;
+    private final BeforeRunTask _beforeRunTask;
     private final OnStart _onStart;
-    private final OnText _onText;
+    private final OnBinary _onBinary;
     private final OnStop _onStop;
 
 
+    private String _apiKey;
+    private String _taskId;
     private long _startInMs;
+    private long _continueTaskInMs = 0;
 
     private interface UserEventHandler extends Consumer<Object> {}
     private interface BinaryHandler extends Consumer<ByteBuf> {}
-    private interface TextHandler extends Consumer<String> {}
+    private interface TextHandler extends Consumer<TextWebSocketFrame> {}
 
     @RequiredArgsConstructor
     private static class OnHandshakeComplete implements UserEventHandler {
@@ -248,41 +333,112 @@ public class CosyVoiceWSClient {
         }
     }
 
-    final StringBuilder _text = new StringBuilder();
+    private static final byte[] TASK_ID_BYTES = "\"task_id\"".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] EVENT_BYTES = "\"event\"".getBytes(StandardCharsets.UTF_8);
+    private static final SearchProcessorFactory SEARCH_TASK_ID = BitapSearchProcessorFactory.newBitapSearchProcessorFactory(TASK_ID_BYTES);
+    private static final SearchProcessorFactory SEARCH_EVENT = BitapSearchProcessorFactory.newBitapSearchProcessorFactory(EVENT_BYTES);
+    private static final ByteProcessor.IndexOfProcessor INDEX_OF_QUOTES = new ByteProcessor.IndexOfProcessor((byte)'"');
 
-    private final TextHandler ON_ASR_STARTED = new TextHandler() {
+    private final TextHandler ON_TASK_STARTED = new TextHandler() {
         @Override
         public String toString() {
-            return "ON_ASR_STARTED";
+            return "ON_TASK_STARTED";
         }
         @Override
-        public void accept(final String msg) {
-            try {
-                final var vo = new ObjectMapper().readValue(msg, ASRResult.class);
-                if (vo.mode.equals("2pass-online") || vo.mode.equals("online")) {
-                    _text.append(vo.text);
-                    // log.info("{} asr changed result: {}", this, _text);
-                    if (null != _onText) {
-                        _onText.accept(_text.toString());
-                    }
-                } else {
-                    /*
-                    _text.append(vo.text);
-                    final String result = _text.toString();
-                    _text.delete(0, _text.length());
-                    // log.info("{} asr final result: {}", this, result);
-                    if (null != _onText) {
-                        _onText.accept(result);
-                    }
-                    */
-                }
+        public void accept(final TextWebSocketFrame frame) {
+            // search "task_id"
+            final var task_id = extractValue(frame.content(), SEARCH_TASK_ID.newSearchProcessor());
 
-            } catch (JsonProcessingException ex) {
-                log.warn("{} with exception: {}", this, ExceptionUtil.exception2detail(ex));
+            if (task_id == null || !task_id.equals(_taskId)) {
+                log.warn("task: {} recv mismatched event's task_id:{}, ignore", _taskId, task_id);
+                return;
+            }
+
+            // search "event"
+            final var event_str = extractValue(frame.content(), SEARCH_EVENT.newSearchProcessor());
+            if (event_str == null) {
+                log.warn("task: {} missing event field, ignore", _taskId);
+                return;
+            }
+
+            switch (event_str/*event.header.event*/) {
+                case "task-started" -> {
+                    log.info("task: {} started", _taskId);
+                    _onStart.accept(new SynthesizerOp() {
+                        @Override
+                        public void text(final String text) {
+                            changeBinaryHandler(ON_AUDIO_DATA);
+
+                            if (_continueTaskInMs == 0) {
+                                _continueTaskInMs = System.currentTimeMillis();
+                            }
+                            // 发送continue-task指令
+                            // https://help.aliyun.com/zh/model-studio/cosyvoice-websocket-api?#974b0beb59ob5
+                            final TaskInstruction<ContinuePayload> continueTask = TaskInstruction.<ContinuePayload>builder()
+                                    .header(TaskHeader.builder().action("continue-task").task_id(_taskId).build())
+                                    .payload(ContinuePayload.builder().input(Input.builder().text(text).build()).build())
+                                    .build();
+                            sendMessage(vo2string(continueTask));
+                        }
+
+                        @Override
+                        public void finish() {
+                            // 发送 finish-task指令
+                            //https://help.aliyun.com/zh/model-studio/cosyvoice-websocket-api?#2e967d2d349es
+                            // changeTextHandler(ON_ASR_ENDING);
+                            final TaskInstruction<FinishPayload> finishTask = TaskInstruction.<FinishPayload>builder()
+                                    .header(TaskHeader.builder().action("finish-task").task_id(_taskId).build())
+                                    .payload(FinishPayload.builder().build())
+                                    .build();
+                            sendMessage(vo2string(finishTask));
+                        }
+                    });
+                }
+                case "result-generated" -> {
+                    final var msg = frame.text();
+                    //final TypeReference<TaskEvent<Object>> TYPE = new TypeReference<>() {};
+                    //final var event = new ObjectMapper().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).readValue(msg, TYPE);
+
+                    log.info("task: {} result-generated: {}", _taskId, msg);
+                }
+                case "task-finished" -> {
+                    final var msg = frame.text();
+
+                    log.info("task: {} task-finished: {}", _taskId, msg);
+                    if (_onStop != null) {
+                        _onStop.accept(_taskId);
+                    }
+                }
+                case "task-failed" -> {
+                    final var msg = frame.text();
+
+                    log.info("task: {} task-failed: {}", _taskId, msg);
+                    if (_onStop != null) {
+                        _onStop.accept(_taskId);
+                    }
+                }
             }
         }
     };
 
+    private static String extractValue(final ByteBuf content, final ByteProcessor findKey) {
+        int keyEnd = content.forEachByte(findKey);
+        if (keyEnd != -1) {
+            final var idx = keyEnd + 1;
+            final var quotesBegin = content.forEachByte(idx, content.readableBytes() - idx, INDEX_OF_QUOTES);
+            if (quotesBegin != -1) {
+                final var quotesEnd = content.forEachByte( quotesBegin + 1, content.readableBytes() - quotesBegin - 1, INDEX_OF_QUOTES);
+                if (quotesEnd != -1) {
+                    final var bytes = new byte[quotesEnd - quotesBegin - 1];
+                    content.getBytes(quotesBegin+1, bytes);
+                    return new String(bytes, StandardCharsets.UTF_8);
+                }
+            }
+        }
+        return null;
+    }
+
+    /*
     private final TextHandler ON_ASR_ENDING = new TextHandler() {
         @Override
         public String toString() {
@@ -298,6 +454,26 @@ public class CosyVoiceWSClient {
             }
         }
     };
+    */
+    private final BinaryHandler ON_AUDIO_DATA = new BinaryHandler() {
+        @Override
+        public String toString() {
+            return "ON_AUDIO_DATA";
+        }
+        @Override
+        public void accept(final ByteBuf byteBuf) {
+            if (_continueTaskInMs != -1) {
+                log.info("taskId:{} => continue -> first audio slice cost: {} ms", _taskId, System.currentTimeMillis() - _continueTaskInMs);
+                _continueTaskInMs = -1;
+            }
+
+            if (_onBinary != null) {
+                final var bytes = new byte[byteBuf.readableBytes()];
+                byteBuf.readBytes(bytes);
+                _onBinary.accept(bytes);
+            }
+        }
+    };
 
     private final AtomicReference<UserEventHandler> refUserEventHandler = new AtomicReference<>();
     private final AtomicReference<BinaryHandler> refBinaryHandler = new AtomicReference<>();
@@ -308,18 +484,19 @@ public class CosyVoiceWSClient {
     private final EventLoopGroup group;
 
     public CosyVoiceWSClient(final EventLoopGroup group,
-                             final Timer connect_timer,
                              final String url,
-                             final BeforeStart beforeStart,
+                             final String apiKey,
+                             final BeforeRunTask beforeRunTask,
                              final OnStart onStart,
-                             final OnText onText,
+                             final OnBinary onBinary,
                              final OnStop onStop
-        ) {
+    ) {
         this.uri = buildUri(url);
         this.group = group;
-        this._beforeStart = beforeStart;
+        this._apiKey = apiKey;
+        this._beforeRunTask = beforeRunTask;
         this._onStart = onStart;
-        this._onText = onText;
+        this._onBinary = onBinary;
         this._onStop = onStop;
 
         this._startInMs = System.currentTimeMillis();
@@ -330,9 +507,6 @@ public class CosyVoiceWSClient {
             } else {
                 this.channel = channel;
                 final long cost = System.currentTimeMillis() - _startInMs;
-                if (null != connect_timer) {
-                    connect_timer.record(cost, TimeUnit.MILLISECONDS);
-                }
                 log.info("cosyvoice_connect_to {} cost: {} ms", url, cost);
             }
         });
@@ -354,23 +528,21 @@ public class CosyVoiceWSClient {
     // 客户端初始化与连接
     private CompletionStage<Channel> connect() {
         changeUserEventHandler(new OnHandshakeComplete(() -> {
-            changeTextHandler(ON_ASR_STARTED);
-            final var startVO = StartASR.builder()
-                    //.mode("2pass")
-                    .mode("online")
-                    .wav_name("realtime")
-                    .wav_format("pcm")
-                    .audio_fs(8000)
-                    .is_speaking(true)
-                    .chunk_size(new int[]{5, 10, 5})
-                    .itn(true)
-                    .build();
+            changeTextHandler(ON_TASK_STARTED);
+            final var payload = RunPayload.builder().parameters(RunParameters.builder().build()).build();
 
-            if (_beforeStart != null) {
-                _beforeStart.accept(startVO);
+            if (_beforeRunTask != null) {
+                _beforeRunTask.accept(payload);
             }
-            sendMessage(vo2string(startVO)).whenComplete((ok, ex)-> {
-                        if (ex == null) {
+
+            _taskId = UUID.randomUUID().toString();
+            final TaskInstruction<RunPayload> runTask = TaskInstruction.<RunPayload>builder()
+                    .header(TaskHeader.builder().action("run-task").task_id(_taskId).build())
+                    .payload(payload)
+                    .build();
+            sendMessage(vo2string(runTask)).whenComplete((ok, ex)-> {
+                if (ex == null) {
+                            /*
                             _onStart.accept(new AsrOp() {
                                 @Override
                                 public void send(byte[] pcm) {
@@ -385,35 +557,36 @@ public class CosyVoiceWSClient {
                                     });
                                 }
                             });
-                        }
+                            */
+                }
             });
         }));
 
         final var result = new CompletableFuture<Channel>();
 
         new Bootstrap()
-            .group(group)
-            .channel(NioSocketChannel.class)
-            .option(ChannelOption.SO_KEEPALIVE, true)
-            .option(ChannelOption.TCP_NODELAY, true) // 禁用Nagle算法
-            .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5000)
-            .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT) // 使用内存池
-            .handler(new LoggingHandler(LogLevel.INFO)) // 生产环境可关闭
-            .handler(new ClientInitializer())
-            .connect(uri.getHost(), getPort()).addListener(future -> {
-                if (!future.isSuccess()) {
-                    result.completeExceptionally(future.cause());
-                } else {
-                    result.complete(((ChannelFuture)future).channel());
-                }
-            });
+                .group(group)
+                .channel(NioSocketChannel.class)
+                .option(ChannelOption.SO_KEEPALIVE, true)
+                .option(ChannelOption.TCP_NODELAY, true) // 禁用Nagle算法
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5000)
+                .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT) // 使用内存池
+                .handler(new LoggingHandler(LogLevel.DEBUG)) // 生产环境可关闭
+                .handler(new ClientInitializer())
+                .connect(uri.getHost(), getPort()).addListener(future -> {
+                    if (!future.isSuccess()) {
+                        result.completeExceptionally(future.cause());
+                    } else {
+                        result.complete(((ChannelFuture)future).channel());
+                    }
+                });
 
         return result;
     }
 
     private String vo2string(final Object vo) {
         try {
-            return new ObjectMapper().writeValueAsString(vo);
+            return new ObjectMapper().disable(SerializationFeature.FAIL_ON_EMPTY_BEANS).writeValueAsString(vo);
         } catch (JsonProcessingException ex) {
             log.warn("vo2string with exception: {}", ExceptionUtil.exception2detail(ex));
         }
@@ -473,7 +646,6 @@ public class CosyVoiceWSClient {
         if (channel != null) {
             channel.close();
         }
-        // group.shutdownGracefully();
     }
 
     // 管道初始化器
@@ -489,11 +661,24 @@ public class CosyVoiceWSClient {
                     null,
                     false,
                     new DefaultHttpHeaders()
-                        .add("Authorization", "Bearer <your_api_key>")
-                        .add("user-agent", "xxx")
-                        .add("X-DashScope-WorkSpace", "xxx"),
+                            .add("Authorization", "Bearer " + _apiKey)
+                            .add("user-agent", "CosyVoiceWSClient")
+                    //.add("X-DashScope-WorkSpace", "xxx")
+                    ,
                     1024 * 1024 // 最大内容长度 1MBytes
             );
+
+            try {
+                final boolean ssl = "wss".equalsIgnoreCase(uri.getScheme());
+                if (ssl) {
+                    final SslContext sslCtx = SslContextBuilder.forClient()
+                            .trustManager(InsecureTrustManagerFactory.INSTANCE).build();
+                    pipeline.addLast(sslCtx.newHandler(ch.alloc(), uri.getHost(), getPort()));
+                }
+            } catch (SSLException e) {
+                throw new RuntimeException(e);
+            }
+
             pipeline.addLast(
                     new HttpClientCodec(),
                     new HttpObjectAggregator(65536), // 聚合HTTP请求
@@ -526,10 +711,12 @@ public class CosyVoiceWSClient {
             // 2. 避免阻塞操作
             // 3. 使用异步处理
             if (frame instanceof TextWebSocketFrame) {
-                final String text = ((TextWebSocketFrame) frame).text();
+                //final String text = ((TextWebSocketFrame) frame).text();
                 final var handler = refTextHandler.get();
                 if (handler != null) {
-                    handler.accept(text);
+                    handler.accept((TextWebSocketFrame) frame);
+                } else {
+                    log.warn("task:[{}] missing TextHandler for frame:{}, ignore", _taskId, frame);
                 }
             } else if (frame instanceof BinaryWebSocketFrame) {
                 final var buf = frame.content();
@@ -558,13 +745,7 @@ public class CosyVoiceWSClient {
             //if (whenDisconnect != null) {
             //    whenDisconnect.accept(RmsClient.this);
             //}
-            try {
-                if (_onStop != null) {
-                    _onStop.accept(_text.toString());
-                }
-            } finally {
-                log.info("cosyvoice disconnect");
-            }
+            log.info("cosyvoice disconnect");
             // shutdown();
         }
     }
