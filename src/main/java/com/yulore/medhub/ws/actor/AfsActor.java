@@ -640,7 +640,8 @@ public final class AfsActor {
 
     private CompletionStage<ApiResponse<AIReplyVO>> scriptOnly(final String speechText, final int content_index) {
         final var getReply = callAiReplyWithSpeech(speechText, content_index);
-        return interactAsync(getReply).exceptionallyCompose(handleRetryable(()->interactAsync(getReply)));
+        return interactAsync(getReply, "ai_reply")
+                .exceptionallyCompose(handleRetryable(()->interactAsync(getReply, "ai_reply")));
     }
 
     private CompletionStage<ApiResponse<AIReplyVO>> scriptAndEslMixed(final String speechText, final int content_index) {
@@ -707,6 +708,45 @@ public final class AfsActor {
                 cost.set(System.currentTimeMillis() - startInMs);
                 log.info("[{}] after match_esl: ({}) speech:{} partition:{} => cost {} ms",
                         sessionId, content_index, speechText, _esl_partition, cost.longValue());
+            }
+        };
+    }
+
+    private Supplier<DialogApi.MatchIntentResult> callNdmS2I(
+            final String speechText,
+            final int content_index,
+            final AtomicLong cost) {
+        return ()-> {
+            final var startInMs = System.currentTimeMillis();
+            try {
+                final var lastReply = _lastReply.get();
+                final var scriptText = lastReply != null
+                        ? (lastReply.getScript_text() != null
+                           ? lastReply.getScript_text()
+                           : lastReply.getReply_content())
+                        : null;
+                log.info("[{}]: before speech2intent: ({}) speech:{} script:{}",
+                        sessionId, content_index, speechText, scriptText);
+                final var result = _ndmSpeech2Intent.apply(DialogApi.ClassifySpeechRequest.builder()
+                        .esl("afs")
+                        .useBert(false)
+                        .sessionId(sessionId)
+                        .botId(lastReply != null ? lastReply.getBot_id() : 0)
+                        .nodeId(0L)
+                        .scriptText(scriptText)
+                        .speechText(speechText)
+                        .speechIdx(content_index)
+                        .build());
+                if (result != null && result.contexts != null) {
+                    for (final var context : result.contexts) {
+                        context.setScriptText(scriptText);
+                    }
+                }
+                return result;
+            } finally {
+                cost.set(System.currentTimeMillis() - startInMs);
+                log.info("[{}]: after speech2intent: ({}) speech:{} => cost {} ms",
+                        sessionId, content_index, speechText, cost.longValue());
             }
         };
     }
