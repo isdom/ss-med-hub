@@ -650,7 +650,8 @@ public final class AfsActor {
         final AtomicReference<String> t2i_intent_ref = new AtomicReference<>(null);
         final var getIntent = callSpeech2Intent(speechText, content_index);
 
-        return interactAsync(getIntent).exceptionallyCompose(handleRetryable(()->interactAsync(getIntent)))
+        return interactAsync(getIntent, "script_esl")
+                .exceptionallyCompose(handleRetryable(()->interactAsync(getIntent, "script_esl")))
                 .thenCombine(interactAsync(callMatchEsl(speechText, content_index, esl_cost))
                                 .exceptionally(handleEslSearchException()), Pair::of)
                 .thenComposeAsync(script_and_esl->{
