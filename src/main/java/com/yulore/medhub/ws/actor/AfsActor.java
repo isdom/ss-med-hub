@@ -102,6 +102,9 @@ public final class AfsActor {
     private ScriptApi _scriptApi;
 
     @Autowired
+    private DialogApi _dialogApi;
+
+    @Autowired
     private IntentConfig intentConfig;
 
     final private MatchEsl _matchEsl;
@@ -301,7 +304,8 @@ public final class AfsActor {
             return _scriptApi.ai_t2i(ScriptApi.Text2IntentRequest.builder()
                     .speechText(speechText)
                     .speechIdx(content_index)
-                    .sessionId(sessionId).build());
+                    .sessionId(sessionId)
+                    .build());
         };
     }
 
@@ -321,6 +325,36 @@ public final class AfsActor {
                     .sessionId(sessionId)
                     .traceId(traceId)
                     .intent(intent)
+                    .speechIdx(content_index)
+                    .speechText(speechText)
+                    .isSpeaking(isAiSpeaking ? 1 : 0)
+                    .speakingContentId(aiContentId != null ? Long.parseLong(aiContentId) : null)
+                    .speakingDurationMs(speakingDuration)
+                    .build());
+        };
+    }
+
+    private Supplier<ApiResponse<AIReplyVO>> scriptIntent2Reply(
+            final String traceId,
+            final String intent,
+            final Integer[] sysIntents,
+            final String speechText,
+            final int content_index) {
+        return ()-> {
+            final boolean isAiSpeaking = isAiSpeaking();
+
+            // when close() called before, bcs of _id2memo has been clear(), will throw java.lang.NullPointerException, TODO fix
+            final String aiContentId = currentAiContentId();
+
+            final int speakingDuration = currentSpeakingDuration();
+            log.info("[{}] before ai_i2r => ({}) speech:{}/traceId:{}/intent:{}/sysIntents:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
+                    sessionId, content_index, speechText, traceId, intent, sysIntents != null ? Arrays.toString(sysIntents) : null,
+                    isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
+            return _scriptApi.ai_i2r(Intent2ReplyRequest.builder()
+                    .sessionId(sessionId)
+                    .traceId(traceId)
+                    .intent(intent)
+                    .sysIntents(sysIntents)
                     .speechIdx(content_index)
                     .speechText(speechText)
                     .isSpeaking(isAiSpeaking ? 1 : 0)
@@ -618,7 +652,9 @@ public final class AfsActor {
             _userContentIndex.set(content_index);
             final var iterationIdx = addIteration(speechText);
             log.info("[{}] whenASRSentenceEnd: addIteration => {}", sessionId, iterationIdx);
-            speech2reply(speechText, content_index)
+            final AtomicReference<DialogApi.MatchIntentResult> emrRef = new AtomicReference<>();
+            //speech2reply(speechText, content_index)
+            usingNdm(speechText, content_index, emrRef)
             .whenCompleteAsync(handleAiReply(content_index, payload), executor)
             .whenComplete((ignored, ex)-> {
                 completeIteration(iterationIdx);
@@ -630,6 +666,7 @@ public final class AfsActor {
                 }
             })
             .whenComplete(reportUserSpeech(content_index, payload, sentenceEndInMs))
+            .whenComplete(reportToNdm(emrRef))
             ;
         }
     }
@@ -711,6 +748,49 @@ public final class AfsActor {
                         sessionId, content_index, speechText, _esl_partition, cost.longValue());
             }
         };
+    }
+
+    private CompletionStage<ApiResponse<AIReplyVO>> usingNdm(
+            final String speechText,
+            final int content_index,
+            final AtomicReference<DialogApi.MatchIntentResult> emrRef) {
+        final var esl_cost = new AtomicLong(0);
+        final var scriptS2I = callSpeech2Intent(speechText, content_index);
+
+        return interactAsync(scriptS2I).exceptionallyCompose(handleRetryable(()->interactAsync(scriptS2I)))
+                .thenCombine(interactAsync(callNdmS2I(speechText, content_index, esl_cost)), Pair::of)
+                .thenComposeAsync(script_and_ndm->{
+                    final var t2i_resp = script_and_ndm.getLeft();
+                    emrRef.set(script_and_ndm.getRight());
+                    log.info("[{}] usingNdm done with intent_config:{} / ai_t2i resp: {} / ndm_s2i resp: {}",
+                            sessionId, intentConfig, t2i_resp, script_and_ndm.getRight());
+                    final String traceId = (t2i_resp != null && t2i_resp.getData() != null) ? t2i_resp.getData().getTraceId() : null;
+                    final AtomicReference<Integer[]> sysIntentsRef = new AtomicReference<>(null);
+                    final String ndm_intent = decideNdmIntent(script_and_ndm.getRight(), t2i_resp, sysIntentsRef);
+                    final var getReply = scriptIntent2Reply(traceId, ndm_intent, sysIntentsRef.get(), speechText, content_index);
+                    return interactAsync(getReply).exceptionallyCompose(handleRetryable(()->interactAsync(getReply)));
+                }, executor);
+    }
+
+    private String decideNdmIntent(
+            final DialogApi.MatchIntentResult emr,
+            final ApiResponse<ScriptApi.Text2IntentResult> t2i_resp,
+            final AtomicReference<Integer[]> sysIntentsRef) {
+        if (emr.getIntents() != null) {
+            sysIntentsRef.set(emr.getIntents());
+        }
+        if (t2i_resp != null && t2i_resp.getData() != null) {
+            final var t2i_result = t2i_resp.getData();
+            if (t2i_result.getIntentCode() != null
+                    && (intentConfig.getRing0().contains(t2i_result.getIntentCode())
+                    || t2i_result.getIntentCode().startsWith(intentConfig.getPrefix()))
+            ) {
+                // high priority intent, like phone's AI assistant
+                // using t2i's intent
+                return t2i_result.getIntentCode();
+            }
+        }
+        return emr.getOldIntent();
     }
 
     private Supplier<DialogApi.MatchIntentResult> callNdmS2I(
@@ -800,6 +880,33 @@ public final class AfsActor {
             }
             reportUserContent(content_index, payload, sentenceEndInMs, userContentId);
             reportAsrTime(content_index, sentenceEndInMs, userContentId);
+        };
+    }
+
+    private BiConsumer<ApiResponse<AIReplyVO>, Throwable>
+    reportToNdm(final AtomicReference<DialogApi.MatchIntentResult> emrRef) {
+        return (ai_resp, ex) -> {
+            final var contentId =
+                    (ai_resp != null && ai_resp.getData() != null)
+                            ? ai_resp.getData().getUser_content_id()
+                            : null;
+            final var emr = emrRef.get();
+            if (emr != null && emr.contexts != null && contentId != null) {
+                for (final var ctx : emr.contexts) {
+                    ctx.setSessionId(sessionId);
+                    ctx.setContentId(contentId);
+                }
+                log.info("[{}] before reportToNdm: {}", sessionId, emr.contexts.length);
+                final var begin  = System.currentTimeMillis();
+                try {
+                    final var resp = _dialogApi.report_s2i(emr.contexts);
+                } finally {
+                    log.info("[{}] after reportToNdm: cost {} ms", sessionId, (System.currentTimeMillis() - begin));
+                }
+            }
+            if (contentId == null) {
+                log.info("[{}] skip reportToNdm with {}, for user_content_id_is_null", sessionId, emrRef.get());
+            }
         };
     }
 
