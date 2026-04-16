@@ -1,9 +1,8 @@
-package com.yulore.bailian;
+package com.yulore.chat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -18,9 +17,6 @@ public class BaiLianService {
 
     private final WebClient bailianWebClient;
     private final ObjectMapper objectMapper = new ObjectMapper();
-
-    //@Value("${bailian.api.model}")
-    //private String model;
 
     public BaiLianService(WebClient bailianWebClient) {
         this.bailianWebClient = bailianWebClient;
