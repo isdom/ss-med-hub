@@ -580,6 +580,7 @@ public final class AfsActor {
                                 .build()
                 );
             }
+            _lastReply.set(replyVO);
             _currentPlaybackId.set(newPlaybackId);
             _currentPlaybackPaused.set(false);
             _currentPlaybackDuration.set(()->0L);
@@ -666,7 +667,7 @@ public final class AfsActor {
                 }
             })
             .whenComplete(reportUserSpeech(content_index, payload, sentenceEndInMs))
-            .whenComplete(reportToNdm(emrRef))
+            //.whenComplete(reportToNdm(emrRef))
             ;
         }
     }
@@ -809,7 +810,7 @@ public final class AfsActor {
                 log.info("[{}]: before speech2intent: ({}) speech:{} script:{}",
                         sessionId, content_index, speechText, scriptText);
                 final var result = _ndmSpeech2Intent.apply(DialogApi.ClassifySpeechRequest.builder()
-                        .esl("afs")
+                        .esl("")
                         .useBert(false)
                         .sessionId(sessionId)
                         .botId(lastReply != null ? lastReply.getBot_id() : 0)
