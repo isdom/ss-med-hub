@@ -654,8 +654,9 @@ public final class AfsActor {
             final var iterationIdx = addIteration(speechText);
             log.info("[{}] whenASRSentenceEnd: addIteration => {}", sessionId, iterationIdx);
             final AtomicReference<DialogApi.MatchIntentResult> emrRef = new AtomicReference<>();
-            //speech2reply(speechText, content_index)
-            usingNdm(speechText, content_index, emrRef)
+            (_use_esl
+                ? usingNdm(speechText, content_index, emrRef)
+                : speech2reply(speechText, content_index))
             .whenCompleteAsync(handleAiReply(content_index, payload), executor)
             .whenComplete((ignored, ex)-> {
                 completeIteration(iterationIdx);
