@@ -656,7 +656,8 @@ public final class AfsActor {
             final AtomicReference<DialogApi.MatchIntentResult> emrRef = new AtomicReference<>();
             (_use_esl
                 ? usingNdm(speechText, content_index, emrRef)
-                : speech2reply(speechText, content_index))
+                : scriptOnly(speechText, content_index)
+            )
             .whenCompleteAsync(handleAiReply(content_index, payload), executor)
             .whenComplete((ignored, ex)-> {
                 completeIteration(iterationIdx);
@@ -673,14 +674,15 @@ public final class AfsActor {
         }
     }
 
-    private CompletionStage<ApiResponse<AIReplyVO>> speech2reply(final String speechText, final int content_index) {
-        return _use_esl ? scriptAndEslMixed(speechText, content_index) : scriptOnly(speechText, content_index);
-    }
-
     private CompletionStage<ApiResponse<AIReplyVO>> scriptOnly(final String speechText, final int content_index) {
         final var getReply = callAiReplyWithSpeech(speechText, content_index);
         return interactAsync(getReply, "ai_reply")
                 .exceptionallyCompose(handleRetryable(()->interactAsync(getReply, "ai_reply")));
+    }
+
+    /*
+    private CompletionStage<ApiResponse<AIReplyVO>> speech2reply(final String speechText, final int content_index) {
+        return _use_esl ? scriptAndEslMixed(speechText, content_index) : scriptOnly(speechText, content_index);
     }
 
     private CompletionStage<ApiResponse<AIReplyVO>> scriptAndEslMixed(final String speechText, final int content_index) {
@@ -727,6 +729,7 @@ public final class AfsActor {
                 }, executor)
                 .whenCompleteAsync(reportEsl(t2i_intent_ref, esl_resp_ref, content_index, esl_cost), executorStore.apply("feign"));
     }
+    */
 
     private Function<Throwable, EslApi.EslResponse<EslApi.Hit>> handleEslSearchException() {
         return ex -> {
