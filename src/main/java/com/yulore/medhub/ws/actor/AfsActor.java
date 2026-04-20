@@ -729,7 +729,6 @@ public final class AfsActor {
                 }, executor)
                 .whenCompleteAsync(reportEsl(t2i_intent_ref, esl_resp_ref, content_index, esl_cost), executorStore.apply("feign"));
     }
-    */
 
     private Function<Throwable, EslApi.EslResponse<EslApi.Hit>> handleEslSearchException() {
         return ex -> {
@@ -754,6 +753,7 @@ public final class AfsActor {
             }
         };
     }
+    */
 
     private CompletionStage<ApiResponse<AIReplyVO>> usingNdm(
             final String speechText,
