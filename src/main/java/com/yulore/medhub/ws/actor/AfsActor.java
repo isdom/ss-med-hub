@@ -814,7 +814,7 @@ public final class AfsActor {
                 log.info("[{}]: before speech2intent: ({}) speech:{} script:{}",
                         sessionId, content_index, speechText, scriptText);
                 final var result = _ndmSpeech2Intent.apply(DialogApi.ClassifySpeechRequest.builder()
-                        .esl("")
+                        .esl(_esl_partition)
                         .useBert(false)
                         .sessionId(sessionId)
                         .botId(lastReply != null ? lastReply.getBot_id() : 0)
