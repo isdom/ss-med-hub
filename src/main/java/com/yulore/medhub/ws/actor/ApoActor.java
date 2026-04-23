@@ -1098,6 +1098,9 @@ public final class ApoActor {
                 if (_reply2playback == null) {
                     log.warn("[{}]: [{}]-[{}]: close_without_playback_ws, total duration {} s", _clientIp, _sessionId, _uuid, (System.currentTimeMillis() - _sessionBeginInMs) / 1000.0f);
                 }
+                if (_userContentIndex.get() == 0) {
+                    log.warn("[{}]: [{}]-[{}]: close_without_user_content, total duration {} s", _clientIp, _sessionId, _uuid, (System.currentTimeMillis() - _sessionBeginInMs) / 1000.0f);
+                }
             }
             log.info("[{}] ApoActor.close ended", _sessionId);
         } catch (Exception ex) {
