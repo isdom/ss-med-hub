@@ -1102,7 +1102,8 @@ public final class ApoActor {
                     log.warn("[{}]: [{}]-[{}]: close_without_user_content, total duration {} s", _clientIp, _sessionId, _uuid, (System.currentTimeMillis() - _sessionBeginInMs) / 1000.0f);
                 }
             }
-            log.info("[{}] ApoActor.close ended, detail: asrStartInMs-{}", _sessionId, _asrStartInMs.get());
+            log.info("[{}] ApoActor.close ended, detail: asrStartInMs-{} / sessionBeginInMs-{}",
+                    _sessionId, _asrStartInMs.get(), _sessionBeginInMs);
         } catch (Exception ex) {
             log.warn("[{}] ApoActor.close with exception: {}", _sessionId, ExceptionUtil.exception2detail(ex));
         }
