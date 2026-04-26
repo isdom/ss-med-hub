@@ -1262,19 +1262,6 @@ public final class ApoActor {
             ;
     }
 
-    /*
-    private Supplier<ApiResponse<AIReplyVO>> callAiReplyWithSpeech(final String speechText, final int content_index) {
-        return ()-> {
-            final boolean isAiSpeaking = isAiSpeaking();
-            final String aiContentId = currentAiContentId();
-            final int speakingDuration = currentSpeakingDuration();
-            log.info("[{}]: [{}]-[{}]: before ai_reply => ({}) speech:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
-                    _clientIp, _sessionId, _uuid, content_index, speechText, isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
-            return _scriptApi.ai_reply(_sessionId, content_index, speechText, null, isAiSpeaking ? 1 : 0, aiContentId, speakingDuration);
-        };
-    }
-    */
-
     private Supplier<ApiResponse<ScriptApi.Text2IntentResult>> callScriptS2I(final String speechText, final int content_index) {
         return ()-> {
             log.info("[{}]: [{}]-[{}]: before ai_t2i => ({}) speech:{}", _clientIp, _sessionId, _uuid, content_index, speechText);
