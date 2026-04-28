@@ -111,20 +111,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                     return (name,obj)-> WSEventVO.sendEvent(ws, name, obj);
                 }
                 public AfsActor.MatchEsl matchEsl() {
-                    return (speech, partition) -> {
-                        /*
-                        if (_eslApi != null && speech.length() >=5) {
-                            final var hdrs = new HashMap<>(_esl_headers);
-                            if (partition != null) {
-                                hdrs.put(_esl_hdr_partition, partition);
-                            }
-                            return _eslApi.search_text(hdrs, speech, 0.95f);
-                        } else {
-                         */
-                            // esl response with 0 hit
-                            return EslApi.emptyResponse();
-                        //}
-                    };
+                    return (speech, partition) -> EslApi.emptyResponse();
                 }
                 public AfsActor.NDMSpeech2Intent speech2intent() {
                     return request -> {
