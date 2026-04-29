@@ -58,7 +58,7 @@ public final class AfsActor {
         Executor executor();
         Reply2Rms reply2rms();
         BiConsumer<String, Object> sendEvent();
-        MatchEsl matchEsl();
+        //MatchEsl matchEsl();
         NDMSpeech2Intent speech2intent();
     }
 
@@ -72,7 +72,7 @@ public final class AfsActor {
         this.executor = ctx.executor();
         this.reply2rms = ctx.reply2rms();
         this.sendEvent = ctx.sendEvent();
-        this._matchEsl = ctx.matchEsl();
+        //this._matchEsl = ctx.matchEsl();
         this._ndmSpeech2Intent = ctx.speech2intent();
     }
 
@@ -107,7 +107,7 @@ public final class AfsActor {
     @Autowired
     private IntentConfig intentConfig;
 
-    final private MatchEsl _matchEsl;
+    //final private MatchEsl _matchEsl;
     final private AtomicReference<AIReplyVO> _lastReply = new AtomicReference<>(null);
     private final NDMSpeech2Intent _ndmSpeech2Intent;
 
@@ -121,7 +121,7 @@ public final class AfsActor {
     private final Map<Integer, String> _pendingIteration = new HashMap<>();
 
     public void start() {
-        log.info("[{}] start with ScriptApi({})/matchEsl({})", sessionId, _scriptApi, _matchEsl);
+        log.info("[{}] start with ScriptApi({})", sessionId, _scriptApi);
         _asrService.startTranscription(new ASRConsumer() {
             @Override
             public void onSentenceBegin(PayloadSentenceBegin payload) {
