@@ -45,7 +45,7 @@ public final class AfsActor {
         public String local_vars;
     }
     public interface Reply2Rms extends BiFunction<AIReplyVO, Supplier<String>, RmsSource> {}
-    public interface MatchEsl extends BiFunction<String, String, EslApi.EslResponse<EslApi.Hit>> {}
+    // public interface MatchEsl extends BiFunction<String, String, EslApi.EslResponse<EslApi.Hit>> {}
     public interface NDMSpeech2Intent extends Function<DialogApi.ClassifySpeechRequest, DialogApi.MatchIntentResult> {}
 
     public interface Context {
@@ -58,7 +58,6 @@ public final class AfsActor {
         Executor executor();
         Reply2Rms reply2rms();
         BiConsumer<String, Object> sendEvent();
-        //MatchEsl matchEsl();
         NDMSpeech2Intent speech2intent();
     }
 
@@ -72,7 +71,6 @@ public final class AfsActor {
         this.executor = ctx.executor();
         this.reply2rms = ctx.reply2rms();
         this.sendEvent = ctx.sendEvent();
-        //this._matchEsl = ctx.matchEsl();
         this._ndmSpeech2Intent = ctx.speech2intent();
     }
 
