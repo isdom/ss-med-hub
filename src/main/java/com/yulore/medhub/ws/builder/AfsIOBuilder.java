@@ -110,11 +110,6 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                 public BiConsumer<String, Object> sendEvent() {
                     return (name,obj)-> WSEventVO.sendEvent(ws, name, obj);
                 }
-                /*
-                public AfsActor.MatchEsl matchEsl() {
-                    return (speech, partition) -> EslApi.emptyResponse();
-                }
-                */
                 public AfsActor.NDMSpeech2Intent speech2intent() {
                     return request -> {
                         if (_dmApi != null) {
