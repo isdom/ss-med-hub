@@ -45,7 +45,6 @@ public final class AfsActor {
         public String local_vars;
     }
     public interface Reply2Rms extends BiFunction<AIReplyVO, Supplier<String>, RmsSource> {}
-    // public interface MatchEsl extends BiFunction<String, String, EslApi.EslResponse<EslApi.Hit>> {}
     public interface NDMSpeech2Intent extends Function<DialogApi.ClassifySpeechRequest, DialogApi.MatchIntentResult> {}
 
     public interface Context {
