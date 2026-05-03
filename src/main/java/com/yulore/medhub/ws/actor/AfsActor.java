@@ -104,7 +104,6 @@ public final class AfsActor {
     @Autowired
     private IntentConfig intentConfig;
 
-    //final private MatchEsl _matchEsl;
     final private AtomicReference<AIReplyVO> _lastReply = new AtomicReference<>(null);
     private final NDMSpeech2Intent _ndmSpeech2Intent;
 
