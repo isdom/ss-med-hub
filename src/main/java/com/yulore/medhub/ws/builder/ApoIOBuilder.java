@@ -53,10 +53,10 @@ public class ApoIOBuilder implements WsHandlerBuilder {
     @PostConstruct
     public void init() {
         playback_timer = timerProvider.getObject("mh.playback.delay", MetricCustomized.builder().tags(List.of("actor", "apo_io")).build());
-        transmit_timer = timerProvider.getObject("mh.transmit.delay", MetricCustomized.builder()
-                .tags(List.of("actor", "apo_io"))
-                .maximumExpected(Duration.ofMinutes(1))
-                .build());
+        //transmit_timer = timerProvider.getObject("mh.transmit.delay", MetricCustomized.builder()
+        //        .tags(List.of("actor", "apo_io"))
+        //        .maximumExpected(Duration.ofMinutes(1))
+        //        .build());
         oss_timer = timerProvider.getObject("oss.upload.duration", MetricCustomized.builder().tags(List.of("actor", "apo_io")).build());
         gaugeProvider.getObject((Supplier<Number>)_wscount::get, "mh.ws.count", MetricCustomized.builder().tags(List.of("actor", "apo_io")).build());
     }
@@ -375,7 +375,7 @@ public class ApoIOBuilder implements WsHandlerBuilder {
 
     private Timer playback_timer;
     private Timer oss_timer;
-    private Timer transmit_timer;
+    // private Timer transmit_timer;
 
     private final WSCommandRegistry<ApoActor> cmds = new WSCommandRegistry<ApoActor>()
             .register(VOPCMPlaybackStarted.TYPE,"PCMPlaybackStarted",
