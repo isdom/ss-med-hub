@@ -112,6 +112,8 @@ public final class AfsActor {
     private final AtomicBoolean isWelcomePlayed = new AtomicBoolean(false);
     private boolean _use_esl = false;
     private String _esl_partition = null;
+    private boolean _use_bert = false;
+    private String _bert_version = null;
 
     private int _lastIterationIdx = 0;
     private final Map<Integer, String> _pendingIteration = new HashMap<>();
@@ -443,7 +445,12 @@ public final class AfsActor {
                     if (_use_esl) {
                         _esl_partition = response.getData().getEsl_partition();
                     }
-                    log.info("[{}] handleWelcomeReply: _use_esl:{} / _esl_partition:{}", sessionId, _use_esl, _esl_partition);
+                    _use_bert = response.getData().getUse_bert() != null ? response.getData().getUse_bert() : false;
+                    if (_use_bert) {
+                        _bert_version = response.getData().getBert_version();
+                    }
+                    log.info("[{}] handleWelcomeReply: _use_esl:{} / _esl_partition:{} / _use_bert:{} / _bert_version: {}",
+                            sessionId, _use_esl, _esl_partition, _use_bert, _bert_version);
                     if (!doPlayback(response.getData())) {
                         if (response.getData().getHangup() == 1) {
                             doHangup();
@@ -650,7 +657,7 @@ public final class AfsActor {
             final var iterationIdx = addIteration(speechText);
             log.info("[{}] whenASRSentenceEnd: addIteration => {}", sessionId, iterationIdx);
             final AtomicReference<DialogApi.MatchIntentResult> emrRef = new AtomicReference<>();
-            (_use_esl
+            (_use_bert
                 ? usingNdm(speechText, content_index, emrRef)
                 : scriptOnly(speechText, content_index)
             )
