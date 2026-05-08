@@ -94,6 +94,9 @@ public interface DialogApi {
         public Integer[] intents;
     }
 
+    @RequestMapping(value = "${dialog.api.speech2intent_v2}", method = RequestMethod.POST)
+    ApiResponse<MatchIntentResult> speech2intentV2(@RequestBody final ClassifySpeechRequest request);
+
     @RequestMapping(value = "${dialog.api.speech2intent}", method = RequestMethod.POST)
     ApiResponse<MatchIntentResult> speech2intent(@RequestBody final ClassifySpeechRequest request);
 

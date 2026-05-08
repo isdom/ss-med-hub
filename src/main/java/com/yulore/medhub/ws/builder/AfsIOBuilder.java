@@ -113,9 +113,9 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                 public AfsActor.NDMSpeech2Intent speech2intent() {
                     return request -> {
                         if (_dmApi != null) {
-                            return _dmApi.speech2intent(request).getData();
+                            return _dmApi.speech2intentV2(request).getData();
                         } else {
-                            log.warn("AfsIO: dm-api is null, skip speech2intent({})", request);
+                            log.warn("AfsIO: dm-api is null, skip speech2intentV2({})", request);
                             return null;
                         }
                     };
