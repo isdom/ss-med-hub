@@ -274,7 +274,8 @@ public final class ApoActor {
             @Override
             public void onSpeechTranscriberCreated(SpeechTranscriber speechTranscriber) {
                 speechTranscriber.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
-                speechTranscriber.addCustomedParam("speech_noise_threshold", 0.9);
+                // disable “speech_noise_threshold” param 2026.05.10
+                // speechTranscriber.addCustomedParam("speech_noise_threshold", 0.9);
             }
 
             @Override
