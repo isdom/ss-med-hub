@@ -276,6 +276,9 @@ public final class ApoActor {
                 speechTranscriber.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
                 // disable “speech_noise_threshold” param 2026.05.10
                 // speechTranscriber.addCustomedParam("speech_noise_threshold", 0.9);
+                if (_enable_speech_noise_threshold) {
+                    speechTranscriber.addCustomedParam("speech_noise_threshold", 0.9);
+                }
             }
 
             @Override
@@ -1381,6 +1384,8 @@ public final class ApoActor {
 
     @Value("${dialog.esl}")
     private String _ndm_esl;
+
+    private boolean _enable_speech_noise_threshold;
 
     private boolean _isNjd;
 
