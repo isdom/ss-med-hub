@@ -1385,6 +1385,7 @@ public final class ApoActor {
     @Value("${dialog.esl}")
     private String _ndm_esl;
 
+    @Value("${asr.enable_speech_noise:false}")
     private boolean _enable_speech_noise_threshold;
 
     private boolean _isNjd;
