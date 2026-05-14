@@ -276,7 +276,7 @@ public final class ApoActor {
                 speechTranscriber.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
                 // disable “speech_noise_threshold” param 2026.05.10
                 // speechTranscriber.addCustomedParam("speech_noise_threshold", 0.9);
-                if (_enable_speech_noise_threshold) {
+                if (_asr_enable_speech_noise_threshold) {
                     speechTranscriber.addCustomedParam("speech_noise_threshold", _asr_speech_noise_threshold);
                 }
             }
@@ -1386,7 +1386,7 @@ public final class ApoActor {
     private String _ndm_esl;
 
     @Value("${asr.enable_speech_noise:false}")
-    private boolean _enable_speech_noise_threshold;
+    private boolean _asr_enable_speech_noise_threshold;
 
     @Value("${asr.speech_noise_threshold:0.9f}")
     private float _asr_speech_noise_threshold;
