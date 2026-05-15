@@ -84,4 +84,7 @@ public class AIReplyVO {
 
     @SerializedName("bert_version")
     private String bert_version;
+
+    @SerializedName("ins_id")
+    private String ins_id;
 }
