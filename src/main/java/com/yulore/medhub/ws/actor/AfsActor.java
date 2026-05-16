@@ -114,6 +114,7 @@ public final class AfsActor {
     private String _esl_partition = null;
     private boolean _use_bert = false;
     private String _bert_version = null;
+    private String _ins_id = null;
 
     private int _lastIterationIdx = 0;
     private final Map<Integer, String> _pendingIteration = new HashMap<>();
@@ -449,8 +450,9 @@ public final class AfsActor {
                     if (_use_bert) {
                         _bert_version = response.getData().getBert_version();
                     }
-                    log.info("[{}] handleWelcomeReply: _use_esl:{} / _esl_partition:{} / _use_bert:{} / _bert_version: {}",
-                            sessionId, _use_esl, _esl_partition, _use_bert, _bert_version);
+                    _ins_id = response.getData().getIns_id();
+                    log.info("[{}] handleWelcomeReply: _use_esl:{} / _esl_partition:{} / _use_bert:{} / _bert_version: {} / _ins_id: {}",
+                            sessionId, _use_esl, _esl_partition, _use_bert, _bert_version, _ins_id);
                     if (!doPlayback(response.getData())) {
                         if (response.getData().getHangup() == 1) {
                             doHangup();
