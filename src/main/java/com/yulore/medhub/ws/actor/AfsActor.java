@@ -57,7 +57,7 @@ public final class AfsActor {
         Executor executor();
         Reply2Rms reply2rms();
         BiConsumer<String, Object> sendEvent();
-        NDMSpeech2Intent speech2intent();
+        NDMSpeech2Intent speech2intentV2();
     }
 
     public AfsActor(final Context ctx) {
@@ -70,7 +70,7 @@ public final class AfsActor {
         this.executor = ctx.executor();
         this.reply2rms = ctx.reply2rms();
         this.sendEvent = ctx.sendEvent();
-        this._ndmSpeech2Intent = ctx.speech2intent();
+        this._ndmSpeech2Intent = ctx.speech2intentV2();
     }
 
     public int localIdx() {

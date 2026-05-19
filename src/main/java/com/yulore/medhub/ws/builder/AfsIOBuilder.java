@@ -110,7 +110,7 @@ public class AfsIOBuilder implements WsHandlerBuilder {
                 public BiConsumer<String, Object> sendEvent() {
                     return (name,obj)-> WSEventVO.sendEvent(ws, name, obj);
                 }
-                public AfsActor.NDMSpeech2Intent speech2intent() {
+                public AfsActor.NDMSpeech2Intent speech2intentV2() {
                     return request -> {
                         if (_dmApi != null) {
                             return _dmApi.speech2intentV2(request).getData();
