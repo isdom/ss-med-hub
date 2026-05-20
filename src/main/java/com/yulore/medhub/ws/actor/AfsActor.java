@@ -308,6 +308,7 @@ public final class AfsActor {
         };
     }
 
+    /*
     private Supplier<ApiResponse<AIReplyVO>> callIntent2Reply(
             final String traceId,
             final String intent,
@@ -332,6 +333,7 @@ public final class AfsActor {
                     .build());
         };
     }
+    */
 
     private Supplier<ApiResponse<AIReplyVO>> scriptIntent2Reply(
             final String traceId,
