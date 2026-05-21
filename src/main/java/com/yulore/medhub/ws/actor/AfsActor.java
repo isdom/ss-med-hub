@@ -923,6 +923,7 @@ public final class AfsActor {
         };
     }
 
+    /*
     private BiConsumer<ApiResponse<AIReplyVO>, Throwable>
     reportEsl(final AtomicReference<String> t2i_intent_ref,
               final AtomicReference<EslApi.EslResponse<EslApi.Hit>> esl_resp_ref,
@@ -964,6 +965,7 @@ public final class AfsActor {
             }
         };
     }
+    */
 
     private void reportUserContent(final int content_index,
                                    final PayloadSentenceEnd payload,
