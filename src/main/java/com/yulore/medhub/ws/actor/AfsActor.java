@@ -896,6 +896,7 @@ public final class AfsActor {
         };
     }
 
+    /*
     private BiConsumer<ApiResponse<AIReplyVO>, Throwable>
     reportToNdm(final AtomicReference<DialogApi.MatchIntentResult> emrRef) {
         return (ai_resp, ex) -> {
@@ -922,6 +923,7 @@ public final class AfsActor {
             }
         };
     }
+    */
 
     /*
     private BiConsumer<ApiResponse<AIReplyVO>, Throwable>
