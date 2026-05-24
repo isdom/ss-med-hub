@@ -741,12 +741,7 @@ public class CosyVoiceWSClient {
 
         @Override
         public void channelInactive(ChannelHandlerContext ctx) {
-            //final Consumer<RmsClient> whenDisconnect = refWhenDisconnect.getAndSet(null);
-            //if (whenDisconnect != null) {
-            //    whenDisconnect.accept(RmsClient.this);
-            //}
             log.info("cosyvoice disconnect");
-            // shutdown();
         }
     }
 }
