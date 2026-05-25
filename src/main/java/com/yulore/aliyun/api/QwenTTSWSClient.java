@@ -916,12 +916,7 @@ public class QwenTTSWSClient {
 
         @Override
         public void channelInactive(ChannelHandlerContext ctx) {
-            //final Consumer<RmsClient> whenDisconnect = refWhenDisconnect.getAndSet(null);
-            //if (whenDisconnect != null) {
-            //    whenDisconnect.accept(RmsClient.this);
-            //}
             log.info("qwentts disconnect");
-            // shutdown();
         }
     }
 }
