@@ -374,10 +374,6 @@ public class FunasrClient {
 
         @Override
         public void channelInactive(ChannelHandlerContext ctx) {
-            //final Consumer<RmsClient> whenDisconnect = refWhenDisconnect.getAndSet(null);
-            //if (whenDisconnect != null) {
-            //    whenDisconnect.accept(RmsClient.this);
-            //}
             try {
                 if (_onStop != null) {
                     _onStop.accept(_text.toString());
@@ -385,7 +381,6 @@ public class FunasrClient {
             } finally {
                 log.info("funasr disconnect");
             }
-            // shutdown();
         }
     }
 }
