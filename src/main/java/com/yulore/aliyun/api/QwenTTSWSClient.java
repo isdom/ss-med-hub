@@ -818,12 +818,14 @@ public class QwenTTSWSClient {
     }
 
     // 关闭连接
+    /*
     public void shutdown() {
         log.info("all cost {} ms", System.currentTimeMillis() - _startInMs);
         if (channel != null) {
             channel.close();
         }
     }
+    */
 
     // 管道初始化器
     private class ClientInitializer extends ChannelInitializer<SocketChannel> {
