@@ -292,11 +292,10 @@ public class FunasrClient {
 
     // 关闭连接
     public void shutdown() {
-        log.info("all cost {} ms", System.currentTimeMillis() - _startInMs);
+        log.info("start -> shutdown: all cost {} ms", System.currentTimeMillis() - _startInMs);
         if (channel != null) {
             channel.close();
         }
-        // group.shutdownGracefully();
     }
 
     // 管道初始化器
