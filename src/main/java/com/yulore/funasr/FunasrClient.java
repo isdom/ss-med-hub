@@ -126,7 +126,7 @@ public class FunasrClient {
     private final AtomicReference<BinaryHandler> refBinaryHandler = new AtomicReference<>();
     private final AtomicReference<TextHandler> refTextHandler = new AtomicReference<>();
 
-    private URI uri;
+    private final URI uri;
     private Channel channel;
     private final EventLoopGroup group;
 
