@@ -245,7 +245,7 @@ public class FunasrClient {
 
     private void changeUserEventHandler(final UserEventHandler newHandler) {
         final var old = refUserEventHandler.getAndSet(newHandler);
-        log.info("changeUserEventHandler: {} => {}", old, newHandler);
+        log.info("funasr_changeUserEventHandler: {} => {}", old, newHandler);
     }
 
     private void changeTextHandler(final TextHandler newHandler) {
