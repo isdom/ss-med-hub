@@ -250,7 +250,7 @@ public class FunasrClient {
 
     private void changeTextHandler(final TextHandler newHandler) {
         final var old = refTextHandler.getAndSet(newHandler);
-        log.info("changeTextHandler: {} => {}", old, newHandler);
+        log.info("funasr_changeTextHandler: {} => {}", old, newHandler);
     }
 
     private void changeBinaryHandler(final BinaryHandler newHandler) {
