@@ -255,7 +255,7 @@ public class FunasrClient {
 
     private void changeBinaryHandler(final BinaryHandler newHandler) {
         final var old = refBinaryHandler.getAndSet(newHandler);
-        log.info("changeBinaryHandler: {} => {}", old, newHandler);
+        log.info("funasr_changeBinaryHandler: {} => {}", old, newHandler);
     }
 
     // send text data
