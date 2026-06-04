@@ -284,7 +284,7 @@ public class FunasrClient {
             final var frame = new BinaryWebSocketFrame(Unpooled.wrappedBuffer(bytes));
             channel.writeAndFlush(frame).addListener(future -> {
                 if (!future.isSuccess()) {
-                    log.warn("send binary frame:[{}] bytes failed", bytes.length, future.cause());
+                    log.warn("funasr_send_binary_frame:[{}] bytes failed", bytes.length, future.cause());
                 }
             });
         }
