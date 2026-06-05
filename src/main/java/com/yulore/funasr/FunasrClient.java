@@ -292,7 +292,7 @@ public class FunasrClient {
 
     // 关闭连接
     public void shutdown() {
-        log.info("start -> shutdown: all cost {} ms", System.currentTimeMillis() - _startInMs);
+        log.info("funasr_shutdown: total cost {} ms", System.currentTimeMillis() - _startInMs);
         if (channel != null) {
             channel.close();
         }
