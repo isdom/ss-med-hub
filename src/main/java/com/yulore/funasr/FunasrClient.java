@@ -330,7 +330,7 @@ public class FunasrClient {
             if (handler != null) {
                 handler.accept(evt);
             }
-            log.info("userEventTriggered: {}", evt);
+            log.info("funasr_userEventTriggered: {}", evt);
         }
 
         @Override
