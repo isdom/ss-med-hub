@@ -357,11 +357,11 @@ public class FunasrClient {
                 if (handler != null) {
                     handler.accept(buf);
                 } else {
-                    log.warn("non-binary handler");
+                    log.warn("funasr_channelRead0: non-binary handler");
                 }
-                log.info("receive binary message: {} bytes", bytes);
+                log.info("funasr_channelRead0: receive binary message: {} bytes", bytes);
             } else if (frame instanceof PongWebSocketFrame) {
-                log.info("receive pong frame");
+                log.info("funasr_channelRead0: receive pong frame");
             }
         }
 
