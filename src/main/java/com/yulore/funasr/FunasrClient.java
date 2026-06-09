@@ -117,7 +117,7 @@ public class FunasrClient {
                 final var vo = new ObjectMapper().readValue(msg, ASRResult.class);
                 log.info("{} asr result: {}", this, vo);
             } catch (JsonProcessingException ex) {
-                log.warn("ON_ASR_ENDING: {} with exception: {}", this, ExceptionUtil.exception2detail(ex));
+                log.warn("funasr_ON_ASR_ENDING: {} with exception: {}", this, ExceptionUtil.exception2detail(ex));
             }
         }
     };
