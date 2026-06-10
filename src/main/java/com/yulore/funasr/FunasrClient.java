@@ -238,7 +238,7 @@ public class FunasrClient {
         try {
             return new ObjectMapper().writeValueAsString(vo);
         } catch (JsonProcessingException ex) {
-            log.warn("vo2string with exception: {}", ExceptionUtil.exception2detail(ex));
+            log.warn("funasr_vo2string with exception: {}", ExceptionUtil.exception2detail(ex));
         }
         return "(null)";
     }
