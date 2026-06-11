@@ -378,7 +378,7 @@ public class FunasrClient {
                     _onStop.accept(_text.toString());
                 }
             } finally {
-                log.info("funasr disconnect");
+                log.info("funasr_disconnect");
             }
         }
     }
