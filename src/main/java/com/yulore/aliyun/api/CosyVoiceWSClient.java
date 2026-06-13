@@ -616,7 +616,7 @@ public class CosyVoiceWSClient {
             final var frame = new TextWebSocketFrame(message);
             channel.writeAndFlush(frame).addListener(future -> {
                 if (!future.isSuccess()) {
-                    log.warn("send text frame:[{}] failed", message, future.cause());
+                    log.warn("cosyvoice_send_text_frame:[{}] failed", message, future.cause());
                     result.completeExceptionally(future.cause());
                 } else {
                     result.complete(null);
