@@ -438,23 +438,6 @@ public class CosyVoiceWSClient {
         return null;
     }
 
-    /*
-    private final TextHandler ON_ASR_ENDING = new TextHandler() {
-        @Override
-        public String toString() {
-            return "ON_ASR_ENDING";
-        }
-        @Override
-        public void accept(final String msg) {
-            try {
-                final var vo = new ObjectMapper().readValue(msg, ASRResult.class);
-                log.info("{} asr result: {}", this, vo);
-            } catch (JsonProcessingException ex) {
-                log.warn("{} with exception: {}", this, ExceptionUtil.exception2detail(ex));
-            }
-        }
-    };
-    */
     private final BinaryHandler ON_AUDIO_DATA = new BinaryHandler() {
         @Override
         public String toString() {
