@@ -98,8 +98,8 @@ public final class AfsActor {
     @Autowired
     private ScriptApi _scriptApi;
 
-    @Autowired
-    private DialogApi _dialogApi;
+    //@Autowired
+    //private DialogApi _dialogApi;
 
     @Autowired
     private IntentConfig intentConfig;
