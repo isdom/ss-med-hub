@@ -741,22 +741,6 @@ public final class AfsActor {
         };
     }
 
-    private Supplier<EslApi.EslResponse<EslApi.Hit>> callMatchEsl(
-            final String speechText,
-            final int content_index,
-            final AtomicLong cost) {
-        return ()-> {
-            log.info("[{}] before match_esl: ({}) speech:{} partition:{}", sessionId, content_index, speechText, _esl_partition);
-            final var startInMs = System.currentTimeMillis();
-            try {
-                return _matchEsl.apply(speechText, _esl_partition);
-            } finally {
-                cost.set(System.currentTimeMillis() - startInMs);
-                log.info("[{}] after match_esl: ({}) speech:{} partition:{} => cost {} ms",
-                        sessionId, content_index, speechText, _esl_partition, cost.longValue());
-            }
-        };
-    }
     */
 
     private CompletionStage<ApiResponse<AIReplyVO>> usingNdm(
