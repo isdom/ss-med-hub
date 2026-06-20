@@ -525,22 +525,6 @@ public class CosyVoiceWSClient {
                     .build();
             sendMessage(vo2string(runTask)).whenComplete((ok, ex)-> {
                 if (ex == null) {
-                            /*
-                            _onStart.accept(new AsrOp() {
-                                @Override
-                                public void send(byte[] pcm) {
-                                    sendBinary(pcm);
-                                }
-
-                                @Override
-                                public void stop() {
-                                    changeTextHandler(ON_ASR_ENDING);
-                                    sendMessage(vo2string(StopASR.builder().is_speaking(false).build())).whenComplete((ok, ex)->{
-                                        shutdown();
-                                    });
-                                }
-                            });
-                            */
                 }
             });
         }));
