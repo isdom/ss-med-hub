@@ -296,12 +296,21 @@ public final class AfsActor {
 
     private Supplier<ApiResponse<ScriptApi.Text2IntentResult>> callSpeech2Intent(final String speechText, final int content_index) {
         return ()-> {
-            log.info("[{}] before ai_t2i => ({}) speech:{}", sessionId, content_index, speechText);
-            return _scriptApi.ai_t2i(ScriptApi.Text2IntentRequest.builder()
-                    .speechText(speechText)
-                    .speechIdx(content_index)
-                    .sessionId(sessionId)
-                    .build());
+            final var startInMs = System.currentTimeMillis();
+            ApiResponse<ScriptApi.Text2IntentResult> resp = null;
+            try {
+                log.info("[{}] before ai_t2i => ({}) speech:{}", sessionId, content_index, speechText);
+                resp = _scriptApi.ai_t2i(ScriptApi.Text2IntentRequest.builder()
+                        .speechText(speechText)
+                        .speechIdx(content_index)
+                        .sessionId(sessionId)
+                        .build());
+                return resp;
+            } finally {
+                final long cost = System.currentTimeMillis() - startInMs;
+                log.info("[{}]: after ai_t2i: ({}) speech:{} => cost {} ms, resp: {}",
+                        sessionId, content_index, speechText, cost, resp);
+            }
         };
     }
 
