@@ -314,33 +314,6 @@ public final class AfsActor {
         };
     }
 
-    /*
-    private Supplier<ApiResponse<AIReplyVO>> callIntent2Reply(
-            final String traceId,
-            final String intent,
-            final String speechText,
-            final int content_index) {
-        return ()-> {
-            final boolean isAiSpeaking = isAiSpeaking();
-            final String aiContentId = currentAiContentId();
-            final int speakingDuration = currentSpeakingDuration();
-            log.info("[{}] before ai_i2r => ({}) speech:{}/traceId:{}/intent:{}/is_speaking:{}/content_id:{}/speaking_duration:{} s",
-                    sessionId, content_index, speechText, traceId, intent,
-                    isAiSpeaking, aiContentId, (float)speakingDuration / 1000.0f);
-            return _scriptApi.ai_i2r(Intent2ReplyRequest.builder()
-                    .sessionId(sessionId)
-                    .traceId(traceId)
-                    .intent(intent)
-                    .speechIdx(content_index)
-                    .speechText(speechText)
-                    .isSpeaking(isAiSpeaking ? 1 : 0)
-                    .speakingContentId(aiContentId != null ? Long.parseLong(aiContentId) : null)
-                    .speakingDurationMs(speakingDuration)
-                    .build());
-        };
-    }
-    */
-
     private Supplier<ApiResponse<AIReplyVO>> scriptIntent2Reply(
             final String traceId,
             final String intent,
