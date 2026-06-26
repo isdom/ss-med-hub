@@ -712,13 +712,6 @@ public final class AfsActor {
                 .whenCompleteAsync(reportEsl(t2i_intent_ref, esl_resp_ref, content_index, esl_cost), executorStore.apply("feign"));
     }
 
-    private Function<Throwable, EslApi.EslResponse<EslApi.Hit>> handleEslSearchException() {
-        return ex -> {
-            log.warn("[{}] call_esl_text_failed: {}", sessionId, ExceptionUtil.exception2detail(ex));
-            return EslApi.emptyResponse();
-        };
-    }
-
     */
 
     private CompletionStage<ApiResponse<AIReplyVO>> usingNdm(
