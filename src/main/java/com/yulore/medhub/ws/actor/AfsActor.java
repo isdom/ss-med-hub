@@ -666,54 +666,6 @@ public final class AfsActor {
                 .exceptionallyCompose(handleRetryable(()->interactAsync(getReply, "ai_reply")));
     }
 
-    /*
-    private CompletionStage<ApiResponse<AIReplyVO>> scriptAndEslMixed(final String speechText, final int content_index) {
-        final var esl_cost = new AtomicLong(0);
-        final AtomicReference<EslApi.EslResponse<EslApi.Hit>> esl_resp_ref = new AtomicReference<>(null);
-        final AtomicReference<String> t2i_intent_ref = new AtomicReference<>(null);
-        final var getIntent = callSpeech2Intent(speechText, content_index);
-
-        return interactAsync(getIntent, "script_esl")
-                .exceptionallyCompose(handleRetryable(()->interactAsync(getIntent, "script_esl")))
-                .thenCombine(interactAsync(callMatchEsl(speechText, content_index, esl_cost))
-                                .exceptionally(handleEslSearchException()), Pair::of)
-                .thenComposeAsync(script_and_esl->{
-                    final var t2i_resp = script_and_esl.getLeft();
-                    final var esl_resp = script_and_esl.getRight();
-                    log.info("[{}] whenASRSentenceEnd script_and_esl done with {}\n[{}] ai_t2i resp: {}\n[{}] esl_search resp: {}",
-                            sessionId, intentConfig, sessionId, t2i_resp, sessionId, esl_resp);
-                    esl_resp_ref.set(esl_resp);
-                    String final_intent = null;
-                    String esl_intent = null;
-                    var t2i_result = new ScriptApi.Text2IntentResult();
-                    if (esl_resp.result != null && esl_resp.result.length > 0) {
-                        // hit esl
-                        esl_intent = esl_resp.result[0].es.intentionCode;
-                    }
-                    if (t2i_resp != null && t2i_resp.getData() != null) {
-                        t2i_result = t2i_resp.getData();
-                        t2i_intent_ref.set(t2i_result.getIntentCode());
-                    }
-
-                    if (t2i_result.getIntentCode() != null
-                            && (intentConfig.getRing0().contains(t2i_result.getIntentCode())
-                            || t2i_result.getIntentCode().startsWith(intentConfig.getPrefix()))
-                    ) {
-                        // using t2i's intent
-                        final_intent = t2i_result.getIntentCode();
-                    } else if (esl_intent != null) {
-                        final_intent = esl_intent;
-                    } else {
-                        final_intent = t2i_result.getIntentCode();
-                    }
-                    final var getReply = callIntent2Reply(t2i_result.getTraceId(), final_intent, speechText, content_index);
-                    return interactAsync(getReply).exceptionallyCompose(handleRetryable(()->interactAsync(getReply)));
-                }, executor)
-                .whenCompleteAsync(reportEsl(t2i_intent_ref, esl_resp_ref, content_index, esl_cost), executorStore.apply("feign"));
-    }
-
-    */
-
     private CompletionStage<ApiResponse<AIReplyVO>> usingNdm(
             final String speechText,
             final int content_index,
