@@ -562,7 +562,7 @@ public class CosyVoiceWSClient {
 
     private void changeUserEventHandler(final UserEventHandler newHandler) {
         final var old = refUserEventHandler.getAndSet(newHandler);
-        log.info("changeUserEventHandler: {} => {}", old, newHandler);
+        log.info("cosyvoice_changeUserEventHandler: {} => {}", old, newHandler);
     }
 
     private void changeTextHandler(final TextHandler newHandler) {
