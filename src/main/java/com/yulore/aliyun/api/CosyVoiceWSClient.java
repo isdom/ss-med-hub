@@ -567,7 +567,7 @@ public class CosyVoiceWSClient {
 
     private void changeTextHandler(final TextHandler newHandler) {
         final var old = refTextHandler.getAndSet(newHandler);
-        log.info("changeTextHandler: {} => {}", old, newHandler);
+        log.info("cosyvoice_changeTextHandler: {} => {}", old, newHandler);
     }
 
     private void changeBinaryHandler(final BinaryHandler newHandler) {
