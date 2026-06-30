@@ -572,7 +572,7 @@ public class CosyVoiceWSClient {
 
     private void changeBinaryHandler(final BinaryHandler newHandler) {
         final var old = refBinaryHandler.getAndSet(newHandler);
-        log.info("changeBinaryHandler: {} => {}", old, newHandler);
+        log.info("cosyvoice_changeBinaryHandler: {} => {}", old, newHandler);
     }
 
     // send text data
